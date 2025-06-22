@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
+
   @override
   State<ProfilePage> createState() => _ProfilePageState();
 }
@@ -10,9 +11,10 @@ class ProfilePage extends StatefulWidget {
 class _ProfilePageState extends State<ProfilePage> {
   final supabase = Supabase.instance.client;
 
-  String emergencyName = '';
-  String emergencyPhone = '';
-  String relationship = '';
+  final _formKey = GlobalKey<FormState>();
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _relationshipController = TextEditingController();
 
   @override
   void initState() {
@@ -24,19 +26,59 @@ class _ProfilePageState extends State<ProfilePage> {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) return;
 
-    final data = await supabase
-        .from('profiles')
-        .select()
-        .eq('id', userId)
-        .single();
+    try {
+      final data = await supabase
+          .from('profiles')
+          .select()
+          .eq('id', userId)
+          .single();
 
-    setState(() {
-      emergencyName = data['emergency_name'] ?? '';
-      emergencyPhone = data['emergency_phone'] ?? '';
-      relationship = data['relationship'] ?? '';
-    });
-  }  @override
+      setState(() {
+        _nameController.text = data['emergency_contact_name'] ?? '';
+        _phoneController.text = data['emergency_phone'] ?? '';
+        _relationshipController.text = data['relationship'] ?? '';
+      });
+    } catch (e) {
+      // Handle missing profile or error silently
+      debugPrint('Error loading profile: $e');
+    }
+  }
+
+  Future<void> _saveEmergencyContact() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) return;
+
+    final updates = {
+      'id': userId,
+      'emergency_contact_name': _nameController.text.trim(),
+      'emergency_phone': _phoneController.text.trim(),
+      'relationship': _relationshipController.text.trim(),
+      'updated_at': DateTime.now().toIso8601String(),
+    };
+
+    try {
+      await supabase.from('profiles').upsert(updates);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Emergency contact saved!')),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error saving profile: $e');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error saving contact: $e')),
+        );
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final email = supabase.auth.currentUser?.email ?? 'No email';
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Profile'),
@@ -59,7 +101,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    supabase.auth.currentUser?.email ?? 'No email',
+                    email,
                     style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                 ],
@@ -67,46 +109,59 @@ class _ProfilePageState extends State<ProfilePage> {
             ),
             const SizedBox(height: 32),
 
-            // Emergency Contact Section
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Emergency Contact',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.edit),
-                  onPressed: () {
-                    // TODO: Implement edit functionality
-                  },
-                ),
-              ],
+            // Emergency Contact Form
+            const Text(
+              'Emergency Contact',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
-            Card(
-              elevation: 2,
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Name: $emergencyName', 
-                      style: const TextStyle(fontSize: 16)),
-                    const SizedBox(height: 8),
-                    Text('Phone: $emergencyPhone', 
-                      style: const TextStyle(fontSize: 16)),
-                    const SizedBox(height: 8),
-                    Text('Relationship: $relationship', 
-                      style: const TextStyle(fontSize: 16)),
-                  ],
-                ),
+            Form(
+              key: _formKey,
+              child: Column(
+                children: [
+                  TextFormField(
+                    controller: _nameController,
+                    decoration: const InputDecoration(labelText: 'Emergency Contact Name'),
+                    validator: (value) =>
+                        value == null || value.isEmpty ? 'Please enter a name' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _phoneController,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(labelText: 'Phone Number'),
+                    validator: (value) =>
+                        value == null || value.isEmpty ? 'Please enter a phone number' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _relationshipController,
+                    decoration: const InputDecoration(labelText: 'Relationship'),
+                    validator: (value) =>
+                        value == null || value.isEmpty ? 'Please enter a relationship' : null,
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: _saveEmergencyContact,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blueAccent,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                      ),
+                      child: const Text(
+                        'Save Emergency Contact',
+                        style: TextStyle(fontSize: 16, color: Colors.white),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-            
+
             const SizedBox(height: 32),
-            
-            // Sign Out Button
+
+            // Sign Out
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(

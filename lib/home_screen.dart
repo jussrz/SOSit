@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'profile_page.dart';
 
 
@@ -11,9 +12,36 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  String _emergencyName = '';
+  String _emergencyPhone = '';
+  String _relationship = '';
+
   Future<void> _loadUserProfile() async {
-    // TODO: Implement user profile loading
-    // This will be implemented when we add Supabase integration
+    final supabase = Supabase.instance.client;
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) return;
+
+    try {
+      final data = await supabase
+          .from('profiles')
+          .select()
+          .eq('id', userId)
+          .single();
+
+      setState(() {
+        _emergencyName = data['emergency_contact_name'] ?? '';
+        _emergencyPhone = data['emergency_phone'] ?? '';
+        _relationship = data['relationship'] ?? '';
+      });
+    } catch (e) {
+      debugPrint('Error loading emergency info: $e');
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserProfile();
   }
 
   @override
@@ -121,11 +149,17 @@ child: ListView(
     const Text('GPS Signal: ', style: TextStyle(fontSize: 14)),
     const Text('Location: ', style: TextStyle(fontSize: 14)),
     const SizedBox(height: 16),
-    const Text('Emergency Contact',
-        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-    const Text('Spouse: ', style: TextStyle(fontSize: 14)),
-                  ],
-                ),
+    const Text('Emergency Contact Details',
+        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+    const SizedBox(height: 8),
+    Text('Name: $_emergencyName', 
+        style: const TextStyle(fontSize: 14)),
+    Text('Phone: $_emergencyPhone', 
+        style: const TextStyle(fontSize: 14)),
+    Text('Relationship: $_relationship', 
+        style: const TextStyle(fontSize: 14)),
+  ],
+),
               );
             },
           ),
