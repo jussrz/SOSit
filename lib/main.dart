@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'auth_selection.dart';
+import 'login_page.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -25,27 +26,46 @@ class SOSitApp extends StatelessWidget {
   }
 }
 
-class LandingPage extends StatelessWidget {
+class LandingPage extends StatefulWidget {
   const LandingPage({super.key});
 
   @override
+  State<LandingPage> createState() => _LandingPageState();
+}
+
+class _LandingPageState extends State<LandingPage> {
+  bool _showSplash = true;
+
+  @override
+  void initState() {
+    super.initState();
+    Future.delayed(const Duration(seconds: 1), () {
+      if (mounted) {
+        setState(() {
+          _showSplash = false;
+        });
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => AuthSelectionPage()),
-        );
-      },
-      child: Scaffold(
-        backgroundColor: const Color(0xFFF5F5F5),
+    if (_showSplash) {
+      return Scaffold(
+        backgroundColor: const Color(0xFFFFEEEE),
         body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(32.0),
-            child: Image.asset('assets/sositlogo.png'),
+          child: SvgPicture.asset(
+            'assets/sositsplash.svg',
+            width: 718.61,
+            height: 718.61,
+            fit: BoxFit.cover,
           ),
         ),
-      ),
-    );
+      );
+    } else {
+      return const LoginPage();
+    }
   }
 }
+
+
