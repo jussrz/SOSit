@@ -339,41 +339,7 @@ class _LoginPageState extends State<LoginPage> {
               ),
             ),
           ),
-          if (_submitted && (_emailError != null || _passwordError != null))
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 24,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                child: Material(
-                  color: Colors.transparent,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-                    decoration: BoxDecoration(
-                      color: Colors.red[50],
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.redAccent),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (_emailError != null)
-                          Text(
-                            _emailError!,
-                            style: const TextStyle(color: Colors.red, fontSize: 14),
-                          ),
-                        if (_passwordError != null)
-                          Text(
-                            _passwordError!,
-                            style: const TextStyle(color: Colors.red, fontSize: 14),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
+          // Error alert at the bottom removed as per request
         ],
       ),
     );
