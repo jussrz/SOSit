@@ -51,6 +51,7 @@ flutter:
   assets:
     - assets/icon.png
     - assets/sositsplash.svg
+    - assets/sositlogo.svg
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/assets-and-images/#resolution-aware.
