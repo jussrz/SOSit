@@ -14,7 +14,9 @@ class _ProfilePageState extends State<ProfilePage> {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
-  final TextEditingController _relationshipController = TextEditingController();
+  String? _selectedRelationship;
+
+  final List<String> _relationships = ['Mother', 'Father', 'Aunt', 'Uncle', 'Sibling'];
 
   @override
   void initState() {
@@ -36,7 +38,7 @@ class _ProfilePageState extends State<ProfilePage> {
       setState(() {
         _nameController.text = data['emergency_contact_name'] ?? '';
         _phoneController.text = data['emergency_phone'] ?? '';
-        _relationshipController.text = data['relationship'] ?? '';
+        _selectedRelationship = data['relationship'];
       });
     } catch (e) {
       // Handle missing profile or error silently
@@ -54,7 +56,7 @@ class _ProfilePageState extends State<ProfilePage> {
       'id': userId,
       'emergency_contact_name': _nameController.text.trim(),
       'emergency_phone': _phoneController.text.trim(),
-      'relationship': _relationshipController.text.trim(),
+      'relationship': _selectedRelationship,
       'updated_at': DateTime.now().toIso8601String(),
     };
 
@@ -134,11 +136,25 @@ class _ProfilePageState extends State<ProfilePage> {
                         value == null || value.isEmpty ? 'Please enter a phone number' : null,
                   ),
                   const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _relationshipController,
-                    decoration: const InputDecoration(labelText: 'Relationship'),
+                  DropdownButtonFormField<String>(
+                    value: _selectedRelationship,
+                    decoration: const InputDecoration(
+                      labelText: 'Relationship',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: _relationships.map((String relationship) {
+                      return DropdownMenuItem<String>(
+                        value: relationship,
+                        child: Text(relationship),
+                      );
+                    }).toList(),
                     validator: (value) =>
-                        value == null || value.isEmpty ? 'Please enter a relationship' : null,
+                        value == null ? 'Please select a relationship' : null,
+                    onChanged: (String? newValue) {
+                      setState(() {
+                        _selectedRelationship = newValue;
+                      });
+                    },
                   ),
                   const SizedBox(height: 20),
                   SizedBox(
@@ -168,7 +184,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 onPressed: () async {
                   await supabase.auth.signOut();
                   if (context.mounted) {
-                    Navigator.of(context).pushReplacementNamed('/login');
+                    Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
                   }
                 },
                 style: ElevatedButton.styleFrom(
