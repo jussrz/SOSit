@@ -45,20 +45,37 @@ class _ProfilePageState extends State<ProfilePage> {
     try {
       final data = await supabase
           .from('profiles')
-          .select()
+          .select('*, emergency_contacts(*)')  // Include emergency contacts in query
           .eq('id', userId)
           .single();
       debugPrint('Loaded profile: $data');
 
       setState(() {
+        // Load user profile data
         _fullNameController.text = data['full_name'] ?? '';
         _dobController.text = data['birthdate'] ?? '';
-        _userPhoneController.text = data['phone'] ?? ''; // Changed from user_phone to phone
+        _userPhoneController.text = data['phone'] ?? '';
         _emailController.text = data['email'] ?? supabase.auth.currentUser?.email ?? '';
         _profilePhotoUrl = data['photo_path'] ?? '';
-        _emergencyNameController.text = data['emergency_contact_name'] ?? '';
-        _emergencyPhoneController.text = data['emergency_phone'] ?? '';
-        _relationshipController.text = data['relationship'] ?? '';
+
+        // Load primary emergency contact if exists
+        final emergencyContacts = data['emergency_contacts'] as List?;
+        if (emergencyContacts != null && emergencyContacts.isNotEmpty) {
+          final primary = emergencyContacts[0];
+          _emergencyNameController.text = primary['name'] ?? '';
+          _emergencyPhoneController.text = primary['phone'] ?? '';
+          _relationshipController.text = primary['relationship'] ?? '';
+
+          // Load additional emergency contact if exists
+          if (emergencyContacts.length > 1) {
+            final additional = emergencyContacts[1];
+            _emergencyContacts.add({
+              'name': TextEditingController(text: additional['name']),
+              'phone': TextEditingController(text: additional['phone']),
+              'relationship': TextEditingController(text: additional['relationship']),
+            });
+          }
+        }
       });
     } catch (e) {
       debugPrint('Error loading profile: $e');
@@ -129,7 +146,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Future<void> _saveProfile() async {
     setState(() {
-      _submitted = true;  // Set submitted to true when save is pressed
+      _submitted = true;
     });
     
     if (!_formKey.currentState!.validate()) return;
@@ -138,54 +155,44 @@ class _ProfilePageState extends State<ProfilePage> {
     if (userId == null) return;
 
     try {
-      debugPrint('Starting profile save...');
-      
       // Handle photo upload first
       String? photoUrl = _profilePhotoUrl;
       if (_newProfilePhoto != null) {
         photoUrl = await _uploadProfilePhoto(_newProfilePhoto!);
-        debugPrint('Uploaded photo URL: $photoUrl');
       }
 
-      final updates = {
+      // Save profile data with all fields
+      final profileData = {
         'id': userId,
         'full_name': _fullNameController.text.trim(),
         'birthdate': _dobController.text,
         'phone': _userPhoneController.text.trim(),
         'email': _emailController.text.trim(),
         'photo_path': photoUrl,
-        'emergency_contacts': _emergencyContacts.map((contact) => {
-          'name': contact['name']!.text.trim(),
-          'phone': contact['phone']!.text.trim(),
-          'relationship': contact['relationship']!.text.trim(),
-        }).toList(),
+        'emergency_contact_name': _emergencyNameController.text.trim(),
+        'emergency_phone': _emergencyPhoneController.text.trim(),
+        'relationship2': _relationshipController.text.trim(),
         'updated_at': DateTime.now().toIso8601String(),
       };
 
-      debugPrint('Saving profile with data: $updates');
-
-      // First check if profile exists
-      final existing = await supabase
+      // Save to profiles table
+      await supabase
           .from('profiles')
-          .select()
-          .eq('id', userId)
-          .maybeSingle();
+          .upsert(profileData);
 
-      if (existing == null) {
-        // Insert new profile
-        debugPrint('Creating new profile...');
-        await supabase.from('profiles').insert(updates);
-      } else {
-        // Update existing profile
-        debugPrint('Updating existing profile...');
+      // Save additional contact if exists
+      if (_emergencyContacts.isNotEmpty) {
+        final additional = _emergencyContacts[0];
         await supabase
             .from('profiles')
-            .update(updates)
+            .update({
+              'emergency_contact_name': additional['name']!.text.trim(),
+              'emergency_phone': additional['phone']!.text.trim(),
+              'relationship2': additional['relationship']!.text.trim(),
+            })
             .eq('id', userId);
       }
 
-      debugPrint('Profile saved successfully');
-      
       // Reload profile to verify changes
       await _loadUserProfile();
 
