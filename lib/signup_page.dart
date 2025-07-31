@@ -73,18 +73,34 @@ class _SignupPageState extends State<SignupPage> {
 
     if (_formKey.currentState!.validate()) {
       try {
-        await Supabase.instance.client.auth.signUp(
+        // Sign up the user
+        final AuthResponse res = await Supabase.instance.client.auth.signUp(
           email: _emailController.text.trim(),
           password: _passwordController.text.trim(),
         );
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const HomeScreen()),
-        );
+
+        // Create initial profile with email
+        if (res.user != null) {
+          await Supabase.instance.client.from('profiles').upsert({
+            'id': res.user!.id,
+            'email': res.user!.email,
+            'created_at': DateTime.now().toIso8601String(),
+            'updated_at': DateTime.now().toIso8601String(),
+          });
+        }
+
+        if (context.mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const HomeScreen()),
+          );
+        }
       } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Signup failed: $e')),
-        );
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Signup failed: $e')),
+          );
+        }
       }
     }
   }
