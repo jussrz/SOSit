@@ -197,12 +197,19 @@ class _HomeScreenState extends State<HomeScreen> {
                     const Text('Emergency Contact',
                         style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                     const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Text('${_relationship.isNotEmpty ? _relationship : 'Contact'}: ', style: const TextStyle(fontWeight: FontWeight.w500)),
-                        Text(_emergencyPhone),
-                      ],
-                    ),
+                    // Show name, relationship, and phone for the main emergency contact
+                    if (_emergencyName.isNotEmpty)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Name: $_emergencyName', style: const TextStyle(fontWeight: FontWeight.w500)),
+                          Text('Relationship: ${_relationship.isNotEmpty ? _relationship : 'Contact'}', style: const TextStyle(fontWeight: FontWeight.w500)),
+                          Text('Phone: $_emergencyPhone', style: const TextStyle(fontWeight: FontWeight.w500)),
+                        ],
+                      )
+                    else
+                      const Text('No emergency contact set.', style: TextStyle(color: Colors.black54)),
+                    // ...you can add more contacts here if you fetch them from the database...
                   ],
                 ),
               ),

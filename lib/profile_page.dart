@@ -134,9 +134,12 @@ class _ProfilePageState extends State<ProfilePage> {
     if (userId == null) return;
 
     try {
-      String? photoUrl = _profilePhotoUrl;
+      // Use _profilePhotoUrl directly
       if (_newProfilePhoto != null) {
-        photoUrl = await _uploadProfilePhoto(_newProfilePhoto!);
+        final uploadedUrl = await _uploadProfilePhoto(_newProfilePhoto!);
+        if (uploadedUrl != null) {
+          _profilePhotoUrl = uploadedUrl;
+        }
       }
 
       // Save main profile data
@@ -146,7 +149,7 @@ class _ProfilePageState extends State<ProfilePage> {
         'birthdate': _dobController.text,
         'phone': _userPhoneController.text.trim(),
         'email': supabase.auth.currentUser?.email ?? _emailController.text.trim(),
-        'photo_path': photoUrl,
+        'photo_path': _profilePhotoUrl,
         'emergency_contact_name': _emergencyNameController.text.trim(),
         'emergency_phone': _emergencyPhoneController.text.trim(),
         'relationship': _relationshipController.text.trim(),
@@ -165,12 +168,9 @@ class _ProfilePageState extends State<ProfilePage> {
         }).eq('id', userId);
       }
 
-      // Always reload the latest profile from the database after saving
       await _loadUserProfile();
-
       if (context.mounted) {
         setState(() {
-          if (photoUrl != null) _profilePhotoUrl = photoUrl;
           _newProfilePhoto = null;
           _isEditingPhoto = false;
         });
