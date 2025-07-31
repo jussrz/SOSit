@@ -45,7 +45,7 @@ class _SignupPageState extends State<SignupPage> {
       setState(() {
         _emailError = 'Email is required.';
       });
-    } else if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,}$').hasMatch(_emailController.text)) {
+    } else if (!_emailController.text.contains('@') || !_emailController.text.contains('.com')) {
       setState(() {
         _emailError = 'Invalid email format.';
       });
@@ -144,7 +144,7 @@ class _SignupPageState extends State<SignupPage> {
                       )
                     else if (_submitted &&
                         _emailController.text.isNotEmpty &&
-                        !RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,}$').hasMatch(_emailController.text))
+                        (!_emailController.text.contains('@') || !_emailController.text.contains('.com')))
                       const Padding(
                         padding: EdgeInsets.only(left: 8, top: 4),
                         child: Text('Invalid email format.', style: TextStyle(color: Colors.red, fontSize: 12)),
