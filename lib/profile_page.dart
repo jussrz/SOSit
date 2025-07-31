@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
+import 'login_page.dart'; // Add this import
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -39,7 +40,7 @@ class _ProfilePageState extends State<ProfilePage> {
     final user = supabase.auth.currentUser;
     final userId = user?.id;
     if (userId == null) return;
-    
+
     try {
       // First, try to get the profile data
       final data = await supabase.from('profiles').select('*').eq('id', userId).single();
@@ -62,7 +63,7 @@ class _ProfilePageState extends State<ProfilePage> {
         _profilePhotoUrl = data['photo_path'] ?? '';
         _emergencyNameController.text = data['emergency_contact_name'] ?? '';
         _emergencyPhoneController.text = data['emergency_phone'] ?? '';
-        _relationshipController.text = data['relationship2'] ?? '';
+        _relationshipController.text = data['relationship'] ?? '';
       });
     } catch (e) {
       debugPrint('Error loading profile: $e');
@@ -133,7 +134,7 @@ class _ProfilePageState extends State<ProfilePage> {
         'photo_path': photoUrl,
         'emergency_contact_name': _emergencyNameController.text.trim(),
         'emergency_phone': _emergencyPhoneController.text.trim(),
-        'relationship2': _relationshipController.text.trim(),
+        'relationship': _relationshipController.text.trim(),
         'updated_at': DateTime.now().toIso8601String(),
       };
 
@@ -148,7 +149,9 @@ class _ProfilePageState extends State<ProfilePage> {
         }).eq('id', userId);
       }
 
+      // Always reload the latest profile from the database after saving
       await _loadUserProfile();
+
       if (context.mounted) {
         setState(() {
           if (photoUrl != null) _profilePhotoUrl = photoUrl;
@@ -249,25 +252,84 @@ class _ProfilePageState extends State<ProfilePage> {
               ..._emergencyContacts.map((contact) => _buildEmergencyContactCard(contact, removable: true)),
 
               if (_emergencyContacts.length < 1)
-                OutlinedButton.icon(
-                  onPressed: _addNewEmergencyContact,
-                  icon: const Icon(Icons.add, color: Colors.redAccent),
-                  label: const Text('Add Emergency Contact',
-                      style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
-                  style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: Colors.redAccent),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32))),
+                Container(
+                  width: MediaQuery.of(context).size.width * 0.5, // Make button 80% of screen width
+                  child: OutlinedButton.icon(
+                    onPressed: _addNewEmergencyContact,
+                    icon: const Icon(Icons.add, color: Color(0xFFF73D5C)),
+                    label: const Text('Add Emergency Contact',
+                        style: TextStyle(color: Color(0xFFF73D5C), fontWeight: FontWeight.bold)),
+                    style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        side: const BorderSide(color: Color(0xFFF73D5C)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32))),
+                  ),
                 ),
 
               const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: _saveProfile,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.redAccent,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
+
+              // Save button
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _saveProfile,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFF73D5C),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(32),
+                    ),
+                  ),
+                  child: const Text(
+                    'Save',
+                    style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold),
+                  ),
                 ),
-                child: const Text('Save', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               ),
+
+              const SizedBox(height: 16),
+
+              // Sign Out button
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: () async {
+                    try {
+                      await supabase.auth.signOut();
+                      if (context.mounted) {
+                        // Replace entire navigation stack with login page
+                        Navigator.of(context).pushAndRemoveUntil(
+                          MaterialPageRoute(builder: (_) => const LoginPage()),
+                          (route) => false,
+                        );
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Error signing out: $e')),
+                        );
+                      }
+                    }
+                  },
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    side: const BorderSide(color: Color(0xFFF73D5C)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(32),
+                    ),
+                  ),
+                  child: const Text(
+                    'Sign Out',
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Color(0xFFF73D5C),
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 48),
             ],
           ),
         ),
@@ -332,37 +394,41 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Widget _buildEmergencyContactFields(Map<String, TextEditingController> contact) {
-    const predefinedRelationships = ['Spouse', 'Father', 'Mother', 'Sibling', 'Friend', 'Relative', 'Other'];
-    bool isCustom(String value) => value.isNotEmpty && !predefinedRelationships.contains(value);
-
+    const predefinedRelationships = ['Spouse', 'Father', 'Mother', 'Sibling', 'Friend', 'Relative'];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildTextField(contact['name']!, 'Emergency Contact Name'),
         Container(
           margin: const EdgeInsets.only(bottom: 12),
-          decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade400), borderRadius: BorderRadius.circular(12)),
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey.shade400),
+            borderRadius: BorderRadius.circular(12),
+          ),
           child: DropdownButtonFormField<String>(
-            value: isCustom(contact['relationship']!.text)
-                ? 'Other'
-                : (contact['relationship']!.text.isEmpty ? null : contact['relationship']!.text),
-            items: predefinedRelationships.map((rel) => DropdownMenuItem(value: rel, child: Text(rel))).toList(),
+            value: contact['relationship']!.text.isEmpty ? null : contact['relationship']!.text,
+            items: predefinedRelationships
+                .map((rel) => DropdownMenuItem(value: rel, child: Text(rel)))
+                .toList(),
             onChanged: (val) {
-              if (val == 'Other') {
-                contact['relationship']!.clear();
-              } else {
-                contact['relationship']!.text = val ?? '';
-              }
+              contact['relationship']!.text = val ?? '';
               setState(() {});
             },
-            decoration: const InputDecoration(labelText: "Relationship to User", border: InputBorder.none, contentPadding: EdgeInsets.all(12)),
+            decoration: const InputDecoration(
+              labelText: "Relationship to User",
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.all(12),
+            ),
           ),
         ),
-        if (contact['relationship']!.text.isEmpty || isCustom(contact['relationship']!.text))
-          TextFormField(controller: contact['relationship'], decoration: const InputDecoration(labelText: 'Specify Other Relationship', border: OutlineInputBorder())),
         const SizedBox(height: 12),
-        _buildTextField(contact['phone']!, "Emergency Contact's Phone Number", keyboardType: TextInputType.phone),
+        _buildTextField(
+          contact['phone']!,
+          "Emergency Contact's Phone Number",
+          keyboardType: TextInputType.phone,
+        ),
       ],
     );
   }
 }
+
