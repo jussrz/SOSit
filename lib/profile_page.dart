@@ -59,11 +59,25 @@ class _ProfilePageState extends State<ProfilePage> {
         _fullNameController.text = data['full_name'] ?? '';
         _dobController.text = data['birthdate'] ?? '';
         _userPhoneController.text = data['phone'] ?? '';
-        _emailController.text = user?.email ?? data['email'] ?? ''; // Prioritize auth email
+        _emailController.text = user?.email ?? data['email'] ?? '';
         _profilePhotoUrl = data['photo_path'] ?? '';
         _emergencyNameController.text = data['emergency_contact_name'] ?? '';
         _emergencyPhoneController.text = data['emergency_phone'] ?? '';
         _relationshipController.text = data['relationship'] ?? '';
+
+        // Clear existing emergency contacts
+        _emergencyContacts.clear();
+        
+        // Add emergency contact 2 if it exists
+        if (data['emergency_contact_name2'] != null || 
+            data['emergency_phone2'] != null || 
+            data['relationship2'] != null) {
+          _emergencyContacts.add({
+            'name': TextEditingController(text: data['emergency_contact_name2'] ?? ''),
+            'phone': TextEditingController(text: data['emergency_phone2'] ?? ''),
+            'relationship': TextEditingController(text: data['relationship2'] ?? ''),
+          });
+        }
       });
     } catch (e) {
       debugPrint('Error loading profile: $e');
@@ -125,6 +139,7 @@ class _ProfilePageState extends State<ProfilePage> {
         photoUrl = await _uploadProfilePhoto(_newProfilePhoto!);
       }
 
+      // Save main profile data
       final profileData = {
         'id': userId,
         'full_name': _fullNameController.text.trim(),
@@ -140,11 +155,12 @@ class _ProfilePageState extends State<ProfilePage> {
 
       await supabase.from('profiles').upsert(profileData);
 
+      // Save emergency contact 2 data if it exists
       if (_emergencyContacts.isNotEmpty) {
         final additional = _emergencyContacts[0];
         await supabase.from('profiles').update({
-          'emergency_contact_name': additional['name']!.text.trim(),
-          'emergency_phone': additional['phone']!.text.trim(),
+          'emergency_contact_name2': additional['name']!.text.trim(),
+          'emergency_phone2': additional['phone']!.text.trim(),
           'relationship2': additional['relationship']!.text.trim(),
         }).eq('id', userId);
       }
