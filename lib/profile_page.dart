@@ -27,6 +27,12 @@ class _ProfilePageState extends State<ProfilePage> {
   File? _newProfilePhoto;
   bool _isEditingPhoto = false;
 
+  // Add this list to track multiple emergency contacts
+  final List<Map<String, TextEditingController>> _emergencyContacts = [];
+
+  // Add this variable
+  bool _submitted = false;
+
   @override
   void initState() {
     super.initState();
@@ -109,7 +115,23 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
+  void _addNewEmergencyContact() {
+    if (_emergencyContacts.length < 1) { // Only allow one additional contact
+      setState(() {
+        _emergencyContacts.add({
+          'name': TextEditingController(),
+          'phone': TextEditingController(),
+          'relationship': TextEditingController(),
+        });
+      });
+    }
+  }
+
   Future<void> _saveProfile() async {
+    setState(() {
+      _submitted = true;  // Set submitted to true when save is pressed
+    });
+    
     if (!_formKey.currentState!.validate()) return;
     
     final userId = supabase.auth.currentUser?.id;
@@ -132,9 +154,11 @@ class _ProfilePageState extends State<ProfilePage> {
         'phone': _userPhoneController.text.trim(),
         'email': _emailController.text.trim(),
         'photo_path': photoUrl,
-        'emergency_contact_name': _emergencyNameController.text.trim(),
-        'emergency_phone': _emergencyPhoneController.text.trim(),
-        'relationship': _relationshipController.text.trim(),
+        'emergency_contacts': _emergencyContacts.map((contact) => {
+          'name': contact['name']!.text.trim(),
+          'phone': contact['phone']!.text.trim(),
+          'relationship': contact['relationship']!.text.trim(),
+        }).toList(),
         'updated_at': DateTime.now().toIso8601String(),
       };
 
@@ -330,70 +354,94 @@ class _ProfilePageState extends State<ProfilePage> {
               ),
               const SizedBox(height: 18),
               Divider(height: 32, thickness: 1.2, color: Colors.grey[200]),
-              const Text('Emergency Contact', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+              const Text('Emergency Contacts', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
               const SizedBox(height: 12),
+              
+              // Primary emergency contact
               Container(
+                padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade400),
+                  border: Border.all(color: Colors.grey.shade200),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: TextFormField(
-                  controller: _emergencyNameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Emergency Contact Name',
-                    border: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(vertical: 18, horizontal: 12),
-                  ),
-                  validator: (v) => v == null || v.isEmpty ? 'Please enter a name' : null,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Container(
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade400),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: DropdownButtonFormField<String>(
-                  value: _relationshipController.text.isNotEmpty ? _relationshipController.text : null,
-                  items: const [
-                    DropdownMenuItem(value: 'Spouse', child: Text('Spouse')),
-                    DropdownMenuItem(value: 'Father', child: Text('Father')),
-                    DropdownMenuItem(value: 'Mother', child: Text('Mother')),
-                    DropdownMenuItem(value: 'Sibling', child: Text('Sibling')),
-                    DropdownMenuItem(value: 'Friend', child: Text('Friend')),
-                    DropdownMenuItem(value: 'Other', child: Text('Other')),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Primary Emergency Contact', 
+                      style: TextStyle(fontWeight: FontWeight.w500, fontSize: 16)),
+                    const SizedBox(height: 12),
+                    // Existing emergency contact fields
+                    _buildEmergencyContactFields({
+                      'name': _emergencyNameController,
+                      'phone': _emergencyPhoneController,
+                      'relationship': _relationshipController,
+                    }),
                   ],
-                  onChanged: (val) {
-                    setState(() {
-                      _relationshipController.text = val ?? '';
-                    });
-                  },
-                  decoration: const InputDecoration(
-                    labelText: "Relationship to User",
-                    border: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(vertical: 18, horizontal: 12),
-                  ),
-                  validator: (v) => v == null || v.isEmpty ? 'Please select a relationship' : null,
                 ),
               ),
-              const SizedBox(height: 12),
-              Container(
+              
+              // Additional emergency contacts
+              ..._emergencyContacts.map((contact) => Container(
+                margin: const EdgeInsets.only(top: 16),
+                padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade400),
+                  border: Border.all(color: Colors.grey.shade200),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: TextFormField(
-                  controller: _emergencyPhoneController,
-                  decoration: const InputDecoration(
-                    labelText: "Emergency Contact's Phone Number",
-                    border: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(vertical: 18, horizontal: 12),
-                  ),
-                  keyboardType: TextInputType.phone,
-                  validator: (v) => v == null || v.isEmpty ? 'Please enter a phone number' : null,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Additional Emergency Contact', 
+                          style: TextStyle(fontWeight: FontWeight.w500, fontSize: 16)),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () {
+                            setState(() {
+                              _emergencyContacts.remove(contact);
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    _buildEmergencyContactFields(contact),
+                  ],
                 ),
-              ),
-              const SizedBox(height: 24), // <-- Add this line for space before the first button
+              )).toList(),
+              
+              const SizedBox(height: 32), // Increased spacing before Add Emergency Contact button
+              
+              // Add Emergency Contact button - only show if less than 2 total contacts
+              if (_emergencyContacts.length < 1)
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _addNewEmergencyContact,
+                    icon: const Icon(Icons.add, color: Colors.redAccent),
+                    label: const Text(
+                      'Add Emergency Contact',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Colors.redAccent,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      side: const BorderSide(color: Colors.redAccent),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(32),
+                      ),
+                    ),
+                  ),
+                ),
+              
+              const SizedBox(height: 12), // Reduced spacing between buttons
+              
+              // Save button
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
@@ -401,25 +449,13 @@ class _ProfilePageState extends State<ProfilePage> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.redAccent,
                     padding: const EdgeInsets.symmetric(vertical: 16),
-                  ),
-                  child: const Text(
-                    'Add Emergency Contact',
-                    style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold,),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _saveProfile,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.redAccent,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(32),
+                    ),
                   ),
                   child: const Text(
                     'Save',
-                    style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold,),
+                    style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold),
                   ),
                 ),
               ),
@@ -427,6 +463,103 @@ class _ProfilePageState extends State<ProfilePage> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildEmergencyContactFields(Map<String, TextEditingController> contact) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey.shade400),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: TextFormField(
+            controller: contact['name'],
+            decoration: const InputDecoration(
+              labelText: 'Emergency Contact Name',
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.symmetric(vertical: 18, horizontal: 12),
+            ),
+            onChanged: (val) {
+              if (_submitted) setState(() {}); // Trigger rebuild when value changes
+            },
+            validator: (value) => null,
+          ),
+        ),
+        if (_submitted && contact['name']?.text.isEmpty == true)  // Only show if submitted
+          Padding(
+            padding: const EdgeInsets.only(left: 8, top: 4),
+            child: Text(
+              'Please enter a name',
+              style: TextStyle(color: Colors.red.shade700, fontSize: 12),
+            ),
+          ),
+
+        const SizedBox(height: 12),
+        Container(
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey.shade400),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: DropdownButtonFormField<String>(
+            value: contact['relationship']!.text.isEmpty ? null : contact['relationship']!.text,
+            onChanged: (val) {
+              contact['relationship']!.text = val ?? '';
+              if (_submitted) setState(() {}); // Trigger rebuild when value changes
+            },
+            items: const [
+              DropdownMenuItem(value: 'Spouse', child: Text('Spouse')),
+              DropdownMenuItem(value: 'Father', child: Text('Father')),
+              DropdownMenuItem(value: 'Mother', child: Text('Mother')),
+              DropdownMenuItem(value: 'Sibling', child: Text('Sibling')),
+              DropdownMenuItem(value: 'Friend', child: Text('Friend')),
+              DropdownMenuItem(value: 'Relative', child: Text('Relative')),
+            ],
+            decoration: const InputDecoration(
+              labelText: "Relationship to User",
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.symmetric(vertical: 18, horizontal: 12),
+            ),
+            validator: (value) => null, // Remove inline validation
+          ),
+        ),
+        if (_submitted && contact['relationship']?.text.isEmpty == true)  // Only show if submitted
+          Padding(
+            padding: const EdgeInsets.only(left: 8, top: 4),
+            child: Text(
+              'Please select a relationship',
+              style: TextStyle(color: Colors.red.shade700, fontSize: 12),
+            ),
+          ),
+
+        const SizedBox(height: 12),
+        Container(
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey.shade400),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: TextFormField(
+            controller: contact['phone'],
+            decoration: const InputDecoration(
+              labelText: "Emergency Contact's Phone Number",
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.symmetric(vertical: 18, horizontal: 12),
+            ),
+            keyboardType: TextInputType.phone,
+            validator: (value) => null, // Remove inline validation
+          ),
+        ),
+        if (_submitted && contact['phone']?.text.isEmpty == true)  // Only show if submitted
+          Padding(
+            padding: const EdgeInsets.only(left: 8, top: 4),
+            child: Text(
+              'Please enter a phone number',
+              style: TextStyle(color: Colors.red.shade700, fontSize: 12),
+            ),
+          ),
+      ],
     );
   }
 }
