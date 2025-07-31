@@ -21,7 +21,11 @@ class SOSitApp extends StatelessWidget {
     return MaterialApp(
       title: 'SOSit',
       debugShowCheckedModeBanner: false,
-      home: LandingPage(),
+      initialRoute: '/',
+      routes: {
+        '/': (context) => const LandingPage(),
+        '/login': (context) => const LoginPage(),
+      },
     );
   }
 }

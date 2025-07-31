@@ -12,8 +12,9 @@ class ProfilePage extends StatefulWidget {
 
 class _ProfilePageState extends State<ProfilePage> {
   final supabase = Supabase.instance.client;
-
   final _formKey = GlobalKey<FormState>();
+  
+  // Keep your current controllers
   final TextEditingController _fullNameController = TextEditingController();
   final TextEditingController _dobController = TextEditingController();
   final TextEditingController _userPhoneController = TextEditingController();
@@ -113,6 +114,14 @@ class _ProfilePageState extends State<ProfilePage> {
     
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) return;
+
+    final updates = {
+      'id': userId,
+      'emergency_contact_name': _nameController.text.trim(),
+      'emergency_phone': _phoneController.text.trim(),
+      'relationship': _selectedRelationship,
+      'updated_at': DateTime.now().toIso8601String(),
+    };
 
     try {
       debugPrint('Starting profile save...');
