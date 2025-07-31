@@ -115,18 +115,10 @@ class _ProfilePageState extends State<ProfilePage> {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) return;
 
-    final updates = {
-      'id': userId,
-      'emergency_contact_name': _nameController.text.trim(),
-      'emergency_phone': _phoneController.text.trim(),
-      'relationship': _selectedRelationship,
-      'updated_at': DateTime.now().toIso8601String(),
-    };
-
     try {
       debugPrint('Starting profile save...');
       
-      // Handle photo first if there's a new one
+      // Handle photo upload first
       String? photoUrl = _profilePhotoUrl;
       if (_newProfilePhoto != null) {
         photoUrl = await _uploadProfilePhoto(_newProfilePhoto!);
