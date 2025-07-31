@@ -19,14 +19,14 @@ class _ProfilePageState extends State<ProfilePage> {
   final TextEditingController _dobController = TextEditingController();
   final TextEditingController _userPhoneController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _emergencyNameController = TextEditingController();
-  final TextEditingController _emergencyPhoneController = TextEditingController();
+  final TextEditingController _emergencyNameController =
+      TextEditingController();
+  final TextEditingController _emergencyPhoneController =
+      TextEditingController();
   final TextEditingController _relationshipController = TextEditingController();
 
   String _profilePhotoUrl = '';
   File? _newProfilePhoto;
-  bool _isEditingPhoto = false;
-  bool _submitted = false;
 
   final List<Map<String, TextEditingController>> _emergencyContacts = [];
 
@@ -43,17 +43,8 @@ class _ProfilePageState extends State<ProfilePage> {
 
     try {
       // First, try to get the profile data
-      final data = await supabase.from('profiles').select('*').eq('id', userId).single();
-      
-      // If this is the first time loading (no data exists), create initial profile with email
-      if (data == null && user?.email != null) {
-        await supabase.from('profiles').upsert({
-          'id': userId,
-          'email': user!.email,
-          'created_at': DateTime.now().toIso8601String(),
-          'updated_at': DateTime.now().toIso8601String(),
-        });
-      }
+      final data =
+          await supabase.from('profiles').select('*').eq('id', userId).single();
 
       setState(() {
         _fullNameController.text = data['full_name'] ?? '';
@@ -67,30 +58,49 @@ class _ProfilePageState extends State<ProfilePage> {
 
         // Clear existing emergency contacts
         _emergencyContacts.clear();
-        
+
         // Add emergency contact 2 if it exists
-        if (data['emergency_contact_name2'] != null || 
-            data['emergency_phone2'] != null || 
+        if (data['emergency_contact_name2'] != null ||
+            data['emergency_phone2'] != null ||
             data['relationship2'] != null) {
           _emergencyContacts.add({
-            'name': TextEditingController(text: data['emergency_contact_name2'] ?? ''),
-            'phone': TextEditingController(text: data['emergency_phone2'] ?? ''),
-            'relationship': TextEditingController(text: data['relationship2'] ?? ''),
+            'name': TextEditingController(
+                text: data['emergency_contact_name2'] ?? ''),
+            'phone':
+                TextEditingController(text: data['emergency_phone2'] ?? ''),
+            'relationship':
+                TextEditingController(text: data['relationship2'] ?? ''),
           });
         }
       });
     } catch (e) {
-      debugPrint('Error loading profile: $e');
+      // If no profile exists, create initial profile with email
+      if (user?.email != null) {
+        try {
+          await supabase.from('profiles').upsert({
+            'id': userId,
+            'email': user!.email,
+            'created_at': DateTime.now().toIso8601String(),
+            'updated_at': DateTime.now().toIso8601String(),
+          });
+          // Reload the profile after creating it
+          await _loadUserProfile();
+        } catch (createError) {
+          debugPrint('Error creating profile: $createError');
+        }
+      } else {
+        debugPrint('Error loading profile: $e');
+      }
     }
   }
 
   Future<void> _pickProfilePhoto() async {
     final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
+    final picked =
+        await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
     if (picked != null) {
       setState(() {
         _newProfilePhoto = File(picked.path);
-        _isEditingPhoto = true;
       });
     }
   }
@@ -103,10 +113,11 @@ class _ProfilePageState extends State<ProfilePage> {
       final fileName = '$userId.$fileExt';
       final bytes = await file.readAsBytes();
       await supabase.storage.from('profile-photo').uploadBinary(
-        fileName,
-        bytes,
-        fileOptions: const FileOptions(contentType: 'image/jpeg', upsert: true),
-      );
+            fileName,
+            bytes,
+            fileOptions:
+                const FileOptions(contentType: 'image/jpeg', upsert: true),
+          );
       return supabase.storage.from('profile-photo').getPublicUrl(fileName);
     } catch (e) {
       debugPrint('Error uploading photo: $e');
@@ -115,7 +126,7 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   void _addNewEmergencyContact() {
-    if (_emergencyContacts.length < 1) {
+    if (_emergencyContacts.isEmpty) {
       setState(() {
         _emergencyContacts.add({
           'name': TextEditingController(),
@@ -127,7 +138,6 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Future<void> _saveProfile() async {
-    setState(() => _submitted = true);
     if (!_formKey.currentState!.validate()) return;
 
     final userId = supabase.auth.currentUser?.id;
@@ -148,7 +158,8 @@ class _ProfilePageState extends State<ProfilePage> {
         'full_name': _fullNameController.text.trim(),
         'birthdate': _dobController.text,
         'phone': _userPhoneController.text.trim(),
-        'email': supabase.auth.currentUser?.email ?? _emailController.text.trim(),
+        'email':
+            supabase.auth.currentUser?.email ?? _emailController.text.trim(),
         'photo_path': _profilePhotoUrl,
         'emergency_contact_name': _emergencyNameController.text.trim(),
         'emergency_phone': _emergencyPhoneController.text.trim(),
@@ -169,10 +180,9 @@ class _ProfilePageState extends State<ProfilePage> {
       }
 
       await _loadUserProfile();
-      if (context.mounted) {
+      if (mounted) {
         setState(() {
           _newProfilePhoto = null;
-          _isEditingPhoto = false;
         });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Profile saved successfully!')),
@@ -180,7 +190,7 @@ class _ProfilePageState extends State<ProfilePage> {
       }
     } catch (e) {
       debugPrint('Error saving profile: $e');
-      if (context.mounted) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error saving profile: $e')),
         );
@@ -222,9 +232,11 @@ class _ProfilePageState extends State<ProfilePage> {
                           : (_profilePhotoUrl.isNotEmpty
                               ? NetworkImage(_profilePhotoUrl)
                               : null) as ImageProvider<Object>?,
-                      child: (_newProfilePhoto == null && _profilePhotoUrl.isEmpty)
-                          ? const Icon(Icons.person, size: 56, color: Colors.grey)
-                          : null,
+                      child:
+                          (_newProfilePhoto == null && _profilePhotoUrl.isEmpty)
+                              ? const Icon(Icons.person,
+                                  size: 56, color: Colors.grey)
+                              : null,
                     ),
                     Positioned(
                       bottom: 0,
@@ -236,9 +248,12 @@ class _ProfilePageState extends State<ProfilePage> {
                           decoration: const BoxDecoration(
                             color: Colors.white,
                             shape: BoxShape.circle,
-                            boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4)],
+                            boxShadow: [
+                              BoxShadow(color: Colors.black12, blurRadius: 4)
+                            ],
                           ),
-                          child: const Icon(Icons.edit, color: Colors.blueAccent, size: 22),
+                          child: const Icon(Icons.edit,
+                              color: Colors.blueAccent, size: 22),
                         ),
                       ),
                     ),
@@ -247,16 +262,20 @@ class _ProfilePageState extends State<ProfilePage> {
               ),
               const SizedBox(height: 24),
 
-              const Text('Personal Details', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+              const Text('Personal Details',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
               const SizedBox(height: 12),
 
               _buildTextField(_fullNameController, 'Full Name'),
               _buildDateField(),
-              _buildTextField(_userPhoneController, 'Phone Number', keyboardType: TextInputType.phone),
-              _buildTextField(_emailController, 'Email Address', readOnly: true),
+              _buildTextField(_userPhoneController, 'Phone Number',
+                  keyboardType: TextInputType.phone),
+              _buildTextField(_emailController, 'Email Address',
+                  readOnly: true),
 
               Divider(height: 32, thickness: 1.2, color: Colors.grey[200]),
-              const Text('Emergency Contacts', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+              const Text('Emergency Contacts',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
               const SizedBox(height: 12),
 
               _buildEmergencyContactCard({
@@ -265,20 +284,25 @@ class _ProfilePageState extends State<ProfilePage> {
                 'relationship': _relationshipController,
               }),
 
-              ..._emergencyContacts.map((contact) => _buildEmergencyContactCard(contact, removable: true)),
+              ..._emergencyContacts.map((contact) =>
+                  _buildEmergencyContactCard(contact, removable: true)),
 
-              if (_emergencyContacts.length < 1)
-                Container(
-                  width: MediaQuery.of(context).size.width * 0.5, // Make button 80% of screen width
+              if (_emergencyContacts.isEmpty)
+                SizedBox(
+                  width: MediaQuery.of(context).size.width *
+                      0.5, // Make button 80% of screen width
                   child: OutlinedButton.icon(
                     onPressed: _addNewEmergencyContact,
                     icon: const Icon(Icons.add, color: Color(0xFFF73D5C)),
                     label: const Text('Add Emergency Contact',
-                        style: TextStyle(color: Color(0xFFF73D5C), fontWeight: FontWeight.bold)),
+                        style: TextStyle(
+                            color: Color(0xFFF73D5C),
+                            fontWeight: FontWeight.bold)),
                     style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         side: const BorderSide(color: Color(0xFFF73D5C)),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32))),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(32))),
                   ),
                 ),
 
@@ -298,7 +322,10 @@ class _ProfilePageState extends State<ProfilePage> {
                   ),
                   child: const Text(
                     'Save',
-                    style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                        fontSize: 16,
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold),
                   ),
                 ),
               ),
@@ -354,15 +381,21 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Widget _buildTextField(TextEditingController controller, String label,
-      {bool readOnly = false, TextInputType keyboardType = TextInputType.text}) {
+      {bool readOnly = false,
+      TextInputType keyboardType = TextInputType.text}) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade400), borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(
+          border: Border.all(color: Colors.grey.shade400),
+          borderRadius: BorderRadius.circular(12)),
       child: TextFormField(
         controller: controller,
         readOnly: readOnly,
         keyboardType: keyboardType,
-        decoration: InputDecoration(labelText: label, border: InputBorder.none, contentPadding: const EdgeInsets.all(12)),
+        decoration: InputDecoration(
+            labelText: label,
+            border: InputBorder.none,
+            contentPadding: const EdgeInsets.all(12)),
         validator: (v) => v == null || v.isEmpty ? 'Required' : null,
       ),
     );
@@ -371,37 +404,50 @@ class _ProfilePageState extends State<ProfilePage> {
   Widget _buildDateField() {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade400), borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(
+          border: Border.all(color: Colors.grey.shade400),
+          borderRadius: BorderRadius.circular(12)),
       child: TextFormField(
         controller: _dobController,
         readOnly: true,
-        decoration: const InputDecoration(labelText: 'Date of Birth', border: InputBorder.none, contentPadding: EdgeInsets.all(12)),
+        decoration: const InputDecoration(
+            labelText: 'Date of Birth',
+            border: InputBorder.none,
+            contentPadding: EdgeInsets.all(12)),
         onTap: () async {
           DateTime? picked = await showDatePicker(
               context: context,
-              initialDate: DateTime.tryParse(_dobController.text) ?? DateTime(2000),
+              initialDate:
+                  DateTime.tryParse(_dobController.text) ?? DateTime(2000),
               firstDate: DateTime(1900),
               lastDate: DateTime.now());
           if (picked != null) {
-            _dobController.text = "${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}";
+            _dobController.text =
+                "${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}";
           }
         },
       ),
     );
   }
 
-  Widget _buildEmergencyContactCard(Map<String, TextEditingController> contact, {bool removable = false}) {
+  Widget _buildEmergencyContactCard(Map<String, TextEditingController> contact,
+      {bool removable = false}) {
     return Container(
       margin: const EdgeInsets.only(top: 16),
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade200), borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(
+          border: Border.all(color: Colors.grey.shade200),
+          borderRadius: BorderRadius.circular(12)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (removable)
             Align(
               alignment: Alignment.topRight,
-              child: IconButton(icon: const Icon(Icons.close), onPressed: () => setState(() => _emergencyContacts.remove(contact))),
+              child: IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () =>
+                      setState(() => _emergencyContacts.remove(contact))),
             ),
           _buildEmergencyContactFields(contact),
         ],
@@ -409,34 +455,12 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  Widget _buildEmergencyContactFields(Map<String, TextEditingController> contact) {
-    const predefinedRelationships = ['Spouse', 'Father', 'Mother', 'Sibling', 'Friend', 'Relative'];
+  Widget _buildEmergencyContactFields(
+      Map<String, TextEditingController> contact) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildTextField(contact['name']!, 'Emergency Contact Name'),
-        Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey.shade400),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: DropdownButtonFormField<String>(
-            value: contact['relationship']!.text.isEmpty ? null : contact['relationship']!.text,
-            items: predefinedRelationships
-                .map((rel) => DropdownMenuItem(value: rel, child: Text(rel)))
-                .toList(),
-            onChanged: (val) {
-              contact['relationship']!.text = val ?? '';
-              setState(() {});
-            },
-            decoration: const InputDecoration(
-              labelText: "Relationship to User",
-              border: InputBorder.none,
-              contentPadding: EdgeInsets.all(12),
-            ),
-          ),
-        ),
         const SizedBox(height: 12),
         _buildTextField(
           contact['phone']!,
@@ -447,4 +471,3 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 }
-
