@@ -120,9 +120,9 @@ class _ProfilePageState extends State<ProfilePage> {
     if (userId == null) return;
 
     try {
-      String? photoUrl = _profilePhotoUrl;
+      String? photo_path = _profilePhotoUrl;
       if (_newProfilePhoto != null) {
-        photoUrl = await _uploadProfilePhoto(_newProfilePhoto!);
+        photo_path = await _uploadProfilePhoto(_newProfilePhoto!);
       }
 
       final profileData = {
