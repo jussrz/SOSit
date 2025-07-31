@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -10,10 +12,15 @@ class ProfilePage extends StatefulWidget {
 
 class _ProfilePageState extends State<ProfilePage> {
   final supabase = Supabase.instance.client;
-
   final _formKey = GlobalKey<FormState>();
-  final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _phoneController = TextEditingController();
+  
+  // Keep your current controllers
+  final TextEditingController _fullNameController = TextEditingController();
+  final TextEditingController _dobController = TextEditingController();
+  final TextEditingController _userPhoneController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _emergencyNameController = TextEditingController();
+  final TextEditingController _emergencyPhoneController = TextEditingController();
   final TextEditingController _relationshipController = TextEditingController();
 
   String _profilePhotoUrl = '';
@@ -35,21 +42,25 @@ class _ProfilePageState extends State<ProfilePage> {
   Future<void> _loadUserProfile() async {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) return;
-
     try {
       final data = await supabase
           .from('profiles')
           .select()
           .eq('id', userId)
           .single();
+      debugPrint('Loaded profile: $data');
 
       setState(() {
-        _nameController.text = data['emergency_contact_name'] ?? '';
-        _phoneController.text = data['emergency_phone'] ?? '';
+        _fullNameController.text = data['full_name'] ?? '';
+        _dobController.text = data['birthdate'] ?? '';
+        _userPhoneController.text = data['phone'] ?? ''; // Changed from user_phone to phone
+        _emailController.text = data['email'] ?? supabase.auth.currentUser?.email ?? '';
+        _profilePhotoUrl = data['photo_path'] ?? '';
+        _emergencyNameController.text = data['emergency_contact_name'] ?? '';
+        _emergencyPhoneController.text = data['emergency_phone'] ?? '';
         _relationshipController.text = data['relationship'] ?? '';
       });
     } catch (e) {
-      // Handle missing profile or error silently
       debugPrint('Error loading profile: $e');
     }
   }
@@ -122,9 +133,19 @@ class _ProfilePageState extends State<ProfilePage> {
     });
     
     if (!_formKey.currentState!.validate()) return;
-
+    
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) return;
+
+    try {
+      debugPrint('Starting profile save...');
+      
+      // Handle photo upload first
+      String? photoUrl = _profilePhotoUrl;
+      if (_newProfilePhoto != null) {
+        photoUrl = await _uploadProfilePhoto(_newProfilePhoto!);
+        debugPrint('Uploaded photo URL: $photoUrl');
+      }
 
       final updates = {
         'id': userId,
@@ -141,18 +162,51 @@ class _ProfilePageState extends State<ProfilePage> {
         'updated_at': DateTime.now().toIso8601String(),
       };
 
-    try {
-      await supabase.from('profiles').upsert(updates);
+      debugPrint('Saving profile with data: $updates');
+
+      // First check if profile exists
+      final existing = await supabase
+          .from('profiles')
+          .select()
+          .eq('id', userId)
+          .maybeSingle();
+
+      if (existing == null) {
+        // Insert new profile
+        debugPrint('Creating new profile...');
+        await supabase.from('profiles').insert(updates);
+      } else {
+        // Update existing profile
+        debugPrint('Updating existing profile...');
+        await supabase
+            .from('profiles')
+            .update(updates)
+            .eq('id', userId);
+      }
+
+      debugPrint('Profile saved successfully');
+      
+      // Reload profile to verify changes
+      await _loadUserProfile();
+
       if (context.mounted) {
+        setState(() {
+          if (photoUrl != null) _profilePhotoUrl = photoUrl;
+          _newProfilePhoto = null;
+          _isEditingPhoto = false;
+        });
+        
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Emergency contact saved!')),
+          const SnackBar(content: Text('Profile saved successfully!')),
         );
       }
-    } catch (e) {
+
+    } catch (e, stack) {
       debugPrint('Error saving profile: $e');
+      debugPrint('Stack trace: $stack');
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error saving contact: $e')),
+          SnackBar(content: Text('Error saving profile: $e')),
         );
       }
     }
@@ -160,32 +214,79 @@ class _ProfilePageState extends State<ProfilePage> {
 
   @override
   Widget build(BuildContext context) {
-    final email = supabase.auth.currentUser?.email ?? 'No email';
-
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Profile'),
         backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
         elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        centerTitle: true,
+        title: const Text('User Information', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w500)),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Profile Header
-            Center(
-              child: Column(
-                children: [
-                  const CircleAvatar(
-                    radius: 50,
-                    backgroundImage: AssetImage('assets/default_user.png'),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    email,
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 8),
+              Center(
+                child: Stack(
+                  alignment: Alignment.bottomRight,
+                  children: [
+                    CircleAvatar(
+                      radius: 56,
+                      backgroundColor: Colors.grey[200],
+                      backgroundImage: _newProfilePhoto != null
+                          ? FileImage(_newProfilePhoto!)
+                          : (_profilePhotoUrl.isNotEmpty
+                              ? NetworkImage(_profilePhotoUrl)
+                              : null) as ImageProvider<Object>?, // <-- Cast to ImageProvider<Object>?
+                      child: (_newProfilePhoto == null && _profilePhotoUrl.isEmpty)
+                          ? const Icon(Icons.person, size: 56, color: Colors.grey)
+                          : null,
+                    ),
+                    Positioned(
+                      bottom: 0,
+                      right: 4,
+                      child: GestureDetector(
+                        onTap: _pickProfilePhoto,
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black12,
+                                blurRadius: 4,
+                              ),
+                            ],
+                          ),
+                          child: const Icon(Icons.edit, color: Colors.blueAccent, size: 22),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+              const Text('Personal Details', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+              const SizedBox(height: 12),
+              Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey.shade400),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: TextFormField(
+                  controller: _fullNameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Full Name',
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.symmetric(vertical: 18, horizontal: 12),
                   ),
                   validator: (v) => v == null || v.isEmpty ? 'Please enter your name' : null,
                 ),
