@@ -16,13 +16,12 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  image_picker: ^1.0.0
+    image_picker: ^1.0.0
 
   # Add other dependencies here
   cupertino_icons: ^1.0.2
   supabase_flutter: ^2.9.1
   google_maps_flutter: ^2.12.3
-  geolocator: ^10.1.0
   flutter_svg: ^2.0.10
   font_awesome_flutter: ^10.7.0
 
