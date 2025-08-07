@@ -1,5 +1,3 @@
-
-
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:io';
@@ -40,25 +38,112 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Future<void> _loadUserProfile() async {
     final userId = supabase.auth.currentUser?.id;
-    if (userId == null) return;
+    if (userId == null) {
+      debugPrint('No user ID found');
+      return;
+    }
+    
+    debugPrint('Loading profile for user: $userId');
+    
     try {
       final data = await supabase
           .from('profiles')
           .select()
           .eq('id', userId)
           .single();
+      
+      // Debug: Print raw data from database
+      debugPrint('Raw database data: $data');
+      debugPrint('Available keys in data: ${data.keys.toList()}');
+      
       setState(() {
         _fullNameController.text = data['full_name'] ?? '';
-        _dobController.text = data['dob'] ?? '';
-        _userPhoneController.text = data['user_phone'] ?? '';
+        
+        // Try multiple possible birthdate column names
+        String birthdate = data['birthdate'] ?? 
+                          data['birth_date'] ?? 
+                          data['date_of_birth'] ?? 
+                          data['dob'] ?? '';
+        
+        debugPrint('Birthdate from database: "$birthdate"');
+        _dobController.text = birthdate;
+        
+        // Try different possible phone column names
+        _userPhoneController.text = data['user_phone'] ?? 
+                                   data['phone'] ?? 
+                                   data['phone_number'] ?? 
+                                   data['mobile'] ?? '';
+        
         _emailController.text = data['email'] ?? supabase.auth.currentUser?.email ?? '';
         _profilePhotoUrl = data['profile_photo_url'] ?? '';
         _emergencyNameController.text = data['emergency_contact_name'] ?? '';
-        _emergencyPhoneController.text = data['emergency_phone'] ?? '';
-        _relationshipController.text = data['relationship'] ?? '';
+        _emergencyPhoneController.text = data['emergency_phone'] ?? 
+                                        data['emergency_contact_phone'] ?? '';
+        
+        // Handle relationship with case insensitive matching
+        String relationship = data['relationship'] ?? '';
+        debugPrint('Raw relationship from database: "$relationship"');
+        
+        // Normalize the relationship value to match our dropdown options
+        if (relationship.isNotEmpty) {
+          String normalizedRelationship = relationship.toLowerCase();
+          switch (normalizedRelationship) {
+            case 'spouse':
+              _relationshipController.text = 'Spouse';
+              break;
+            case 'mother':
+              _relationshipController.text = 'Mother';
+              break;
+            case 'father':
+              _relationshipController.text = 'Father';
+              break;
+            case 'parent':
+              // If database has 'parent', default to 'Mother' or keep as is
+              _relationshipController.text = 'Mother';
+              break;
+            case 'sibling':
+              _relationshipController.text = 'Sibling';
+              break;
+            case 'friend':
+              _relationshipController.text = 'Friend';
+              break;
+            case 'relative':
+            case 'other':
+              _relationshipController.text = 'Relative';
+              break;
+            default:
+              // If the value matches exactly one of our options, use it
+              if (['Spouse', 'Mother', 'Father', 'Sibling', 'Friend', 'Relative'].contains(relationship)) {
+                _relationshipController.text = relationship;
+              } else {
+                _relationshipController.text = 'Relative'; // Default fallback
+              }
+          }
+        } else {
+          _relationshipController.text = '';
+        }
+        
+        debugPrint('Normalized relationship: "${_relationshipController.text}"');
       });
+      
+      // Debug: Print what was loaded into controllers
+      debugPrint('Profile loaded successfully');
+      debugPrint('Full Name: "${_fullNameController.text}"');
+      debugPrint('DOB Controller: "${_dobController.text}"');
+      debugPrint('Phone: "${_userPhoneController.text}"');
+      debugPrint('Email: "${_emailController.text}"');
+      debugPrint('Emergency Name: "${_emergencyNameController.text}"');
+      debugPrint('Emergency Phone: "${_emergencyPhoneController.text}"');
+      debugPrint('Relationship: "${_relationshipController.text}"');
+      
     } catch (e) {
       debugPrint('Error loading profile: $e');
+      // Show error message to user
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load profile: $e')),
+        );
+      }
     }
   }
 
@@ -108,7 +193,7 @@ class _ProfilePageState extends State<ProfilePage> {
     final updates = {
       'id': userId,
       'full_name': _fullNameController.text.trim(),
-      'dob': _dobController.text.trim(),
+      'birthdate': _dobController.text.trim(), // Use 'birthdate' instead of 'dob'
       'user_phone': _userPhoneController.text.trim(),
       'email': _emailController.text.trim(),
       'profile_photo_url': photoUrl,
@@ -142,6 +227,7 @@ class _ProfilePageState extends State<ProfilePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.grey[100],
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
@@ -153,153 +239,124 @@ class _ProfilePageState extends State<ProfilePage> {
         title: const Text('User Information', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w500)),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        padding: const EdgeInsets.all(20),
         child: Form(
           key: _formKey,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(height: 8),
+              // Profile Photo Section
               Center(
                 child: Stack(
                   alignment: Alignment.bottomRight,
                   children: [
-                    CircleAvatar(
-                      radius: 56,
-                      backgroundColor: Colors.grey[200],
-                      backgroundImage: _newProfilePhoto != null
-                          ? FileImage(_newProfilePhoto!)
-                          : (_profilePhotoUrl.isNotEmpty
-                              ? NetworkImage(_profilePhotoUrl)
-                              : const AssetImage('assets/default_user.png') as ImageProvider),
+                    Container(
+                      width: 80,
+                      height: 80,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[300],
+                        shape: BoxShape.circle,
+                        image: _newProfilePhoto != null
+                            ? DecorationImage(
+                                image: FileImage(_newProfilePhoto!),
+                                fit: BoxFit.cover,
+                              )
+                            : (_profilePhotoUrl.isNotEmpty
+                                ? DecorationImage(
+                                    image: NetworkImage(_profilePhotoUrl),
+                                    fit: BoxFit.cover,
+                                  )
+                                : null),
+                      ),
+                      child: (_newProfilePhoto == null && _profilePhotoUrl.isEmpty)
+                          ? Icon(Icons.person, size: 40, color: Colors.grey[600])
+                          : null,
                     ),
                     Positioned(
-                      bottom: 0,
-                      right: 4,
+                      bottom: 2,
+                      right: 2,
                       child: GestureDetector(
                         onTap: _pickProfilePhoto,
                         child: Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
+                          width: 28,
+                          height: 28,
+                          decoration: const BoxDecoration(
+                            color: Colors.blue,
                             shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black12,
-                                blurRadius: 4,
-                              ),
-                            ],
                           ),
-                          child: const Icon(Icons.edit, color: Colors.blueAccent, size: 22),
+                          child: const Icon(Icons.edit, color: Colors.white, size: 16),
                         ),
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 24),
-              const Text('Personal Details', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+              const SizedBox(height: 32),
+              
+              // Personal Details Section
+              const Text('Personal Details', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16, color: Colors.black)),
+              const SizedBox(height: 16),
+              
+              _buildTextField('Full Name', _fullNameController),
               const SizedBox(height: 12),
-              TextFormField(
-                controller: _fullNameController,
-                decoration: const InputDecoration(labelText: 'Full Name'),
-                validator: (v) => v == null || v.isEmpty ? 'Please enter your name' : null,
-              ),
+              _buildTextField('Date of Birth', _dobController, readOnly: true, onTap: () async {
+                DateTime? picked = await showDatePicker(
+                  context: context,
+                  initialDate: _dobController.text.isNotEmpty ? DateTime.tryParse(_dobController.text) ?? DateTime(2000, 1, 1) : DateTime(2000, 1, 1),
+                  firstDate: DateTime(1900),
+                  lastDate: DateTime.now(),
+                );
+                if (picked != null) {
+                  _dobController.text = "${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}";
+                }
+              }),
               const SizedBox(height: 12),
-              TextFormField(
-                controller: _dobController,
-                readOnly: true,
-                decoration: const InputDecoration(labelText: 'Date of Birth'),
-                onTap: () async {
-                  DateTime? picked = await showDatePicker(
-                    context: context,
-                    initialDate: _dobController.text.isNotEmpty ? DateTime.tryParse(_dobController.text) ?? DateTime(2000, 1, 1) : DateTime(2000, 1, 1),
-                    firstDate: DateTime(1900),
-                    lastDate: DateTime.now(),
-                  );
-                  if (picked != null) {
-                    _dobController.text = "${picked.month.toString().padLeft(2, '0')}/${picked.day.toString().padLeft(2, '0')}/${picked.year}";
-                  }
-                },
-                validator: (v) => v == null || v.isEmpty ? 'Please select your date of birth' : null,
-              ),
+              _buildTextField('Phone Number', _userPhoneController, keyboardType: TextInputType.phone),
               const SizedBox(height: 12),
-              TextFormField(
-                controller: _userPhoneController,
-                decoration: const InputDecoration(labelText: 'Phone Number'),
-                keyboardType: TextInputType.phone,
-                validator: (v) => v == null || v.isEmpty ? 'Please enter your phone number' : null,
-              ),
+              _buildTextField('Email Address', _emailController, readOnly: true),
+              
+              const SizedBox(height: 32),
+              
+              // Emergency Contact Section
+              const Text('Emergency Contacts', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16, color: Colors.black)),
+              const SizedBox(height: 16),
+              
+              _buildTextField('Emergency Contact Name', _emergencyNameController),
               const SizedBox(height: 12),
-              TextFormField(
-                controller: _emailController,
-                decoration: const InputDecoration(labelText: 'Email Address'),
-                readOnly: true,
-              ),
-              const SizedBox(height: 18),
-              Divider(height: 32, thickness: 1.2, color: Colors.grey[200]),
-              const Text('Emergency Contact', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+              _buildDropdownTextField('Relationship to User', _relationshipController),
               const SizedBox(height: 12),
-              TextFormField(
-                controller: _emergencyNameController,
-                decoration: const InputDecoration(labelText: 'Emergency Contact Name'),
-                validator: (v) => v == null || v.isEmpty ? 'Please enter a name' : null,
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                value: _relationshipController.text.isNotEmpty ? _relationshipController.text : null,
-                items: const [
-                  DropdownMenuItem(value: 'Spouse', child: Text('Spouse')),
-                  DropdownMenuItem(value: 'Parent', child: Text('Parent')),
-                  DropdownMenuItem(value: 'Sibling', child: Text('Sibling')),
-                  DropdownMenuItem(value: 'Friend', child: Text('Friend')),
-                  DropdownMenuItem(value: 'Other', child: Text('Other')),
-                ],
-                onChanged: (val) {
-                  setState(() {
-                    _relationshipController.text = val ?? '';
-                  });
-                },
-                decoration: const InputDecoration(labelText: "Relationship to User"),
-                validator: (v) => v == null || v.isEmpty ? 'Please select a relationship' : null,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _emergencyPhoneController,
-                decoration: const InputDecoration(labelText: "Emergency Contact's Phone Number"),
-                keyboardType: TextInputType.phone,
-                validator: (v) => v == null || v.isEmpty ? 'Please enter a phone number' : null,
-              ),
-              const SizedBox(height: 24),
-              Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: _saveProfile,
-                      icon: const Icon(Icons.person_add, color: Colors.white),
-                      label: const Text('Add Emergency Contact'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.redAccent,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        textStyle: const TextStyle(fontSize: 16),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
+              _buildTextField('Emergency Contact\'s Phone Number', _emergencyPhoneController, keyboardType: TextInputType.phone),
+              
+              const SizedBox(height: 32),
+              
+              // Add Button
+              Container(
                 width: double.infinity,
-                child: ElevatedButton(
+                height: 48,
+                decoration: BoxDecoration(
+                  border: Border.all(color: const Color(0xFFF73D5C), width: 1),
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: TextButton.icon(
                   onPressed: _saveProfile,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.redAccent,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                  ),
-                  child: const Text(
-                    'Save',
-                    style: TextStyle(fontSize: 16, color: Colors.white),
-                  ),
+                  icon: const Icon(Icons.add, color: Color(0xFFF73D5C), size: 18),
+                  label: const Text('Add Emergency Contact', style: TextStyle(color: Color(0xFFF73D5C), fontSize: 15, fontWeight: FontWeight.w500)),
+                ),
+              ),
+              
+              const SizedBox(height: 16),
+              
+              // Save Button
+              Container(
+                width: double.infinity,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF73D5C),
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: TextButton(
+                  onPressed: _saveProfile,
+                  child: const Text('Save', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600)),
                 ),
               ),
             ],
@@ -307,5 +364,105 @@ class _ProfilePageState extends State<ProfilePage> {
         ),
       ),
     );
+  }
+
+  Widget _buildTextField(String label, TextEditingController controller, {
+    bool readOnly = false,
+    VoidCallback? onTap,
+    TextInputType? keyboardType,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.grey.shade400),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: TextFormField(
+        controller: controller,
+        readOnly: readOnly,
+        onTap: onTap,
+        keyboardType: keyboardType,
+        decoration: InputDecoration(
+          hintText: label,
+          hintStyle: const TextStyle(
+            color: Colors.grey,
+            fontSize: 16,
+          ),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+        ),
+        style: const TextStyle(fontSize: 16, color: Colors.black),
+        validator: (value) {
+          // Add validation for required fields
+          if (label.contains('Full Name') || 
+              label.contains('Phone Number') || 
+              label.contains('Emergency Contact Name') || 
+              label.contains('Emergency Contact\'s Phone Number')) {
+            if (value == null || value.trim().isEmpty) {
+              return '$label is required';
+            }
+          }
+          return null;
+        },
+      ),
+    );
+  }
+
+  Widget _buildDropdownTextField(String label, TextEditingController controller) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.grey.shade400),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: DropdownButtonFormField<String>(
+        value: controller.text.isNotEmpty && 
+               ['Spouse', 'Mother', 'Father', 'Sibling', 'Friend', 'Relative'].contains(controller.text) 
+               ? controller.text 
+               : null,
+        items: const [
+          DropdownMenuItem(value: 'Spouse', child: Text('Spouse')),
+          DropdownMenuItem(value: 'Mother', child: Text('Mother')),
+          DropdownMenuItem(value: 'Father', child: Text('Father')),
+          DropdownMenuItem(value: 'Sibling', child: Text('Sibling')),
+          DropdownMenuItem(value: 'Friend', child: Text('Friend')),
+          DropdownMenuItem(value: 'Relative', child: Text('Relative')),
+        ],
+        onChanged: (val) {
+          setState(() {
+            controller.text = val ?? '';
+          });
+          debugPrint('Dropdown selected: "$val"');
+        },
+        decoration: InputDecoration(
+          hintText: controller.text.isEmpty ? label : null,
+          hintStyle: const TextStyle(
+            color: Colors.grey,
+            fontSize: 16,
+          ),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+        ),
+        style: const TextStyle(fontSize: 16, color: Colors.black),
+        validator: (value) {
+          if (value == null || value.isEmpty) {
+            return 'Please select a relationship';
+          }
+          return null;
+        },
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _fullNameController.dispose();
+    _dobController.dispose();
+    _userPhoneController.dispose();
+    _emailController.dispose();
+    _emergencyNameController.dispose();
+    _emergencyPhoneController.dispose();
+    _relationshipController.dispose();
+    super.dispose();
   }
 }
