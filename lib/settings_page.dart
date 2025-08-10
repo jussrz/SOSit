@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'login_details_page.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -36,10 +37,13 @@ class _SettingsPageState extends State<SettingsPage> {
             
             _buildSettingsItem(
               icon: Icons.person_outline,
-              title: 'Profile Information',
-              subtitle: 'Update your personal details',
+              title: 'Login Details',
+              subtitle: 'Update your email and password',
               onTap: () {
-                // Navigate to profile page
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const LoginDetailsPage()),
+                );
               },
             ),
             
