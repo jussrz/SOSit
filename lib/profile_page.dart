@@ -25,11 +25,18 @@ class _ProfilePageState extends State<ProfilePage> {
   final TextEditingController _emergencyNameController = TextEditingController();
   final TextEditingController _emergencyPhoneController = TextEditingController();
   final TextEditingController _relationshipController = TextEditingController();
+  
+  // Second emergency contact controllers
+  final TextEditingController _emergencyName2Controller = TextEditingController();
+  final TextEditingController _emergencyPhone2Controller = TextEditingController();
+  final TextEditingController _relationship2Controller = TextEditingController();
 
   String _profilePhotoUrl = '';
   File? _newProfilePhoto;
   bool _isEditingPhoto = false;
   bool _isLoading = false;
+  bool _showSecondContact = false;
+  bool _hasSecondContact = false;
 
   @override
   void initState() {
@@ -81,47 +88,29 @@ class _ProfilePageState extends State<ProfilePage> {
         _emergencyPhoneController.text = data['emergency_phone'] ?? 
                                         data['emergency_contact_phone'] ?? '';
         
-        // Handle relationship with case insensitive matching
+        // Load second emergency contact with correct column names
+        _emergencyName2Controller.text = data['emergency_contact_name2'] ?? '';
+        _emergencyPhone2Controller.text = data['emergency_phone2'] ?? '';
+        
+        // Check if second contact exists in database - both name AND phone must have values
+        _hasSecondContact = (_emergencyName2Controller.text.isNotEmpty && 
+                           _emergencyPhone2Controller.text.isNotEmpty);
+        
+        // Show second contact section if it exists in database OR if user clicked add button
+        _showSecondContact = _hasSecondContact;
+        
+        // Handle first relationship
         String relationship = data['relationship'] ?? '';
         debugPrint('Raw relationship from database: "$relationship"');
+        _relationshipController.text = _normalizeRelationship(relationship);
         
-        if (relationship.isNotEmpty) {
-          String normalizedRelationship = relationship.toLowerCase();
-          switch (normalizedRelationship) {
-            case 'spouse':
-              _relationshipController.text = 'Spouse';
-              break;
-            case 'mother':
-              _relationshipController.text = 'Mother';
-              break;
-            case 'father':
-              _relationshipController.text = 'Father';
-              break;
-            case 'parent':
-              _relationshipController.text = 'Mother';
-              break;
-            case 'sibling':
-              _relationshipController.text = 'Sibling';
-              break;
-            case 'friend':
-              _relationshipController.text = 'Friend';
-              break;
-            case 'relative':
-            case 'other':
-              _relationshipController.text = 'Relative';
-              break;
-            default:
-              if (['Spouse', 'Mother', 'Father', 'Sibling', 'Friend', 'Relative'].contains(relationship)) {
-                _relationshipController.text = relationship;
-              } else {
-                _relationshipController.text = 'Relative';
-              }
-          }
-        } else {
-          _relationshipController.text = '';
-        }
+        // Handle second relationship with correct column name
+        String relationship2 = data['relationship2'] ?? '';
+        debugPrint('Raw relationship 2 from database: "$relationship2"');
+        _relationship2Controller.text = _normalizeRelationship(relationship2);
         
         debugPrint('Normalized relationship: "${_relationshipController.text}"');
+        debugPrint('Normalized relationship 2: "${_relationship2Controller.text}"');
       });
       
       // Debug: Print what was loaded into controllers
@@ -133,6 +122,11 @@ class _ProfilePageState extends State<ProfilePage> {
       debugPrint('Emergency Name: "${_emergencyNameController.text}"');
       debugPrint('Emergency Phone: "${_emergencyPhoneController.text}"');
       debugPrint('Relationship: "${_relationshipController.text}"');
+      debugPrint('Emergency Name 2: "${_emergencyName2Controller.text}"');
+      debugPrint('Emergency Phone 2: "${_emergencyPhone2Controller.text}"');
+      debugPrint('Relationship 2: "${_relationship2Controller.text}"');
+      debugPrint('Has second contact: $_hasSecondContact');
+      debugPrint('Show second contact: $_showSecondContact');
       
     } catch (e) {
       debugPrint('Error loading profile: $e');
@@ -142,6 +136,46 @@ class _ProfilePageState extends State<ProfilePage> {
         );
       }
     }
+  }
+
+  String _normalizeRelationship(String relationship) {
+    if (relationship.isNotEmpty) {
+      String normalizedRelationship = relationship.toLowerCase();
+      switch (normalizedRelationship) {
+        case 'spouse':
+          return 'Spouse';
+        case 'mother':
+          return 'Mother';
+        case 'father':
+          return 'Father';
+        case 'parent':
+          return 'Mother';
+        case 'sibling':
+          return 'Sibling';
+        case 'friend':
+          return 'Friend';
+        case 'relative':
+        case 'other':
+          return 'Relative';
+        default:
+          if (['Spouse', 'Mother', 'Father', 'Sibling', 'Friend', 'Relative'].contains(relationship)) {
+            return relationship;
+          } else {
+            return 'Relative';
+          }
+      }
+    }
+    return '';
+  }
+
+  void _addSecondEmergencyContact() {
+    setState(() {
+      _showSecondContact = true;
+      // Clear the fields for new input
+      _emergencyName2Controller.clear();
+      _emergencyPhone2Controller.clear();
+      _relationship2Controller.clear();
+    });
   }
 
   Future<void> _pickProfilePhoto() async {
@@ -192,18 +226,21 @@ class _ProfilePageState extends State<ProfilePage> {
       debugPrint('Current user ID: $userId');
       debugPrint('Current user email: $userEmail');
 
-      // Prepare updates with only the fields we want to save
+      // Prepare updates with all fields including second emergency contact using correct column names
       final updates = <String, dynamic>{
         'id': userId,
         'full_name': _fullNameController.text.trim(),
         'birthdate': _dobController.text.trim(),
-        'phone': _userPhoneController.text.trim(), // Add phone number
+        'phone': _userPhoneController.text.trim(),
         'email': _emailController.text.trim().isNotEmpty 
             ? _emailController.text.trim() 
             : userEmail ?? '',
         'emergency_contact_name': _emergencyNameController.text.trim(),
         'emergency_phone': _emergencyPhoneController.text.trim(),
         'relationship': _relationshipController.text.trim(),
+        'emergency_contact_name2': _emergencyName2Controller.text.trim(),
+        'emergency_phone2': _emergencyPhone2Controller.text.trim(),
+        'relationship2': _relationship2Controller.text.trim(),
         'updated_at': DateTime.now().toIso8601String(),
       };
 
@@ -230,6 +267,15 @@ class _ProfilePageState extends State<ProfilePage> {
               duration: Duration(seconds: 2),
             ),
           );
+          
+          // Update the state to reflect that second contact now exists if it was added
+          if (_showSecondContact && 
+              _emergencyName2Controller.text.trim().isNotEmpty && 
+              _emergencyPhone2Controller.text.trim().isNotEmpty) {
+            setState(() {
+              _hasSecondContact = true;
+            });
+          }
           
           // Reload profile to verify changes
           await Future.delayed(const Duration(milliseconds: 300));
@@ -364,22 +410,53 @@ class _ProfilePageState extends State<ProfilePage> {
               const SizedBox(height: 12),
               _buildTextField('Emergency Contact\'s Phone Number', _emergencyPhoneController, keyboardType: TextInputType.phone),
               
+              // Second Emergency Contact Section (show if exists in DB or if user clicked add)
+              if (_showSecondContact) ...[
+                const SizedBox(height: 24),
+                const Text('Second Emergency Contact', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16, color: Colors.black)),
+                const SizedBox(height: 16),
+                
+                _buildTextField('Emergency Contact Name 2', _emergencyName2Controller),
+                const SizedBox(height: 12),
+                _buildDropdownTextField('Relationship to User 2', _relationship2Controller),
+                const SizedBox(height: 12),
+                _buildTextField('Emergency Contact\'s Phone Number 2', _emergencyPhone2Controller, keyboardType: TextInputType.phone),
+              ],
+              
               const SizedBox(height: 32),
               
-              // Add Button
-              Container(
-                width: double.infinity,
-                height: 48,
-                decoration: BoxDecoration(
-                  border: Border.all(color: const Color(0xFFF73D5C), width: 1),
-                  borderRadius: BorderRadius.circular(24),
+              // Add Button - only show if no second contact exists in database
+              if (!_hasSecondContact && !_showSecondContact)
+                Container(
+                  width: double.infinity,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: const Color(0xFFF73D5C), width: 1),
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  child: TextButton.icon(
+                    onPressed: _addSecondEmergencyContact,
+                    icon: const Icon(Icons.add, color: Color(0xFFF73D5C), size: 18),
+                    label: const Text('Add Emergency Contact', style: TextStyle(color: Color(0xFFF73D5C), fontSize: 15, fontWeight: FontWeight.w500)),
+                  ),
                 ),
-                child: TextButton.icon(
-                  onPressed: _saveProfile,
-                  icon: const Icon(Icons.add, color: Color(0xFFF73D5C), size: 18),
-                  label: const Text('Add Emergency Contact', style: TextStyle(color: Color(0xFFF73D5C), fontSize: 15, fontWeight: FontWeight.w500)),
+              
+              // Show disabled button if max contacts reached
+              if (_hasSecondContact || _showSecondContact) ...[
+                Container(
+                  width: double.infinity,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey, width: 1),
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  child: TextButton.icon(
+                    onPressed: null,
+                    icon: const Icon(Icons.check, color: Colors.grey, size: 18),
+                    label: const Text('Maximum Contacts Added', style: TextStyle(color: Colors.grey, fontSize: 15, fontWeight: FontWeight.w500)),
+                  ),
                 ),
-              ),
+              ],
               
               const SizedBox(height: 16),
               
@@ -579,5 +656,20 @@ class _ProfilePageState extends State<ProfilePage> {
         ],
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _fullNameController.dispose();
+    _dobController.dispose();
+    _userPhoneController.dispose();
+    _emailController.dispose();
+    _emergencyNameController.dispose();
+    _emergencyPhoneController.dispose();
+    _relationshipController.dispose();
+    _emergencyName2Controller.dispose();
+    _emergencyPhone2Controller.dispose();
+    _relationship2Controller.dispose();
+    super.dispose();
   }
 }
