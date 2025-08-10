@@ -604,6 +604,7 @@ class _ProfilePageState extends State<ProfilePage> {
         readOnly: readOnly,
         onTap: onTap,
         keyboardType: keyboardType,
+        cursorColor: const Color(0xFFF73D5C), // Add cursor color
         decoration: InputDecoration(
           labelText: label,
           labelStyle: const TextStyle(
