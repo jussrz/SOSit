@@ -441,23 +441,6 @@ class _ProfilePageState extends State<ProfilePage> {
                   ),
                 ),
               
-              // Show disabled button if max contacts reached
-              if (_hasSecondContact || _showSecondContact) ...[
-                Container(
-                  width: double.infinity,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey, width: 1),
-                    borderRadius: BorderRadius.circular(24),
-                  ),
-                  child: TextButton.icon(
-                    onPressed: null,
-                    icon: const Icon(Icons.check, color: Colors.grey, size: 18),
-                    label: const Text('Maximum Contacts Added', style: TextStyle(color: Colors.grey, fontSize: 15, fontWeight: FontWeight.w500)),
-                  ),
-                ),
-              ],
-              
               const SizedBox(height: 16),
               
               // Save Button
