@@ -63,15 +63,19 @@ class _LoginPageState extends State<LoginPage> {
         );
 
         if (response.user != null) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (_) => HomeScreen()),
-          );
+          if (mounted) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute<void>(builder: (_) => const HomeScreen()),
+            );
+          }
         }
       } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Login failed: $e')),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Login failed: $e')),
+          );
+        }
       }
     }
   }
@@ -318,7 +322,7 @@ class _LoginPageState extends State<LoginPage> {
                           onTap: () {
                             Navigator.push(
                               context,
-                              MaterialPageRoute(builder: (_) => const SignupPage()),
+                              MaterialPageRoute<void>(builder: (_) => const SignupPage()),
                             );
                           },
                           child: const Text(

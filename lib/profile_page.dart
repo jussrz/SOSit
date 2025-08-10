@@ -29,6 +29,7 @@ class _ProfilePageState extends State<ProfilePage> {
   String _profilePhotoUrl = '';
   File? _newProfilePhoto;
   bool _isEditingPhoto = false;
+  bool _isLoading = false;
 
   @override
   void initState() {
@@ -84,7 +85,6 @@ class _ProfilePageState extends State<ProfilePage> {
         String relationship = data['relationship'] ?? '';
         debugPrint('Raw relationship from database: "$relationship"');
         
-        // Normalize the relationship value to match our dropdown options
         if (relationship.isNotEmpty) {
           String normalizedRelationship = relationship.toLowerCase();
           switch (normalizedRelationship) {
@@ -98,7 +98,6 @@ class _ProfilePageState extends State<ProfilePage> {
               _relationshipController.text = 'Father';
               break;
             case 'parent':
-              // If database has 'parent', default to 'Mother' or keep as is
               _relationshipController.text = 'Mother';
               break;
             case 'sibling':
@@ -112,11 +111,10 @@ class _ProfilePageState extends State<ProfilePage> {
               _relationshipController.text = 'Relative';
               break;
             default:
-              // If the value matches exactly one of our options, use it
               if (['Spouse', 'Mother', 'Father', 'Sibling', 'Friend', 'Relative'].contains(relationship)) {
                 _relationshipController.text = relationship;
               } else {
-                _relationshipController.text = 'Relative'; // Default fallback
+                _relationshipController.text = 'Relative';
               }
           }
         } else {
@@ -138,8 +136,7 @@ class _ProfilePageState extends State<ProfilePage> {
       
     } catch (e) {
       debugPrint('Error loading profile: $e');
-      // Show error message to user
-      if (context.mounted) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to load profile: $e')),
         );
@@ -180,46 +177,86 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Future<void> _saveProfile() async {
-    if (!_formKey.currentState!.validate()) return;
-    final userId = supabase.auth.currentUser?.id;
-    if (userId == null) return;
-    String? photoUrl = _profilePhotoUrl;
-    if (_newProfilePhoto != null) {
-      final uploaded = await _uploadProfilePhoto(_newProfilePhoto!);
-      if (uploaded != null) {
-        photoUrl = uploaded;
-      }
-    }
-    final updates = {
-      'id': userId,
-      'full_name': _fullNameController.text.trim(),
-      'birthdate': _dobController.text.trim(), // Use 'birthdate' instead of 'dob'
-      'user_phone': _userPhoneController.text.trim(),
-      'email': _emailController.text.trim(),
-      'profile_photo_url': photoUrl,
-      'emergency_contact_name': _emergencyNameController.text.trim(),
-      'emergency_phone': _emergencyPhoneController.text.trim(),
-      'relationship': _relationshipController.text.trim(),
-      'updated_at': DateTime.now().toIso8601String(),
-    };
+    setState(() {
+      _isLoading = true;
+    });
+
     try {
-      await supabase.from('profiles').upsert(updates);
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Profile saved!')),
-        );
-        setState(() {
-          _isEditingPhoto = false;
-          if (photoUrl != null) _profilePhotoUrl = photoUrl;
-          _newProfilePhoto = null;
-        });
+      final userId = supabase.auth.currentUser?.id;
+      final userEmail = supabase.auth.currentUser?.email;
+      
+      if (userId == null) {
+        throw Exception('User not authenticated');
       }
+
+      debugPrint('Current user ID: $userId');
+      debugPrint('Current user email: $userEmail');
+
+      // Prepare updates with only the fields we want to save
+      final updates = <String, dynamic>{
+        'id': userId,
+        'full_name': _fullNameController.text.trim(),
+        'birthdate': _dobController.text.trim(),
+        'phone': _userPhoneController.text.trim(), // Add phone number
+        'email': _emailController.text.trim().isNotEmpty 
+            ? _emailController.text.trim() 
+            : userEmail ?? '',
+        'emergency_contact_name': _emergencyNameController.text.trim(),
+        'emergency_phone': _emergencyPhoneController.text.trim(),
+        'relationship': _relationshipController.text.trim(),
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+
+      debugPrint('Attempting to save profile data: $updates');
+
+      // Try to upsert the profile data
+      final result = await supabase
+          .from('profiles')
+          .upsert(updates)
+          .select();
+
+      debugPrint('Upsert result: $result');
+      debugPrint('Result type: ${result.runtimeType}');
+      debugPrint('Result length: ${result is List ? result.length : 'Not a list'}');
+
+      if (result.isNotEmpty) {
+        debugPrint('Profile saved successfully to database');
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Profile saved successfully!'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
+            ),
+          );
+          
+          // Reload profile to verify changes
+          await Future.delayed(const Duration(milliseconds: 300));
+          await _loadUserProfile();
+        }
+      } else {
+        throw Exception('No data returned from database operation');
+      }
+      
     } catch (e) {
       debugPrint('Error saving profile: $e');
-      if (context.mounted) {
+      debugPrint('Error details: ${e.toString()}');
+      
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error saving profile: $e')),
+          SnackBar(
+            content: Text('Failed to save profile: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
         );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
       }
     }
   }
@@ -355,8 +392,17 @@ class _ProfilePageState extends State<ProfilePage> {
                   borderRadius: BorderRadius.circular(24),
                 ),
                 child: TextButton(
-                  onPressed: _saveProfile,
-                  child: const Text('Save', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600)),
+                  onPressed: _isLoading ? null : _saveProfile,
+                  child: _isLoading 
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                    : const Text('Save', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600)),
                 ),
               ),
             ],
@@ -383,27 +429,16 @@ class _ProfilePageState extends State<ProfilePage> {
         onTap: onTap,
         keyboardType: keyboardType,
         decoration: InputDecoration(
-          hintText: label,
-          hintStyle: const TextStyle(
+          labelText: label,
+          labelStyle: const TextStyle(
             color: Colors.grey,
             fontSize: 16,
           ),
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          floatingLabelBehavior: FloatingLabelBehavior.auto,
         ),
         style: const TextStyle(fontSize: 16, color: Colors.black),
-        validator: (value) {
-          // Add validation for required fields
-          if (label.contains('Full Name') || 
-              label.contains('Phone Number') || 
-              label.contains('Emergency Contact Name') || 
-              label.contains('Emergency Contact\'s Phone Number')) {
-            if (value == null || value.trim().isEmpty) {
-              return '$label is required';
-            }
-          }
-          return null;
-        },
       ),
     );
   }
@@ -432,37 +467,117 @@ class _ProfilePageState extends State<ProfilePage> {
           setState(() {
             controller.text = val ?? '';
           });
-          debugPrint('Dropdown selected: "$val"');
         },
         decoration: InputDecoration(
-          hintText: controller.text.isEmpty ? label : null,
-          hintStyle: const TextStyle(
+          labelText: label,
+          labelStyle: const TextStyle(
             color: Colors.grey,
             fontSize: 16,
           ),
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          floatingLabelBehavior: FloatingLabelBehavior.auto,
         ),
         style: const TextStyle(fontSize: 16, color: Colors.black),
-        validator: (value) {
-          if (value == null || value.isEmpty) {
-            return 'Please select a relationship';
-          }
-          return null;
-        },
       ),
     );
   }
 
-  @override
-  void dispose() {
-    _fullNameController.dispose();
-    _dobController.dispose();
-    _userPhoneController.dispose();
-    _emailController.dispose();
-    _emergencyNameController.dispose();
-    _emergencyPhoneController.dispose();
-    _relationshipController.dispose();
-    super.dispose();
+  Widget _buildDropdownField(String label, TextEditingController controller) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 2,
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 16,
+                color: Colors.black,
+                fontWeight: FontWeight.w400,
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 3,
+            child: DropdownButtonFormField<String>(
+              value: controller.text.isNotEmpty && 
+                     ['Spouse', 'Parent', 'Sibling', 'Friend', 'Relative'].contains(controller.text) 
+                     ? controller.text 
+                     : null,
+              items: const [
+                DropdownMenuItem(value: 'Spouse', child: Text('Spouse')),
+                DropdownMenuItem(value: 'Parent', child: Text('Parent')),
+                DropdownMenuItem(value: 'Sibling', child: Text('Sibling')),
+                DropdownMenuItem(value: 'Friend', child: Text('Friend')),
+                DropdownMenuItem(value: 'Relative', child: Text('Relative')),
+              ],
+              onChanged: (val) {
+                setState(() {
+                  controller.text = val ?? '';
+                });
+              },
+              decoration: const InputDecoration(
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.zero,
+                isDense: true,
+              ),
+              style: const TextStyle(fontSize: 16, color: Colors.black),
+              alignment: Alignment.centerRight,
+              icon: const Icon(Icons.keyboard_arrow_down, color: Colors.grey, size: 20),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCleanTextField(String label, TextEditingController controller, {
+    bool readOnly = false,
+    VoidCallback? onTap,
+    TextInputType? keyboardType,
+    bool isFirst = false,
+    bool isLast = false,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 2,
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 16,
+                color: Colors.black,
+                fontWeight: FontWeight.w400,
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 3,
+            child: TextFormField(
+              controller: controller,
+              readOnly: readOnly,
+              onTap: onTap,
+              keyboardType: keyboardType,
+              textAlign: TextAlign.right,
+              decoration: const InputDecoration(
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.zero,
+                isDense: true,
+                hintStyle: TextStyle(color: Color(0xFF999999)),
+              ),
+              style: const TextStyle(
+                fontSize: 16,
+                color: Colors.black,
+                fontWeight: FontWeight.w400,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
