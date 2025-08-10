@@ -547,7 +547,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   height: 48,
                   decoration: BoxDecoration(
                     border: Border.all(color: const Color(0xFFF73D5C), width: 1),
-                    borderRadius: BorderRadius.circular(24),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                   child: TextButton.icon(
                     onPressed: _addSecondEmergencyContact,
@@ -565,7 +565,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 height: 48,
                 decoration: BoxDecoration(
                   color: const Color(0xFFF73D5C),
-                  borderRadius: BorderRadius.circular(24),
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 child: TextButton(
                   onPressed: _isLoading ? null : _saveProfile,
