@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
 import 'profile_page.dart';
-
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -13,9 +14,9 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  String _deviceStatus = '';
-  String _gpsSignal = '';
-  String _location = '';
+  String _deviceStatus = 'Panic Button Not Connected';
+  String _gpsSignal = 'Getting signal...';
+  String _location = 'Getting location...';
   String _emergencyName = '';
   String _emergencyPhone = '';
   String _relationship = '';
@@ -23,6 +24,143 @@ class _HomeScreenState extends State<HomeScreen> {
   String _emergencyPhone2 = '';
   String _relationship2 = '';
   String _profilePhotoUrl = '';
+  GoogleMapController? _mapController;
+  Position? _currentPosition;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserProfile();
+    _getCurrentLocation();
+    _simulateDeviceStatus();
+  }
+
+  // Simulate device status for demonstration
+  void _simulateDeviceStatus() {
+    // This simulates checking for a panic button device
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) {
+        setState(() {
+          _deviceStatus = 'Searching for Panic Button...';
+        });
+      }
+    });
+
+    Future.delayed(const Duration(seconds: 4), () {
+      if (mounted) {
+        setState(() {
+          _deviceStatus = 'Panic Button Not Found';
+        });
+      }
+    });
+  }
+
+  Future<void> _getCurrentLocation() async {
+    try {
+      // Check if location services are enabled
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        setState(() {
+          _gpsSignal = 'Disabled';
+          _location = 'Location services disabled';
+        });
+        return;
+      }
+
+      // Check location permissions
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          setState(() {
+            _gpsSignal = 'No Permission';
+            _location = 'Location permission denied';
+          });
+          return;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        setState(() {
+          _gpsSignal = 'Permission Denied';
+          _location = 'Location permission permanently denied';
+        });
+        return;
+      }
+
+      // Get current position
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      setState(() {
+        _currentPosition = position;
+        // Determine GPS signal strength based on accuracy
+        if (position.accuracy <= 5) {
+          _gpsSignal = 'Excellent';
+        } else if (position.accuracy <= 10) {
+          _gpsSignal = 'Good';
+        } else if (position.accuracy <= 20) {
+          _gpsSignal = 'Fair';
+        } else {
+          _gpsSignal = 'Poor';
+        }
+      });
+
+      // Get address from coordinates
+      try {
+        List<Placemark> placemarks = await placemarkFromCoordinates(
+          position.latitude,
+          position.longitude,
+        );
+
+        if (placemarks.isNotEmpty) {
+          Placemark place = placemarks[0];
+          setState(() {
+            _location = '${place.street ?? ''}, ${place.locality ?? ''}, ${place.subAdministrativeArea ?? ''}, ${place.administrativeArea ?? ''}';
+          });
+        }
+      } catch (e) {
+        setState(() {
+          _location = '${position.latitude.toStringAsFixed(6)}, ${position.longitude.toStringAsFixed(6)}';
+        });
+      }
+
+      // Move camera to current location
+      if (_mapController != null) {
+        _mapController!.animateCamera(
+          CameraUpdate.newLatLng(
+            LatLng(position.latitude, position.longitude),
+          ),
+        );
+      }
+
+    } catch (e) {
+      setState(() {
+        _gpsSignal = 'Error';
+        _location = 'Unable to get location';
+      });
+      debugPrint('Error getting location: $e');
+    }
+  }
+
+  Color _getGpsColor(String signal) {
+    switch (signal.toLowerCase()) {
+      case 'excellent':
+      case 'good':
+        return Colors.green;
+      case 'fair':
+        return Colors.orange;
+      case 'poor':
+      case 'error':
+      case 'disabled':
+      case 'no permission':
+      case 'permission denied':
+        return Colors.red;
+      default:
+        return Colors.grey;
+    }
+  }
 
   Future<void> _loadUserProfile() async {
     final supabase = Supabase.instance.client;
@@ -37,9 +175,7 @@ class _HomeScreenState extends State<HomeScreen> {
           .single();
 
       setState(() {
-        _deviceStatus = data['device_status'] ?? 'Unknown';
-        _gpsSignal = data['gps_signal'] ?? 'Unknown';
-        _location = data['location'] ?? 'Unknown';
+        // Keep device status as not connected until actual Bluetooth implementation
         _emergencyName = data['emergency_contact_name'] ?? '';
         _emergencyPhone = data['emergency_phone'] ?? '';
         _relationship = data['relationship'] ?? '';
@@ -53,10 +189,14 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  @override
-  void initState() {
-    super.initState();
-    _loadUserProfile();
+  Color _getDeviceStatusColor(String status) {
+    if (status.toLowerCase().contains('connected') && !status.toLowerCase().contains('not')) {
+      return Colors.green;
+    } else if (status.toLowerCase().contains('searching')) {
+      return Colors.orange;
+    } else {
+      return Colors.red;
+    }
   }
 
   @override
@@ -65,13 +205,24 @@ class _HomeScreenState extends State<HomeScreen> {
       body: Stack(
         children: [
           // Google Map background
-          const GoogleMap(
-            initialCameraPosition: CameraPosition(
+          GoogleMap(
+            initialCameraPosition: const CameraPosition(
               target: LatLng(7.0731, 125.6124),
               zoom: 16,
             ),
             myLocationEnabled: true,
             mapType: MapType.normal,
+            onMapCreated: (GoogleMapController controller) {
+              _mapController = controller;
+              // If we already have current position, move camera to it
+              if (_currentPosition != null) {
+                controller.animateCamera(
+                  CameraUpdate.newLatLng(
+                    LatLng(_currentPosition!.latitude, _currentPosition!.longitude),
+                  ),
+                );
+              }
+            },
           ),
 
           // Top Card: Logo, Settings, Profile
@@ -86,7 +237,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(24),
-                  boxShadow: [
+                  boxShadow: const [
                     BoxShadow(
                       color: Colors.black12,
                       blurRadius: 8,
@@ -156,7 +307,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
+                  boxShadow: const [
                     BoxShadow(
                       color: Colors.black12,
                       blurRadius: 12,
@@ -181,13 +332,13 @@ class _HomeScreenState extends State<HomeScreen> {
                     Row(
                       children: [
                         const Text('Device Status: ', style: TextStyle(fontWeight: FontWeight.w500)),
-                        Text(_deviceStatus, style: TextStyle(color: _deviceStatus.toLowerCase().contains('connected') ? Colors.green : Colors.red)),
+                        Text(_deviceStatus, style: TextStyle(color: _getDeviceStatusColor(_deviceStatus))),
                       ],
                     ),
                     Row(
                       children: [
                         const Text('GPS Signal: ', style: TextStyle(fontWeight: FontWeight.w500)),
-                        Text(_gpsSignal, style: TextStyle(color: _gpsSignal.toLowerCase() == 'strong' ? Colors.green : Colors.red)),
+                        Text(_gpsSignal, style: TextStyle(color: _getGpsColor(_gpsSignal))),
                       ],
                     ),
                     Row(
@@ -195,7 +346,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       children: [
                         const Text('Location: ', style: TextStyle(fontWeight: FontWeight.w500)),
                         Expanded(
-                          child: Text(_location, style: const TextStyle(color: Colors.black87)),
+                          child: Text(_location.isNotEmpty ? _location : 'Getting location...', 
+                              style: const TextStyle(color: Colors.black87)),
                         ),
                       ],
                     ),

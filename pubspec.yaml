@@ -22,6 +22,8 @@ dependencies:
   google_maps_flutter: ^2.12.3
   flutter_svg: ^2.0.10
   font_awesome_flutter: ^10.7.0
+  geolocator: ^10.1.0
+  geocoding: ^2.1.1
 
 dev_dependencies:
   flutter_test:
@@ -78,4 +80,5 @@ flutter:
   #
   # For more information, see: https://flutter.dev/custom-fonts/
   #
+  # For more information, see: https://flutter.dev/custom-fonts/
   # For more information, see: https://flutter.dev/custom-fonts/

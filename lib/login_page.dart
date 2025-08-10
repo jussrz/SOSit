@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import 'home_screen.dart';
 import 'signup_page.dart';
+import 'home_screen.dart'; // Add this import
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -66,7 +66,7 @@ class _LoginPageState extends State<LoginPage> {
           if (mounted) {
             Navigator.pushReplacement(
               context,
-              MaterialPageRoute<void>(builder: (_) => const HomeScreen()),
+              MaterialPageRoute<void>(builder: (_) => const HomeScreen()), // This will now use the correct HomeScreen
             );
           }
         }

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import 'home_screen.dart';
 import 'login_page.dart';
+import 'home_screen.dart'; // Add this import
 
 class SignupPage extends StatefulWidget {
   const SignupPage({super.key});
@@ -73,7 +73,6 @@ class _SignupPageState extends State<SignupPage> {
 
     if (_formKey.currentState!.validate()) {
       try {
-        // Sign up the user
         final AuthResponse res = await Supabase.instance.client.auth.signUp(
           email: _emailController.text.trim(),
           password: _passwordController.text.trim(),
@@ -92,7 +91,7 @@ class _SignupPageState extends State<SignupPage> {
         if (context.mounted) {
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (context) => const HomeScreen()),
+            MaterialPageRoute(builder: (context) => const HomeScreen()), // This will now use the correct HomeScreen
           );
         }
       } catch (e) {
