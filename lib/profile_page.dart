@@ -178,6 +178,81 @@ class _ProfilePageState extends State<ProfilePage> {
     });
   }
 
+  Future<void> _removeFirstEmergencyContact() async {
+    final confirmed = await _showRemoveConfirmationDialog('Remove first emergency contact?');
+    if (confirmed) {
+      setState(() {
+        _emergencyNameController.clear();
+        _emergencyPhoneController.clear();
+        _relationshipController.clear();
+      });
+      
+      // Save the changes to database immediately with empty values
+      await _saveProfile();
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('First emergency contact removed successfully!'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _removeSecondEmergencyContact() async {
+    final confirmed = await _showRemoveConfirmationDialog('Remove second emergency contact?');
+    if (confirmed) {
+      setState(() {
+        _emergencyName2Controller.clear();
+        _emergencyPhone2Controller.clear();
+        _relationship2Controller.clear();
+        _showSecondContact = false;
+        _hasSecondContact = false;
+      });
+      
+      // Save the changes to database immediately with empty values
+      await _saveProfile();
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Second emergency contact removed successfully!'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<bool> _showRemoveConfirmationDialog(String message) async {
+    return await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Confirm Removal'),
+          content: Text(message),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.red,
+              ),
+              child: const Text('Remove'),
+            ),
+          ],
+        );
+      },
+    ) ?? false;
+  }
+
   Future<void> _pickProfilePhoto() async {
     // You must add image_picker to your pubspec.yaml for this to work:
     // dependencies:
@@ -227,6 +302,7 @@ class _ProfilePageState extends State<ProfilePage> {
       debugPrint('Current user email: $userEmail');
 
       // Prepare updates with all fields including second emergency contact using correct column names
+      // Empty strings will effectively clear the fields in the database
       final updates = <String, dynamic>{
         'id': userId,
         'full_name': _fullNameController.text.trim(),
@@ -404,6 +480,27 @@ class _ProfilePageState extends State<ProfilePage> {
               const Text('Emergency Contacts', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16, color: Colors.black)),
               const SizedBox(height: 16),
               
+              // First Emergency Contact with Remove Button
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text('Emergency Contact', style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14, color: Colors.black87)),
+                  ),
+                  if (_emergencyNameController.text.isNotEmpty || _emergencyPhoneController.text.isNotEmpty)
+                    TextButton.icon(
+                      onPressed: _removeFirstEmergencyContact,
+                      icon: const Icon(Icons.delete_outline, color: Colors.red, size: 18),
+                      label: const Text('Remove', style: TextStyle(color: Colors.red, fontSize: 12)),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        minimumSize: const Size(0, 0),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              
               _buildTextField('Emergency Contact Name', _emergencyNameController),
               const SizedBox(height: 12),
               _buildDropdownTextField('Relationship to User', _relationshipController),
@@ -413,7 +510,25 @@ class _ProfilePageState extends State<ProfilePage> {
               // Second Emergency Contact Section (show if exists in DB or if user clicked add)
               if (_showSecondContact) ...[
                 const SizedBox(height: 24),
-                const Text('Second Emergency Contact', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16, color: Colors.black)),
+                
+                // Second Emergency Contact with Remove Button
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text('Second Emergency Contact', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16, color: Colors.black)),
+                    ),
+                    TextButton.icon(
+                      onPressed: _removeSecondEmergencyContact,
+                      icon: const Icon(Icons.delete_outline, color: Colors.red, size: 18),
+                      label: const Text('Remove', style: TextStyle(color: Colors.red, fontSize: 12)),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        minimumSize: const Size(0, 0),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 16),
                 
                 _buildTextField('Emergency Contact Name 2', _emergencyName2Controller),
@@ -441,7 +556,8 @@ class _ProfilePageState extends State<ProfilePage> {
                   ),
                 ),
               
-              const SizedBox(height: 16),
+              // Conditional spacing - less space when no add button is shown
+              SizedBox(height: (!_hasSecondContact && !_showSecondContact) ? 16 : 8),
               
               // Save Button
               Container(
