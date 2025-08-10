@@ -614,7 +614,10 @@ class _ProfilePageState extends State<ProfilePage> {
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           floatingLabelBehavior: FloatingLabelBehavior.auto,
         ),
-        style: const TextStyle(fontSize: 16, color: Colors.black),
+        style: TextStyle(
+          fontSize: 16, 
+          color: (readOnly && label == 'Email Address') ? Colors.grey.shade500 : Colors.black,
+        ),
       ),
     );
   }
