@@ -19,6 +19,9 @@ class _HomeScreenState extends State<HomeScreen> {
   String _emergencyName = '';
   String _emergencyPhone = '';
   String _relationship = '';
+  String _emergencyName2 = '';
+  String _emergencyPhone2 = '';
+  String _relationship2 = '';
   String _profilePhotoUrl = '';
 
   Future<void> _loadUserProfile() async {
@@ -40,6 +43,9 @@ class _HomeScreenState extends State<HomeScreen> {
         _emergencyName = data['emergency_contact_name'] ?? '';
         _emergencyPhone = data['emergency_phone'] ?? '';
         _relationship = data['relationship'] ?? '';
+        _emergencyName2 = data['emergency_contact_name2'] ?? '';
+        _emergencyPhone2 = data['emergency_phone2'] ?? '';
+        _relationship2 = data['relationship2'] ?? '';
         _profilePhotoUrl = data['profile_photo_url'] ?? '';
       });
     } catch (e) {
@@ -194,15 +200,123 @@ class _HomeScreenState extends State<HomeScreen> {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    const Text('Emergency Contact',
+                    const Text('Emergency Contacts',
                         style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                     const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Text('${_relationship.isNotEmpty ? _relationship : 'Contact'}: ', style: const TextStyle(fontWeight: FontWeight.w500)),
-                        Text(_emergencyPhone),
-                      ],
-                    ),
+                    
+                    // First Emergency Contact
+                    if (_emergencyName.isNotEmpty || _emergencyPhone.isNotEmpty) ...[
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        margin: const EdgeInsets.only(bottom: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.grey.shade200),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.person, size: 16, color: Colors.grey),
+                                const SizedBox(width: 8),
+                                Text(_emergencyName.isNotEmpty ? _emergencyName : 'No name provided',
+                                    style: const TextStyle(fontWeight: FontWeight.w500)),
+                              ],
+                            ),
+                            if (_relationship.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  const Icon(Icons.family_restroom, size: 16, color: Colors.grey),
+                                  const SizedBox(width: 8),
+                                  Text(_relationship, style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+                                ],
+                              ),
+                            ],
+                            if (_emergencyPhone.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  const Icon(Icons.phone, size: 16, color: Colors.grey),
+                                  const SizedBox(width: 8),
+                                  Text(_emergencyPhone, style: const TextStyle(color: Colors.blue)),
+                                ],
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                    
+                    // Second Emergency Contact
+                    if (_emergencyName2.isNotEmpty || _emergencyPhone2.isNotEmpty) ...[
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.grey.shade200),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.person, size: 16, color: Colors.grey),
+                                const SizedBox(width: 8),
+                                Text(_emergencyName2.isNotEmpty ? _emergencyName2 : 'No name provided',
+                                    style: const TextStyle(fontWeight: FontWeight.w500)),
+                              ],
+                            ),
+                            if (_relationship2.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  const Icon(Icons.family_restroom, size: 16, color: Colors.grey),
+                                  const SizedBox(width: 8),
+                                  Text(_relationship2, style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+                                ],
+                              ),
+                            ],
+                            if (_emergencyPhone2.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  const Icon(Icons.phone, size: 16, color: Colors.grey),
+                                  const SizedBox(width: 8),
+                                  Text(_emergencyPhone2, style: const TextStyle(color: Colors.blue)),
+                                ],
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                    
+                    // Show message if no emergency contacts
+                    if ((_emergencyName.isEmpty && _emergencyPhone.isEmpty) && 
+                        (_emergencyName2.isEmpty && _emergencyPhone2.isEmpty)) ...[
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.orange.shade200),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.warning_amber, color: Colors.orange.shade600, size: 16),
+                            const SizedBox(width: 8),
+                            const Expanded(
+                              child: Text('No emergency contacts added yet',
+                                  style: TextStyle(fontSize: 12)),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
