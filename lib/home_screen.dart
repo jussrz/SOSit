@@ -356,14 +356,26 @@ class _HomeScreenState extends State<HomeScreen> {
                       // Settings icon (left)
                       Align(
                         alignment: Alignment.centerLeft,
-                        child: IconButton(
-                          icon: const Icon(Icons.settings, color: Colors.black),
-                          onPressed: () {
+                        child: GestureDetector(
+                          onTap: () {
                             Navigator.push(
                               context,
                               MaterialPageRoute(builder: (_) => const SettingsPage()),
                             );
                           },
+                          child: Container(
+                            width: 44,
+                            height: 44,
+                            decoration: const BoxDecoration(
+                              color: Colors.transparent,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.settings, 
+                              color: Color(0xFFF73D5C), 
+                              size: 40,
+                            ),
+                          ),
                         ),
                       ),
                       // Profile avatar (right)
@@ -381,10 +393,18 @@ class _HomeScreenState extends State<HomeScreen> {
                                   radius: 22,
                                   backgroundImage: NetworkImage(_profilePhotoUrl),
                                 )
-                              : const CircleAvatar(
-                                  radius: 22,
-                                  backgroundColor: Colors.grey,
-                                  child: Icon(Icons.person, color: Colors.white),
+                              : Container(
+                                  width: 44,
+                                  height: 44,
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xFFF73D5C),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.person, 
+                                    color: Colors.white, 
+                                    size: 28,
+                                  ),
                                 ),
                         ),
                       ),
