@@ -27,10 +27,14 @@ class _HomeScreenState extends State<HomeScreen> {
   String _profilePhotoUrl = '';
   GoogleMapController? _mapController;
   Position? _currentPosition;
+  bool _isLoadingProfile = false;
 
   @override
   void initState() {
     super.initState();
+    setState(() {
+      _isLoadingProfile = true;
+    });
     _loadUserProfile();
     _getCurrentLocation();
     _simulateDeviceStatus();
@@ -57,6 +61,11 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _getCurrentLocation() async {
+    setState(() {
+      _gpsSignal = 'Getting signal...';
+      _location = 'Getting location...';
+    });
+
     try {
       // Check if location services are enabled
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
@@ -65,6 +74,8 @@ class _HomeScreenState extends State<HomeScreen> {
           _gpsSignal = 'Disabled';
           _location = 'Location services disabled';
         });
+        // Request to enable location services
+        await Geolocator.openLocationSettings();
         return;
       }
 
@@ -84,14 +95,17 @@ class _HomeScreenState extends State<HomeScreen> {
       if (permission == LocationPermission.deniedForever) {
         setState(() {
           _gpsSignal = 'Permission Denied';
-          _location = 'Location permission permanently denied';
+          _location = 'Location permission permanently denied. Please enable in settings.';
         });
+        // Open app settings
+        await Geolocator.openAppSettings();
         return;
       }
 
-      // Get current position
+      // Get current position with timeout
       Position position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 10),
       );
 
       setState(() {
@@ -117,21 +131,39 @@ class _HomeScreenState extends State<HomeScreen> {
 
         if (placemarks.isNotEmpty) {
           Placemark place = placemarks[0];
+          String address = '';
+          if (place.street != null && place.street!.isNotEmpty) {
+            address += '${place.street}, ';
+          }
+          if (place.locality != null && place.locality!.isNotEmpty) {
+            address += '${place.locality}, ';
+          }
+          if (place.subAdministrativeArea != null && place.subAdministrativeArea!.isNotEmpty) {
+            address += '${place.subAdministrativeArea}, ';
+          }
+          if (place.administrativeArea != null && place.administrativeArea!.isNotEmpty) {
+            address += place.administrativeArea!;
+          }
+          
           setState(() {
-            _location = '${place.street ?? ''}, ${place.locality ?? ''}, ${place.subAdministrativeArea ?? ''}, ${place.administrativeArea ?? ''}';
+            _location = address.isNotEmpty ? address : 'Address not found';
           });
         }
       } catch (e) {
         setState(() {
-          _location = '${position.latitude.toStringAsFixed(6)}, ${position.longitude.toStringAsFixed(6)}';
+          _location = 'Lat: ${position.latitude.toStringAsFixed(6)}, Lng: ${position.longitude.toStringAsFixed(6)}';
         });
+        debugPrint('Geocoding error: $e');
       }
 
       // Move camera to current location
       if (_mapController != null) {
-        _mapController!.animateCamera(
-          CameraUpdate.newLatLng(
-            LatLng(position.latitude, position.longitude),
+        await _mapController!.animateCamera(
+          CameraUpdate.newCameraPosition(
+            CameraPosition(
+              target: LatLng(position.latitude, position.longitude),
+              zoom: 16.0,
+            ),
           ),
         );
       }
@@ -139,9 +171,19 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (e) {
       setState(() {
         _gpsSignal = 'Error';
-        _location = 'Unable to get location';
+        _location = 'Unable to get location: ${e.toString()}';
       });
-      debugPrint('Error getting location: $e');
+      debugPrint('Location error: $e');
+      
+      // Show error to user
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Location error: ${e.toString()}'),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
     }
   }
 
@@ -166,7 +208,12 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _loadUserProfile() async {
     final supabase = Supabase.instance.client;
     final userId = supabase.auth.currentUser?.id;
-    if (userId == null) return;
+    if (userId == null) {
+      setState(() {
+        _isLoadingProfile = false;
+      });
+      return;
+    }
 
     try {
       final data = await supabase
@@ -176,6 +223,7 @@ class _HomeScreenState extends State<HomeScreen> {
           .single();
 
       setState(() {
+        _isLoadingProfile = false;
         // Keep device status as not connected until actual Bluetooth implementation
         _emergencyName = data['emergency_contact_name'] ?? '';
         _emergencyPhone = data['emergency_phone'] ?? '';
@@ -186,6 +234,9 @@ class _HomeScreenState extends State<HomeScreen> {
         _profilePhotoUrl = data['profile_photo_url'] ?? '';
       });
     } catch (e) {
+      setState(() {
+        _isLoadingProfile = false;
+      });
       debugPrint('Error loading emergency info: $e');
     }
   }
@@ -208,20 +259,63 @@ class _HomeScreenState extends State<HomeScreen> {
           // Google Map background
           GoogleMap(
             initialCameraPosition: const CameraPosition(
-              target: LatLng(7.0731, 125.6124),
+              target: LatLng(7.0731, 125.6124), // Default to your location
               zoom: 16,
             ),
             myLocationEnabled: true,
+            myLocationButtonEnabled: true,
             mapType: MapType.normal,
+            compassEnabled: true,
             onMapCreated: (GoogleMapController controller) {
               _mapController = controller;
-              // If we already have current position, move camera to it
+              debugPrint('Google Map created successfully');
+              // Move to current position if available
               if (_currentPosition != null) {
                 controller.animateCamera(
-                  CameraUpdate.newLatLng(
-                    LatLng(_currentPosition!.latitude, _currentPosition!.longitude),
+                  CameraUpdate.newCameraPosition(
+                    CameraPosition(
+                      target: LatLng(_currentPosition!.latitude, _currentPosition!.longitude),
+                      zoom: 16.0,
+                    ),
                   ),
                 );
+              }
+              
+              // Check if map is loading tiles after a delay
+              Future.delayed(const Duration(seconds: 3), () {
+                if (mounted) {
+                  debugPrint('Checking map tile loading status...');
+                  // If we reach here and no tiles are visible, likely API key issue
+                  debugPrint('Map should have loaded tiles by now. If blank, check API key configuration.');
+                }
+              });
+            },
+            onCameraMove: (CameraPosition position) {
+              // Optional: Debug camera movements
+              debugPrint('Camera moved to: ${position.target}');
+            },
+            onTap: (LatLng position) {
+              debugPrint('Map tapped at: ${position.latitude}, ${position.longitude}');
+              // If this prints but no map tiles show, API key is missing
+              if (_mapController != null) {
+                debugPrint('Map controller is available');
+              } else {
+                debugPrint('Map controller is null - map not properly initialized');
+              }
+            },
+            // Add this callback to detect when tiles fail to load
+            onCameraIdle: () {
+              debugPrint('Camera idle - map tiles should be loaded');
+              if (_mapController == null) {
+                debugPrint('ERROR: Map not fetched - controller is null');
+              } else {
+                debugPrint('Map controller available - tiles should be visible');
+                // Additional check
+                Future.delayed(const Duration(milliseconds: 500), () {
+                  if (mounted) {
+                    debugPrint('Final check: If you see Google logo but no map tiles, API key is missing or invalid');
+                  }
+                });
               }
             },
           ),
@@ -362,118 +456,148 @@ class _HomeScreenState extends State<HomeScreen> {
                         style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                     const SizedBox(height: 8),
                     
-                    // First Emergency Contact
-                    if (_emergencyName.isNotEmpty || _emergencyPhone.isNotEmpty) ...[
+                    // Loading state for contacts
+                    if (_isLoadingProfile) ...[
                       Container(
-                        padding: const EdgeInsets.all(12),
-                        margin: const EdgeInsets.only(bottom: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade50,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.grey.shade200),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                const Icon(Icons.person, size: 16, color: Colors.grey),
-                                const SizedBox(width: 8),
-                                Text(_emergencyName.isNotEmpty ? _emergencyName : 'No name provided',
-                                    style: const TextStyle(fontWeight: FontWeight.w500)),
-                              ],
-                            ),
-                            if (_relationship.isNotEmpty) ...[
-                              const SizedBox(height: 4),
-                              Row(
-                                children: [
-                                  const Icon(Icons.family_restroom, size: 16, color: Colors.grey),
-                                  const SizedBox(width: 8),
-                                  Text(_relationship, style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
-                                ],
-                              ),
-                            ],
-                            if (_emergencyPhone.isNotEmpty) ...[
-                              const SizedBox(height: 4),
-                              Row(
-                                children: [
-                                  const Icon(Icons.phone, size: 16, color: Colors.grey),
-                                  const SizedBox(width: 8),
-                                  Text(_emergencyPhone, style: const TextStyle(color: Colors.blue)),
-                                ],
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ],
-                    
-                    // Second Emergency Contact
-                    if (_emergencyName2.isNotEmpty || _emergencyPhone2.isNotEmpty) ...[
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade50,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.grey.shade200),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                const Icon(Icons.person, size: 16, color: Colors.grey),
-                                const SizedBox(width: 8),
-                                Text(_emergencyName2.isNotEmpty ? _emergencyName2 : 'No name provided',
-                                    style: const TextStyle(fontWeight: FontWeight.w500)),
-                              ],
-                            ),
-                            if (_relationship2.isNotEmpty) ...[
-                              const SizedBox(height: 4),
-                              Row(
-                                children: [
-                                  const Icon(Icons.family_restroom, size: 16, color: Colors.grey),
-                                  const SizedBox(width: 8),
-                                  Text(_relationship2, style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
-                                ],
-                              ),
-                            ],
-                            if (_emergencyPhone2.isNotEmpty) ...[
-                              const SizedBox(height: 4),
-                              Row(
-                                children: [
-                                  const Icon(Icons.phone, size: 16, color: Colors.grey),
-                                  const SizedBox(width: 8),
-                                  Text(_emergencyPhone2, style: const TextStyle(color: Colors.blue)),
-                                ],
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ],
-                    
-                    // Show message if no emergency contacts
-                    if ((_emergencyName.isEmpty && _emergencyPhone.isEmpty) && 
-                        (_emergencyName2.isEmpty && _emergencyPhone2.isEmpty)) ...[
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.orange.shade50,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.orange.shade200),
-                        ),
+                        padding: const EdgeInsets.all(20),
                         child: Row(
-                          children: [
-                            Icon(Icons.warning_amber, color: Colors.orange.shade600, size: 16),
-                            const SizedBox(width: 8),
-                            const Expanded(
-                              child: Text('No emergency contacts added yet',
-                                  style: TextStyle(fontSize: 12)),
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: const [
+                            SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFF73D5C)),
+                              ),
+                            ),
+                            SizedBox(width: 12),
+                            Text(
+                              'Loading contacts...',
+                              style: TextStyle(
+                                color: Colors.grey,
+                                fontSize: 14,
+                              ),
                             ),
                           ],
                         ),
                       ),
+                    ]
+                    // Show contacts when loaded
+                    else ...[
+                      // First Emergency Contact
+                      if (_emergencyName.isNotEmpty || _emergencyPhone.isNotEmpty) ...[
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          margin: const EdgeInsets.only(bottom: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.grey.shade200),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.person, size: 16, color: Colors.grey),
+                                  const SizedBox(width: 8),
+                                  Text(_emergencyName.isNotEmpty ? _emergencyName : 'No name provided',
+                                      style: const TextStyle(fontWeight: FontWeight.w500)),
+                                ],
+                              ),
+                              if (_relationship.isNotEmpty) ...[
+                                const SizedBox(height: 4),
+                                Row(
+                                  children: [
+                                    const Icon(Icons.family_restroom, size: 16, color: Colors.grey),
+                                    const SizedBox(width: 8),
+                                    Text(_relationship, style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+                                  ],
+                                ),
+                              ],
+                              if (_emergencyPhone.isNotEmpty) ...[
+                                const SizedBox(height: 4),
+                                Row(
+                                  children: [
+                                    const Icon(Icons.phone, size: 16, color: Colors.grey),
+                                    const SizedBox(width: 8),
+                                    Text(_emergencyPhone, style: const TextStyle(color: Colors.blue)),
+                                  ],
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
+                      
+                      // Second Emergency Contact
+                      if (_emergencyName2.isNotEmpty || _emergencyPhone2.isNotEmpty) ...[
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.grey.shade200),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.person, size: 16, color: Colors.grey),
+                                  const SizedBox(width: 8),
+                                  Text(_emergencyName2.isNotEmpty ? _emergencyName2 : 'No name provided',
+                                      style: const TextStyle(fontWeight: FontWeight.w500)),
+                                ],
+                              ),
+                              if (_relationship2.isNotEmpty) ...[
+                                const SizedBox(height: 4),
+                                Row(
+                                  children: [
+                                    const Icon(Icons.family_restroom, size: 16, color: Colors.grey),
+                                    const SizedBox(width: 8),
+                                    Text(_relationship2, style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+                                  ],
+                                ),
+                              ],
+                              if (_emergencyPhone2.isNotEmpty) ...[
+                                const SizedBox(height: 4),
+                                Row(
+                                  children: [
+                                    const Icon(Icons.phone, size: 16, color: Colors.grey),
+                                    const SizedBox(width: 8),
+                                    Text(_emergencyPhone2, style: const TextStyle(color: Colors.blue)),
+                                  ],
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
+                      
+                      // Show message if no emergency contacts
+                      if ((_emergencyName.isEmpty && _emergencyPhone.isEmpty) && 
+                          (_emergencyName2.isEmpty && _emergencyPhone2.isEmpty)) ...[
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.orange.shade200),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.warning_amber, color: Colors.orange.shade600, size: 16),
+                              const SizedBox(width: 8),
+                              const Expanded(
+                                child: Text('No emergency contacts added yet',
+                                    style: TextStyle(fontSize: 12)),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ],
                   ],
                 ),
