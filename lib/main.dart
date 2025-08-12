@@ -50,19 +50,15 @@ class _LandingPageState extends State<LandingPage> {
 
   @override
   Widget build(BuildContext context) {
-    final screenSize = MediaQuery.of(context).size;
-    final screenWidth = screenSize.width;
-    final screenHeight = screenSize.height;
-
     if (_showSplash) {
       return Scaffold(
         backgroundColor: const Color(0xFFFFEEEE),
         body: Center(
           child: SvgPicture.asset(
             'assets/sositsplash.svg',
-            width: screenWidth * 0.6, // Smaller splash - 60% of screen width
-            height: screenHeight * 0.3, // Smaller splash - 30% of screen height
-            fit: BoxFit.contain,
+            width: 718.61,
+            height: 718.61,
+            fit: BoxFit.cover,
           ),
         ),
       );
@@ -71,5 +67,6 @@ class _LandingPageState extends State<LandingPage> {
     }
   }
 }
+    
 
 
