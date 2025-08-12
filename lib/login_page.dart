@@ -82,29 +82,34 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
+    final screenSize = MediaQuery.of(context).size;
+    final screenWidth = screenSize.width;
+    final screenHeight = screenSize.height;
+    final isSmallScreen = screenHeight < 650;
+    
     return Scaffold(
       backgroundColor: Colors.white,
       body: Stack(
         children: [
           SafeArea(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0),
+              padding: EdgeInsets.symmetric(horizontal: screenWidth * 0.06), // 6% of screen width
               child: Form(
                 key: _formKey,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const SizedBox(height: 32),
-                    const Text(
+                    SizedBox(height: isSmallScreen ? 16 : 32),
+                    Text(
                       'Welcome\nBack!',
                       style: TextStyle(
-                        fontSize: 36,
+                        fontSize: screenWidth * 0.09, // Dynamic font size based on screen width
                         fontWeight: FontWeight.bold,
                         color: Colors.black,
                       ),
                       textAlign: TextAlign.left,
                     ),
-                    const SizedBox(height: 36),
+                    SizedBox(height: isSmallScreen ? 24 : 36),
 
                     // Email Field
                     Column(
@@ -117,13 +122,14 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                           child: TextFormField(
                             controller: _emailController,
-                            decoration: const InputDecoration(
-                              prefixIcon: Icon(Icons.person, color: Colors.grey),
+                            decoration: InputDecoration(
+                              prefixIcon: const Icon(Icons.person, color: Colors.grey),
                               hintText: 'Email',
                               border: InputBorder.none,
-                              contentPadding: EdgeInsets.symmetric(vertical: 18),
+                              contentPadding: EdgeInsets.symmetric(vertical: screenHeight * 0.025), // Dynamic padding
                             ),
                             keyboardType: TextInputType.emailAddress,
+                            style: TextStyle(fontSize: screenWidth * 0.045), // Dynamic text size
                             autovalidateMode: AutovalidateMode.onUserInteraction,
                             validator: (value) {
                               if (value == null || value.trim().isEmpty) {
@@ -151,7 +157,7 @@ class _LoginPageState extends State<LoginPage> {
                       ],
                     ),
 
-                    const SizedBox(height: 20),
+                    SizedBox(height: screenHeight * 0.025),
 
                     // Password Field
                     Column(
@@ -168,7 +174,7 @@ class _LoginPageState extends State<LoginPage> {
                               prefixIcon: const Icon(Icons.lock, color: Colors.grey),
                               hintText: 'Password',
                               border: InputBorder.none,
-                              contentPadding: const EdgeInsets.symmetric(vertical: 18),
+                              contentPadding: EdgeInsets.symmetric(vertical: screenHeight * 0.025),
                               suffixIcon: IconButton(
                                 icon: Icon(
                                   _obscurePassword ? Icons.visibility_off : Icons.visibility,
@@ -178,6 +184,7 @@ class _LoginPageState extends State<LoginPage> {
                               ),
                             ),
                             obscureText: _obscurePassword,
+                            style: TextStyle(fontSize: screenWidth * 0.045),
                             autovalidateMode: AutovalidateMode.onUserInteraction,
                             validator: (value) {
                               if (value == null || value.trim().isEmpty) {
@@ -197,7 +204,7 @@ class _LoginPageState extends State<LoginPage> {
 
                     // Forgot Password
                     Padding(
-                      padding: const EdgeInsets.only(top: 8.0, right: 4.0),
+                      padding: EdgeInsets.only(top: screenHeight * 0.01, right: 4.0),
                       child: Row(
                         children: [
                           const Spacer(),
@@ -205,11 +212,11 @@ class _LoginPageState extends State<LoginPage> {
                             onTap: () {
                               // TODO: Implement forgot password
                             },
-                            child: const Text(
+                            child: Text(
                               'Forgot Password?',
                               style: TextStyle(
-                                color: Color(0xFFF73D5C),
-                                fontSize: 13,
+                                color: const Color(0xFFF73D5C),
+                                fontSize: screenWidth * 0.035,
                               ),
                             ),
                           ),
@@ -217,7 +224,7 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                     ),
 
-                    const SizedBox(height: 28),
+                    SizedBox(height: screenHeight * 0.035),
 
                     // Login Button
                     SizedBox(
@@ -225,45 +232,45 @@ class _LoginPageState extends State<LoginPage> {
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFFF73D5C),
-                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          padding: EdgeInsets.symmetric(vertical: screenHeight * 0.02),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),
                           ),
                           elevation: 0,
                         ),
                         onPressed: _login,
-                        child: const Text(
+                        child: Text(
                           'Login',
                           style: TextStyle(
                             color: Colors.white,
-                            fontSize: 18,
+                            fontSize: screenWidth * 0.045,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
                       ),
                     ),
 
-                    const SizedBox(height: 32),
+                    SizedBox(height: screenHeight * 0.04),
 
                     // OR Continue with
                     Row(
-                      children: const [
-                        Expanded(child: Divider(thickness: 1)),
+                      children: [
+                        const Expanded(child: Divider(thickness: 1)),
                         Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 8.0),
+                          padding: const EdgeInsets.symmetric(horizontal: 8.0),
                           child: Text(
                             '- OR Continue with -',
                             style: TextStyle(
                               color: Colors.black54,
-                              fontSize: 13,
+                              fontSize: screenWidth * 0.035,
                             ),
                           ),
                         ),
-                        Expanded(child: Divider(thickness: 1)),
+                        const Expanded(child: Divider(thickness: 1)),
                       ],
                     ),
 
-                    const SizedBox(height: 24),
+                    SizedBox(height: screenHeight * 0.03),
 
                     // Social Buttons
                     Row(
@@ -274,48 +281,48 @@ class _LoginPageState extends State<LoginPage> {
                           style: OutlinedButton.styleFrom(
                             shape: const CircleBorder(),
                             side: const BorderSide(color: Color(0xFFF73D5C)),
-                            padding: const EdgeInsets.all(16),
+                            padding: EdgeInsets.all(screenWidth * 0.04),
                           ),
                           onPressed: () {
                             // TODO: Google login
                           },
-                          child: const FaIcon(
+                          child: FaIcon(
                             FontAwesomeIcons.google,
-                            color: Color(0xFFF73D5C),
-                            size: 28,
+                            color: const Color(0xFFF73D5C),
+                            size: screenWidth * 0.07,
                           ),
                         ),
-                        const SizedBox(width: 24),
+                        SizedBox(width: screenWidth * 0.06),
                         // Facebook
                         OutlinedButton(
                           style: OutlinedButton.styleFrom(
                             shape: const CircleBorder(),
                             side: const BorderSide(color: Color(0xFFF73D5C)),
-                            padding: const EdgeInsets.all(16),
+                            padding: EdgeInsets.all(screenWidth * 0.04),
                           ),
                           onPressed: () {
                             // TODO: Facebook login
                           },
-                          child: const FaIcon(
+                          child: FaIcon(
                             FontAwesomeIcons.facebookF,
-                            color: Color(0xFFF73D5C),
-                            size: 28,
+                            color: const Color(0xFFF73D5C),
+                            size: screenWidth * 0.07,
                           ),
                         ),
                       ],
                     ),
 
-                    const SizedBox(height: 32),
+                    SizedBox(height: screenHeight * 0.04),
 
                     // Create Account / Sign Up
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Text(
+                        Text(
                           'Create An Account ',
                           style: TextStyle(
                             color: Colors.black54,
-                            fontSize: 14,
+                            fontSize: screenWidth * 0.035,
                           ),
                         ),
                         GestureDetector(
@@ -325,11 +332,11 @@ class _LoginPageState extends State<LoginPage> {
                               MaterialPageRoute<void>(builder: (_) => const SignupPage()),
                             );
                           },
-                          child: const Text(
+                          child: Text(
                             'Sign Up',
                             style: TextStyle(
-                              color: Color(0xFFF73D5C),
-                              fontSize: 14,
+                              color: const Color(0xFFF73D5C),
+                              fontSize: screenWidth * 0.035,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -337,13 +344,12 @@ class _LoginPageState extends State<LoginPage> {
                       ],
                     ),
 
-                    const SizedBox(height: 48),
+                    SizedBox(height: screenHeight * 0.06),
                   ],
                 ),
               ),
             ),
           ),
-          // Error alert at the bottom removed as per request
         ],
       ),
     );

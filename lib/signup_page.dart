@@ -106,26 +106,31 @@ class _SignupPageState extends State<SignupPage> {
 
   @override
   Widget build(BuildContext context) {
+    final screenSize = MediaQuery.of(context).size;
+    final screenWidth = screenSize.width;
+    final screenHeight = screenSize.height;
+    final isSmallScreen = screenHeight < 650;
+    
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0),
+          padding: EdgeInsets.symmetric(horizontal: screenWidth * 0.06),
           child: Form(
             key: _formKey,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SizedBox(height: 32),
-                const Text(
+                SizedBox(height: isSmallScreen ? 16 : 32),
+                Text(
                   'Create an\naccount',
                   style: TextStyle(
-                    fontSize: 32,
+                    fontSize: screenWidth * 0.08,
                     fontWeight: FontWeight.bold,
                     color: Colors.black,
                   ),
                 ),
-                const SizedBox(height: 32),
+                SizedBox(height: isSmallScreen ? 24 : 32),
 
 
                 // Email Field
@@ -139,13 +144,14 @@ class _SignupPageState extends State<SignupPage> {
                       ),
                       child: TextFormField(
                         controller: _emailController,
-                        decoration: const InputDecoration(
-                          prefixIcon: Icon(Icons.person, color: Colors.grey),
+                        decoration: InputDecoration(
+                          prefixIcon: const Icon(Icons.person, color: Colors.grey),
                           hintText: 'Email',
                           border: InputBorder.none,
-                          contentPadding: EdgeInsets.symmetric(vertical: 18),
+                          contentPadding: EdgeInsets.symmetric(vertical: screenHeight * 0.025),
                         ),
                         keyboardType: TextInputType.emailAddress,
+                        style: TextStyle(fontSize: screenWidth * 0.045),
                         validator: (value) {
                           // No error text here, handled below
                           return null;
@@ -167,7 +173,7 @@ class _SignupPageState extends State<SignupPage> {
                   ],
                 ),
 
-                const SizedBox(height: 20),
+                SizedBox(height: screenHeight * 0.025),
 
                 // Password Field
                 Column(
@@ -184,7 +190,7 @@ class _SignupPageState extends State<SignupPage> {
                           prefixIcon: const Icon(Icons.lock, color: Colors.grey),
                           hintText: 'Password',
                           border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(vertical: 18),
+                          contentPadding: EdgeInsets.symmetric(vertical: screenHeight * 0.025),
                           suffixIcon: IconButton(
                             icon: Icon(
                               _obscurePassword ? Icons.visibility_off : Icons.visibility,
@@ -194,6 +200,7 @@ class _SignupPageState extends State<SignupPage> {
                           ),
                         ),
                         obscureText: _obscurePassword,
+                        style: TextStyle(fontSize: screenWidth * 0.045),
                         validator: (value) {
                           // No error text here, handled below
                           return null;
@@ -208,7 +215,7 @@ class _SignupPageState extends State<SignupPage> {
                   ],
                 ),
 
-                const SizedBox(height: 20),
+                SizedBox(height: screenHeight * 0.025),
 
                 // Confirm Password Field
                 Column(
@@ -225,7 +232,7 @@ class _SignupPageState extends State<SignupPage> {
                           prefixIcon: const Icon(Icons.lock, color: Colors.grey),
                           hintText: 'Confirm Password',
                           border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(vertical: 18),
+                          contentPadding: EdgeInsets.symmetric(vertical: screenHeight * 0.025),
                           suffixIcon: IconButton(
                             icon: Icon(
                               _obscureConfirmPassword ? Icons.visibility_off : Icons.visibility,
@@ -235,6 +242,7 @@ class _SignupPageState extends State<SignupPage> {
                           ),
                         ),
                         obscureText: _obscureConfirmPassword,
+                        style: TextStyle(fontSize: screenWidth * 0.045),
                         validator: (value) {
                           // No error text here, handled below
                           return null;
@@ -256,7 +264,7 @@ class _SignupPageState extends State<SignupPage> {
                   ],
                 ),
 
-                const SizedBox(height: 12),
+                SizedBox(height: screenHeight * 0.015),
 
                 // Terms
                 Padding(
@@ -264,7 +272,7 @@ class _SignupPageState extends State<SignupPage> {
                   child: RichText(
                     text: TextSpan(
                       text: 'By clicking the ',
-                      style: const TextStyle(color: Colors.black54, fontSize: 13),
+                      style: TextStyle(color: Colors.black54, fontSize: screenWidth * 0.035),
                       children: [
                         TextSpan(
                           text: 'Create Account',
@@ -278,7 +286,7 @@ class _SignupPageState extends State<SignupPage> {
                   ),
                 ),
 
-                const SizedBox(height: 24),
+                SizedBox(height: screenHeight * 0.03),
 
                 // Create Account Button
                 SizedBox(
@@ -286,45 +294,45 @@ class _SignupPageState extends State<SignupPage> {
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFFF73D5C),
-                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      padding: EdgeInsets.symmetric(vertical: screenHeight * 0.02),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
                       elevation: 0,
                     ),
                     onPressed: _signup,
-                    child: const Text(
+                    child: Text(
                       'Create Account',
                       style: TextStyle(
                         color: Colors.white,
-                        fontSize: 18,
+                        fontSize: screenWidth * 0.045,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
                   ),
                 ),
 
-                const SizedBox(height: 32),
+                SizedBox(height: screenHeight * 0.04),
 
                 // OR Continue with
                 Row(
-                  children: const [
-                    Expanded(child: Divider(thickness: 1)),
+                  children: [
+                    const Expanded(child: Divider(thickness: 1)),
                     Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 8.0),
+                      padding: const EdgeInsets.symmetric(horizontal: 8.0),
                       child: Text(
                         '- OR Continue with -',
                         style: TextStyle(
                           color: Colors.black54,
-                          fontSize: 13,
+                          fontSize: screenWidth * 0.035,
                         ),
                       ),
                     ),
-                    Expanded(child: Divider(thickness: 1)),
+                    const Expanded(child: Divider(thickness: 1)),
                   ],
                 ),
 
-                const SizedBox(height: 24),
+                SizedBox(height: screenHeight * 0.03),
 
                 // Social Buttons
                 Row(
@@ -334,47 +342,47 @@ class _SignupPageState extends State<SignupPage> {
                       style: OutlinedButton.styleFrom(
                         shape: const CircleBorder(),
                         side: const BorderSide(color: Color(0xFFF73D5C)),
-                        padding: const EdgeInsets.all(16),
+                        padding: EdgeInsets.all(screenWidth * 0.04),
                       ),
                       onPressed: () {
                         // TODO: Google signup
                       },
-                      child: const FaIcon(
+                      child: FaIcon(
                         FontAwesomeIcons.google,
-                        color: Color(0xFFF73D5C),
-                        size: 28,
+                        color: const Color(0xFFF73D5C),
+                        size: screenWidth * 0.07,
                       ),
                     ),
-                    const SizedBox(width: 24),
+                    SizedBox(width: screenWidth * 0.06),
                     OutlinedButton(
                       style: OutlinedButton.styleFrom(
                         shape: const CircleBorder(),
                         side: const BorderSide(color: Color(0xFFF73D5C)),
-                        padding: const EdgeInsets.all(16),
+                        padding: EdgeInsets.all(screenWidth * 0.04),
                       ),
                       onPressed: () {
                         // TODO: Facebook signup
                       },
-                      child: const FaIcon(
+                      child: FaIcon(
                         FontAwesomeIcons.facebookF,
-                        color: Color(0xFFF73D5C),
-                        size: 28,
+                        color: const Color(0xFFF73D5C),
+                        size: screenWidth * 0.07,
                       ),
                     ),
                   ],
                 ),
 
-                const SizedBox(height: 32),
+                SizedBox(height: screenHeight * 0.04),
 
                 // Already have account
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text(
+                    Text(
                       'I Already Have an Account ',
                       style: TextStyle(
                         color: Colors.black54,
-                        fontSize: 14,
+                        fontSize: screenWidth * 0.035,
                       ),
                     ),
                     GestureDetector(
@@ -384,11 +392,11 @@ class _SignupPageState extends State<SignupPage> {
                           MaterialPageRoute(builder: (_) => const LoginPage()),
                         );
                       },
-                      child: const Text(
+                      child: Text(
                         'Login',
                         style: TextStyle(
-                          color: Color(0xFFF73D5C),
-                          fontSize: 14,
+                          color: const Color(0xFFF73D5C),
+                          fontSize: screenWidth * 0.035,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -396,7 +404,7 @@ class _SignupPageState extends State<SignupPage> {
                   ],
                 ),
 
-                const SizedBox(height: 48),
+                SizedBox(height: screenHeight * 0.06),
               ],
             ),
           ),

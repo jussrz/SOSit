@@ -28,6 +28,7 @@ class _HomeScreenState extends State<HomeScreen> {
   GoogleMapController? _mapController;
   Position? _currentPosition;
   bool _isLoadingProfile = false;
+  bool _isCardExpanded = false; // Add this for card expansion state
 
   @override
   void initState() {
@@ -253,6 +254,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final screenSize = MediaQuery.of(context).size;
+    final screenWidth = screenSize.width;
+    final screenHeight = screenSize.height;
+    
     return Scaffold(
       body: Stack(
         children: [
@@ -327,8 +332,14 @@ class _HomeScreenState extends State<HomeScreen> {
             right: 0,
             child: SafeArea(
               child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                margin: EdgeInsets.symmetric(
+                  horizontal: screenWidth * 0.02, 
+                  vertical: screenHeight * 0.01
+                ),
+                padding: EdgeInsets.symmetric(
+                  horizontal: screenWidth * 0.04, 
+                  vertical: screenHeight * 0.015
+                ),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(24),
@@ -341,7 +352,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                 ),
                 child: SizedBox(
-                  height: 40,
+                  height: screenHeight * 0.06,
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
@@ -350,7 +361,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         alignment: Alignment.center,
                         child: SvgPicture.asset(
                           'assets/sositlogo.svg',
-                          height: 18.73,
+                          height: screenHeight * 0.025,
                         ),
                       ),
                       // Settings icon (left)
@@ -364,16 +375,16 @@ class _HomeScreenState extends State<HomeScreen> {
                             );
                           },
                           child: Container(
-                            width: 44,
-                            height: 44,
+                            width: screenWidth * 0.11,
+                            height: screenWidth * 0.11,
                             decoration: const BoxDecoration(
                               color: Colors.transparent,
                               shape: BoxShape.circle,
                             ),
-                            child: const Icon(
+                            child: Icon(
                               Icons.settings, 
-                              color: Color(0xFFF73D5C), 
-                              size: 40,
+                              color: const Color(0xFFF73D5C), 
+                              size: screenWidth * 0.09,
                             ),
                           ),
                         ),
@@ -390,20 +401,20 @@ class _HomeScreenState extends State<HomeScreen> {
                           },
                           child: _profilePhotoUrl.isNotEmpty
                               ? CircleAvatar(
-                                  radius: 22,
+                                  radius: screenWidth * 0.055,
                                   backgroundImage: NetworkImage(_profilePhotoUrl),
                                 )
                               : Container(
-                                  width: 44,
-                                  height: 44,
+                                  width: screenWidth * 0.11,
+                                  height: screenWidth * 0.11,
                                   decoration: const BoxDecoration(
                                     color: Color(0xFFF73D5C),
                                     shape: BoxShape.circle,
                                   ),
-                                  child: const Icon(
+                                  child: Icon(
                                     Icons.person, 
                                     color: Colors.white, 
-                                    size: 28,
+                                    size: screenWidth * 0.07,
                                   ),
                                 ),
                         ),
@@ -415,217 +426,423 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          // Bottom Card: Safety Status
+          // Bottom Card: Safety Status (Expandable)
           Positioned(
             left: 0,
             right: 0,
-            bottom: 24,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 18),
+            bottom: _isCardExpanded ? 0 : screenHeight * 0.03,
+            child: GestureDetector(
+              onTap: () {
+                setState(() {
+                  _isCardExpanded = !_isCardExpanded;
+                });
+              },
+              onPanUpdate: (details) {
+                // Detect upward swipe to expand
+                if (details.delta.dy < -5 && !_isCardExpanded) {
+                  setState(() {
+                    _isCardExpanded = true;
+                  });
+                }
+                // Detect downward swipe to collapse
+                else if (details.delta.dy > 5 && _isCardExpanded) {
+                  setState(() {
+                    _isCardExpanded = false;
+                  });
+                }
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeInOut,
+                height: _isCardExpanded ? screenHeight * 0.7 : null,
+                constraints: _isCardExpanded 
+                    ? null 
+                    : BoxConstraints(
+                        maxHeight: screenHeight * 0.4,
+                        minHeight: screenHeight * 0.2,
+                      ),
+                margin: EdgeInsets.symmetric(
+                  horizontal: _isCardExpanded ? 0 : screenWidth * 0.04
+                ),
+                padding: EdgeInsets.symmetric(
+                  vertical: screenHeight * 0.02, 
+                  horizontal: screenWidth * 0.045
+                ),
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.only(
+                    topLeft: Radius.circular(_isCardExpanded ? 24 : 20),
+                    topRight: Radius.circular(_isCardExpanded ? 24 : 20),
+                    bottomLeft: Radius.circular(_isCardExpanded ? 0 : 20),
+                    bottomRight: Radius.circular(_isCardExpanded ? 0 : 20),
+                  ),
                   boxShadow: const [
                     BoxShadow(
                       color: Colors.black12,
                       blurRadius: 12,
-                      offset: Offset(0, 4),
+                      offset: Offset(0, -4),
                     )
                   ],
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Center(
-                      child: Text(
-                        'Your Safety Status',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 18,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        const Text('Device Status: ', style: TextStyle(fontWeight: FontWeight.w500)),
-                        Text(_deviceStatus, style: TextStyle(color: _getDeviceStatusColor(_deviceStatus))),
-                      ],
-                    ),
-                    Row(
-                      children: [
-                        const Text('GPS Signal: ', style: TextStyle(fontWeight: FontWeight.w500)),
-                        Text(_gpsSignal, style: TextStyle(color: _getGpsColor(_gpsSignal))),
-                      ],
-                    ),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Location: ', style: TextStyle(fontWeight: FontWeight.w500)),
-                        Expanded(
-                          child: Text(_location.isNotEmpty ? _location : 'Getting location...', 
-                              style: const TextStyle(color: Colors.black87)),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    const Text('Emergency Contacts',
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                    const SizedBox(height: 8),
-                    
-                    // Loading state for contacts
-                    if (_isLoadingProfile) ...[
-                      Container(
-                        padding: const EdgeInsets.all(20),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: const [
-                            SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFF73D5C)),
+                child: _isCardExpanded 
+                    ? Column(
+                        children: [
+                          // Drag Handle
+                          Container(
+                            width: screenWidth * 0.12,
+                            height: 4,
+                            margin: EdgeInsets.only(bottom: screenHeight * 0.015),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade400,
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                          
+                          Text(
+                            'Your Safety Status',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: screenWidth * 0.045,
+                            ),
+                          ),
+                          SizedBox(height: screenHeight * 0.015),
+                          
+                          // Status info in expanded view
+                          _buildStatusInfo(),
+                          
+                          SizedBox(height: screenHeight * 0.025),
+                          Row(
+                            children: [
+                              Text('Emergency Contacts',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold, 
+                                    fontSize: screenWidth * 0.04
+                                  )),
+                              const Spacer(),
+                              Icon(
+                                Icons.keyboard_arrow_down,
+                                color: Colors.grey.shade600,
+                                size: screenWidth * 0.05,
+                              ),
+                            ],
+                          ),
+                          SizedBox(height: screenHeight * 0.015),
+                          
+                          // Emergency contacts content
+                          Expanded(
+                            child: SingleChildScrollView(
+                              child: _buildEmergencyContacts(),
+                            ),
+                          ),
+                        ],
+                      )
+                    : IntrinsicHeight(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Drag Handle
+                            Container(
+                              width: screenWidth * 0.12,
+                              height: 4,
+                              margin: EdgeInsets.only(bottom: screenHeight * 0.015),
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade400,
+                                borderRadius: BorderRadius.circular(2),
                               ),
                             ),
-                            SizedBox(width: 12),
+                            
                             Text(
-                              'Loading contacts...',
+                              'Your Safety Status',
                               style: TextStyle(
-                                color: Colors.grey,
-                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                fontSize: screenWidth * 0.045,
                               ),
+                            ),
+                            SizedBox(height: screenHeight * 0.015),
+                            
+                            // Status info in collapsed view
+                            _buildStatusInfo(),
+                            
+                            SizedBox(height: screenHeight * 0.015),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.keyboard_arrow_up,
+                                  color: Colors.grey.shade600,
+                                  size: screenWidth * 0.05,
+                                ),
+                                SizedBox(width: screenWidth * 0.01),
+                                Text(
+                                  'Swipe up for Emergency Contacts',
+                                  style: TextStyle(
+                                    color: Colors.grey.shade600,
+                                    fontSize: screenWidth * 0.03,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
                       ),
-                    ]
-                    // Show contacts when loaded
-                    else ...[
-                      // First Emergency Contact
-                      if (_emergencyName.isNotEmpty || _emergencyPhone.isNotEmpty) ...[
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          margin: const EdgeInsets.only(bottom: 8),
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade50,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.grey.shade200),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  const Icon(Icons.person, size: 16, color: Colors.grey),
-                                  const SizedBox(width: 8),
-                                  Text(_emergencyName.isNotEmpty ? _emergencyName : 'No name provided',
-                                      style: const TextStyle(fontWeight: FontWeight.w500)),
-                                ],
-                              ),
-                              if (_relationship.isNotEmpty) ...[
-                                const SizedBox(height: 4),
-                                Row(
-                                  children: [
-                                    const Icon(Icons.family_restroom, size: 16, color: Colors.grey),
-                                    const SizedBox(width: 8),
-                                    Text(_relationship, style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
-                                  ],
-                                ),
-                              ],
-                              if (_emergencyPhone.isNotEmpty) ...[
-                                const SizedBox(height: 4),
-                                Row(
-                                  children: [
-                                    const Icon(Icons.phone, size: 16, color: Colors.grey),
-                                    const SizedBox(width: 8),
-                                    Text(_emergencyPhone, style: const TextStyle(color: Colors.blue)),
-                                  ],
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ],
-                      
-                      // Second Emergency Contact
-                      if (_emergencyName2.isNotEmpty || _emergencyPhone2.isNotEmpty) ...[
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade50,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.grey.shade200),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  const Icon(Icons.person, size: 16, color: Colors.grey),
-                                  const SizedBox(width: 8),
-                                  Text(_emergencyName2.isNotEmpty ? _emergencyName2 : 'No name provided',
-                                      style: const TextStyle(fontWeight: FontWeight.w500)),
-                                ],
-                              ),
-                              if (_relationship2.isNotEmpty) ...[
-                                const SizedBox(height: 4),
-                                Row(
-                                  children: [
-                                    const Icon(Icons.family_restroom, size: 16, color: Colors.grey),
-                                    const SizedBox(width: 8),
-                                    Text(_relationship2, style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
-                                  ],
-                                ),
-                              ],
-                              if (_emergencyPhone2.isNotEmpty) ...[
-                                const SizedBox(height: 4),
-                                Row(
-                                  children: [
-                                    const Icon(Icons.phone, size: 16, color: Colors.grey),
-                                    const SizedBox(width: 8),
-                                    Text(_emergencyPhone2, style: const TextStyle(color: Colors.blue)),
-                                  ],
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ],
-                      
-                      // Show message if no emergency contacts
-                      if ((_emergencyName.isEmpty && _emergencyPhone.isEmpty) && 
-                          (_emergencyName2.isEmpty && _emergencyPhone2.isEmpty)) ...[
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.orange.shade50,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.orange.shade200),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(Icons.warning_amber, color: Colors.orange.shade600, size: 16),
-                              const SizedBox(width: 8),
-                              const Expanded(
-                                child: Text('No emergency contacts added yet',
-                                    style: TextStyle(fontSize: 12)),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ],
-                  ],
-                ),
               ),
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildStatusInfo() {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
+    
+    return Column(
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Device Status: ', 
+                style: TextStyle(
+                  fontWeight: FontWeight.w500,
+                  fontSize: screenWidth * 0.035
+                )),
+            Expanded(
+              child: Text(_deviceStatus, 
+                  style: TextStyle(
+                    color: _getDeviceStatusColor(_deviceStatus),
+                    fontSize: screenWidth * 0.035
+                  )),
+            ),
+          ],
+        ),
+        SizedBox(height: screenHeight * 0.005),
+        Row(
+          children: [
+            Text('GPS Signal: ', 
+                style: TextStyle(
+                  fontWeight: FontWeight.w500,
+                  fontSize: screenWidth * 0.035
+                )),
+            Text(_gpsSignal, 
+                style: TextStyle(
+                  color: _getGpsColor(_gpsSignal),
+                  fontSize: screenWidth * 0.035
+                )),
+          ],
+        ),
+        SizedBox(height: screenHeight * 0.005),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Location: ', 
+                style: TextStyle(
+                  fontWeight: FontWeight.w500,
+                  fontSize: screenWidth * 0.035
+                )),
+            Expanded(
+              child: Text(_location.isNotEmpty ? _location : 'Getting location...', 
+                  style: TextStyle(
+                    color: Colors.black87,
+                    fontSize: screenWidth * 0.035
+                  ),
+                  maxLines: _isCardExpanded ? null : 2,
+                  overflow: _isCardExpanded ? null : TextOverflow.ellipsis),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEmergencyContacts() {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
+    
+    return Column(
+      children: [
+        // Loading state for contacts
+        if (_isLoadingProfile) ...[
+          Container(
+            padding: EdgeInsets.all(screenHeight * 0.025),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                SizedBox(
+                  width: screenWidth * 0.05,
+                  height: screenWidth * 0.05,
+                  child: const CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFF73D5C)),
+                  ),
+                ),
+                SizedBox(width: screenWidth * 0.03),
+                Text(
+                  'Loading contacts...',
+                  style: TextStyle(
+                    color: Colors.grey,
+                    fontSize: screenWidth * 0.035,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ]
+        // Show contacts when loaded
+        else ...[
+          // First Emergency Contact
+          if (_emergencyName.isNotEmpty || _emergencyPhone.isNotEmpty) ...[
+            Container(
+              padding: EdgeInsets.all(screenWidth * 0.03),
+              margin: EdgeInsets.only(bottom: screenHeight * 0.01),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.person, 
+                          size: screenWidth * 0.04, 
+                          color: Colors.grey),
+                      SizedBox(width: screenWidth * 0.02),
+                      Text(_emergencyName.isNotEmpty ? _emergencyName : 'No name provided',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w500,
+                            fontSize: screenWidth * 0.035
+                          )),
+                    ],
+                  ),
+                  if (_relationship.isNotEmpty) ...[
+                    SizedBox(height: screenHeight * 0.005),
+                    Row(
+                      children: [
+                        Icon(Icons.family_restroom, 
+                            size: screenWidth * 0.04, 
+                            color: Colors.grey),
+                        SizedBox(width: screenWidth * 0.02),
+                        Text(_relationship, 
+                            style: TextStyle(
+                              color: Colors.grey.shade600, 
+                              fontSize: screenWidth * 0.03
+                            )),
+                      ],
+                    ),
+                  ],
+                  if (_emergencyPhone.isNotEmpty) ...[
+                    SizedBox(height: screenHeight * 0.005),
+                    Row(
+                      children: [
+                        Icon(Icons.phone, 
+                            size: screenWidth * 0.04, 
+                            color: Colors.grey),
+                        SizedBox(width: screenWidth * 0.02),
+                        Text(_emergencyPhone, 
+                            style: TextStyle(
+                              color: Colors.blue,
+                              fontSize: screenWidth * 0.035
+                            )),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+          
+          // Second Emergency Contact
+          if (_emergencyName2.isNotEmpty || _emergencyPhone2.isNotEmpty) ...[
+            Container(
+              padding: EdgeInsets.all(screenWidth * 0.03),
+              margin: EdgeInsets.only(bottom: screenHeight * 0.01),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.person, 
+                          size: screenWidth * 0.04, 
+                          color: Colors.grey),
+                      SizedBox(width: screenWidth * 0.02),
+                      Text(_emergencyName2.isNotEmpty ? _emergencyName2 : 'No name provided',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w500,
+                            fontSize: screenWidth * 0.035
+                          )),
+                    ],
+                  ),
+                  if (_relationship2.isNotEmpty) ...[
+                    SizedBox(height: screenHeight * 0.005),
+                    Row(
+                      children: [
+                        Icon(Icons.family_restroom, 
+                            size: screenWidth * 0.04, 
+                            color: Colors.grey),
+                        SizedBox(width: screenWidth * 0.02),
+                        Text(_relationship2, 
+                            style: TextStyle(
+                              color: Colors.grey.shade600, 
+                              fontSize: screenWidth * 0.03
+                            )),
+                      ],
+                    ),
+                  ],
+                  if (_emergencyPhone2.isNotEmpty) ...[
+                    SizedBox(height: screenHeight * 0.005),
+                    Row(
+                      children: [
+                        Icon(Icons.phone, 
+                            size: screenWidth * 0.04, 
+                            color: Colors.grey),
+                        SizedBox(width: screenWidth * 0.02),
+                        Text(_emergencyPhone2, 
+                            style: TextStyle(
+                              color: Colors.blue,
+                              fontSize: screenWidth * 0.035
+                            )),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+          
+          // Show message if no emergency contacts
+          if ((_emergencyName.isEmpty && _emergencyPhone.isEmpty) && 
+              (_emergencyName2.isEmpty && _emergencyPhone2.isEmpty)) ...[
+            Container(
+              padding: EdgeInsets.all(screenWidth * 0.03),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.orange.shade200),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.warning_amber, 
+                      color: Colors.orange.shade600, 
+                      size: screenWidth * 0.04),
+                  SizedBox(width: screenWidth * 0.02),
+                  Expanded(
+                    child: Text('No emergency contacts added yet',
+                        style: TextStyle(fontSize: screenWidth * 0.03)),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ],
     );
   }
 }

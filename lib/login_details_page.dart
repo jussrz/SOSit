@@ -159,35 +159,47 @@ class _LoginDetailsPageState extends State<LoginDetailsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final screenSize = MediaQuery.of(context).size;
+    final screenWidth = screenSize.width;
+    final screenHeight = screenSize.height;
+    
     return Scaffold(
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          icon: Icon(Icons.arrow_back, color: Colors.black, size: screenWidth * 0.06),
           onPressed: () => Navigator.of(context).pop(),
         ),
         centerTitle: true,
-        title: const Text('Login Details', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w500)),
+        title: Text('Login Details', style: TextStyle(
+          color: Colors.black, 
+          fontWeight: FontWeight.w500, 
+          fontSize: screenWidth * 0.045
+        )),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
+        padding: EdgeInsets.all(screenWidth * 0.04),
         child: Form(
           key: _formKey,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Email Section
-              const Text('Email Address', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16, color: Colors.black)),
-              const SizedBox(height: 16),
+              Text('Email Address', style: TextStyle(
+                fontWeight: FontWeight.w600, 
+                fontSize: screenWidth * 0.04, 
+                color: Colors.black
+              )),
+              SizedBox(height: screenHeight * 0.015),
               
               _buildTextField('New Email Address', _emailController, keyboardType: TextInputType.emailAddress),
-              const SizedBox(height: 16),
+              SizedBox(height: screenHeight * 0.015),
               
               SizedBox(
                 width: double.infinity,
-                height: 48,
+                height: screenHeight * 0.05,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFF73D5C),
@@ -198,42 +210,50 @@ class _LoginDetailsPageState extends State<LoginDetailsPage> {
                   ),
                   onPressed: _isLoading ? null : _updateEmail,
                   child: _isLoading 
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
+                    ? SizedBox(
+                        height: screenWidth * 0.04,
+                        width: screenWidth * 0.04,
+                        child: const CircularProgressIndicator(
                           strokeWidth: 2,
                           valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                         ),
                       )
-                    : const Text('Update Email', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600)),
+                    : Text('Update Email', style: TextStyle(
+                        color: Colors.white, 
+                        fontSize: screenWidth * 0.035, 
+                        fontWeight: FontWeight.w600
+                      )),
                 ),
               ),
 
-              const SizedBox(height: 32),
+              SizedBox(height: screenHeight * 0.025),
 
               // Password Section
-              const Text('Change Password', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16, color: Colors.black)),
-              const SizedBox(height: 16),
+              Text('Change Password', style: TextStyle(
+                fontWeight: FontWeight.w600, 
+                fontSize: screenWidth * 0.04, 
+                color: Colors.black
+              )),
+              SizedBox(height: screenHeight * 0.015),
 
               _buildPasswordField('Current Password', _currentPasswordController, _obscureCurrentPassword, () {
                 setState(() => _obscureCurrentPassword = !_obscureCurrentPassword);
               }),
-              const SizedBox(height: 12),
+              SizedBox(height: screenHeight * 0.01),
 
               _buildPasswordField('New Password', _newPasswordController, _obscureNewPassword, () {
                 setState(() => _obscureNewPassword = !_obscureNewPassword);
               }),
-              const SizedBox(height: 12),
+              SizedBox(height: screenHeight * 0.01),
 
               _buildPasswordField('Confirm New Password', _confirmPasswordController, _obscureConfirmPassword, () {
                 setState(() => _obscureConfirmPassword = !_obscureConfirmPassword);
               }),
-              const SizedBox(height: 16),
+              SizedBox(height: screenHeight * 0.015),
 
               SizedBox(
                 width: double.infinity,
-                height: 48,
+                height: screenHeight * 0.05,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFF73D5C),
@@ -244,15 +264,19 @@ class _LoginDetailsPageState extends State<LoginDetailsPage> {
                   ),
                   onPressed: _isLoading ? null : _updatePassword,
                   child: _isLoading 
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
+                    ? SizedBox(
+                        height: screenWidth * 0.04,
+                        width: screenWidth * 0.04,
+                        child: const CircularProgressIndicator(
                           strokeWidth: 2,
                           valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                         ),
                       )
-                    : const Text('Update Password', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600)),
+                    : Text('Update Password', style: TextStyle(
+                        color: Colors.white, 
+                        fontSize: screenWidth * 0.035, 
+                        fontWeight: FontWeight.w600
+                      )),
                 ),
               ),
             ],
@@ -263,8 +287,10 @@ class _LoginDetailsPageState extends State<LoginDetailsPage> {
   }
 
   Widget _buildTextField(String label, TextEditingController controller, {TextInputType? keyboardType}) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: EdgeInsets.only(bottom: MediaQuery.of(context).size.height * 0.01),
       decoration: BoxDecoration(
         border: Border.all(color: Colors.grey.shade400),
         borderRadius: BorderRadius.circular(12),
@@ -275,22 +301,27 @@ class _LoginDetailsPageState extends State<LoginDetailsPage> {
         cursorColor: const Color(0xFFF73D5C),
         decoration: InputDecoration(
           labelText: label,
-          labelStyle: const TextStyle(
+          labelStyle: TextStyle(
             color: Colors.grey,
-            fontSize: 16,
+            fontSize: screenWidth * 0.035,
           ),
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          contentPadding: EdgeInsets.symmetric(
+            horizontal: screenWidth * 0.035, 
+            vertical: MediaQuery.of(context).size.height * 0.015
+          ),
           floatingLabelBehavior: FloatingLabelBehavior.auto,
         ),
-        style: const TextStyle(fontSize: 16, color: Colors.black),
+        style: TextStyle(fontSize: screenWidth * 0.035, color: Colors.black),
       ),
     );
   }
 
   Widget _buildPasswordField(String label, TextEditingController controller, bool obscure, VoidCallback toggleObscure) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: EdgeInsets.only(bottom: MediaQuery.of(context).size.height * 0.01),
       decoration: BoxDecoration(
         border: Border.all(color: Colors.grey.shade400),
         borderRadius: BorderRadius.circular(12),
@@ -301,22 +332,26 @@ class _LoginDetailsPageState extends State<LoginDetailsPage> {
         cursorColor: const Color(0xFFF73D5C),
         decoration: InputDecoration(
           labelText: label,
-          labelStyle: const TextStyle(
+          labelStyle: TextStyle(
             color: Colors.grey,
-            fontSize: 16,
+            fontSize: screenWidth * 0.035,
           ),
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          contentPadding: EdgeInsets.symmetric(
+            horizontal: screenWidth * 0.035, 
+            vertical: MediaQuery.of(context).size.height * 0.015
+          ),
           floatingLabelBehavior: FloatingLabelBehavior.auto,
           suffixIcon: IconButton(
             icon: Icon(
               obscure ? Icons.visibility_off : Icons.visibility,
               color: Colors.grey,
+              size: screenWidth * 0.045,
             ),
             onPressed: toggleObscure,
           ),
         ),
-        style: const TextStyle(fontSize: 16, color: Colors.black),
+        style: TextStyle(fontSize: screenWidth * 0.035, color: Colors.black),
       ),
     );
   }

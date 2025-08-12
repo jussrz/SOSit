@@ -14,26 +14,38 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final screenSize = MediaQuery.of(context).size;
+    final screenWidth = screenSize.width;
+    final screenHeight = screenSize.height;
+    
     return Scaffold(
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          icon: Icon(Icons.arrow_back, color: Colors.black, size: screenWidth * 0.06),
           onPressed: () => Navigator.of(context).pop(),
         ),
         centerTitle: true,
-        title: const Text('Settings', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w500)),
+        title: Text('Settings', style: TextStyle(
+          color: Colors.black, 
+          fontWeight: FontWeight.w500, 
+          fontSize: screenWidth * 0.045
+        )),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
+        padding: EdgeInsets.all(screenWidth * 0.04),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Account Section
-            const Text('Account', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16, color: Colors.black)),
-            const SizedBox(height: 16),
+            Text('Account', style: TextStyle(
+              fontWeight: FontWeight.w600, 
+              fontSize: screenWidth * 0.04, 
+              color: Colors.black
+            )),
+            SizedBox(height: screenHeight * 0.015),
             
             _buildSettingsItem(
               icon: Icons.person_outline,
@@ -56,11 +68,15 @@ class _SettingsPageState extends State<SettingsPage> {
               },
             ),
             
-            const SizedBox(height: 32),
+            SizedBox(height: screenHeight * 0.025),
             
             // Emergency Section
-            const Text('Emergency', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16, color: Colors.black)),
-            const SizedBox(height: 16),
+            Text('Emergency', style: TextStyle(
+              fontWeight: FontWeight.w600, 
+              fontSize: screenWidth * 0.04, 
+              color: Colors.black
+            )),
+            SizedBox(height: screenHeight * 0.015),
             
             _buildSettingsItem(
               icon: Icons.contacts,
@@ -80,11 +96,15 @@ class _SettingsPageState extends State<SettingsPage> {
               },
             ),
             
-            const SizedBox(height: 32),
+            SizedBox(height: screenHeight * 0.025),
             
             // App Section
-            const Text('App', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16, color: Colors.black)),
-            const SizedBox(height: 16),
+            Text('App', style: TextStyle(
+              fontWeight: FontWeight.w600, 
+              fontSize: screenWidth * 0.04, 
+              color: Colors.black
+            )),
+            SizedBox(height: screenHeight * 0.015),
             
             _buildSettingsItem(
               icon: Icons.notifications_outlined,
@@ -113,16 +133,16 @@ class _SettingsPageState extends State<SettingsPage> {
               },
             ),
             
-            const SizedBox(height: 32),
+            SizedBox(height: screenHeight * 0.025),
             
             // Logout Button
             Container(
               width: double.infinity,
-              height: 48,
-              margin: const EdgeInsets.symmetric(vertical: 16),
+              height: screenHeight * 0.05,
+              margin: EdgeInsets.symmetric(vertical: screenHeight * 0.015),
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Color(0xFFF73D5C),
+                  backgroundColor: const Color(0xFFF73D5C),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -134,11 +154,11 @@ class _SettingsPageState extends State<SettingsPage> {
                     await _logout();
                   }
                 },
-                child: const Text(
+                child: Text(
                   'Logout',
                   style: TextStyle(
                     color: Colors.white,
-                    fontSize: 16,
+                    fontSize: screenWidth * 0.04,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -156,8 +176,10 @@ class _SettingsPageState extends State<SettingsPage> {
     required String subtitle,
     required VoidCallback onTap,
   }) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: EdgeInsets.only(bottom: MediaQuery.of(context).size.height * 0.01),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -170,24 +192,27 @@ class _SettingsPageState extends State<SettingsPage> {
         ],
       ),
       child: ListTile(
-        leading: Icon(icon, color: const Color(0xFFF73D5C), size: 24),
+        leading: Icon(icon, color: const Color(0xFFF73D5C), size: screenWidth * 0.055),
         title: Text(
           title,
-          style: const TextStyle(
+          style: TextStyle(
             fontWeight: FontWeight.w500,
-            fontSize: 16,
+            fontSize: screenWidth * 0.038,
           ),
         ),
         subtitle: Text(
           subtitle,
           style: TextStyle(
             color: Colors.grey.shade600,
-            fontSize: 12,
+            fontSize: screenWidth * 0.03,
           ),
         ),
-        trailing: const Icon(Icons.arrow_forward_ios, color: Colors.grey, size: 16),
+        trailing: Icon(Icons.arrow_forward_ios, color: Colors.grey, size: screenWidth * 0.035),
         onTap: onTap,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        contentPadding: EdgeInsets.symmetric(
+          horizontal: screenWidth * 0.035, 
+          vertical: MediaQuery.of(context).size.height * 0.008
+        ),
       ),
     );
   }
