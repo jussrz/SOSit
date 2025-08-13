@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'login_details_page.dart';
+import 'change_password_page.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -49,12 +49,12 @@ class _SettingsPageState extends State<SettingsPage> {
             
             _buildSettingsItem(
               icon: Icons.person_outline,
-              title: 'Login Details',
-              subtitle: 'Update your email and password',
+              title: 'Change Password',
+              subtitle: 'Update your password',
               onTap: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const LoginDetailsPage()),
+                  MaterialPageRoute(builder: (_) => const ChangePasswordPage()),
                 );
               },
             ),
