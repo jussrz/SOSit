@@ -49,8 +49,24 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
       }
     } catch (e) {
       if (mounted) {
+        String errorMessage = 'Failed to update password';
+        String errorString = e.toString().toLowerCase();
+        
+        if (errorString.contains('invalid login credentials') || 
+            errorString.contains('invalid_credentials')) {
+          errorMessage = 'Current password is incorrect';
+        } else if (errorString.contains('weak password') || 
+                   errorString.contains('password too short')) {
+          errorMessage = 'Password is too weak. Use at least 6 characters';
+        } else if (errorString.contains('same password')) {
+          errorMessage = 'New password must be different from current password';
+        }
+        
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to update password: $e')),
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     } finally {
@@ -235,7 +251,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFFF73D5C),
-                      padding: EdgeInsets.symmetric(vertical: screenHeight * 0.02),
+                      padding: EdgeInsets.symmetric(vertical: screenHeight * 0.015),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),

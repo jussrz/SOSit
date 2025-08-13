@@ -19,6 +19,7 @@ class _LoginPageState extends State<LoginPage> {
   bool _submitted = false;
   String? _emailError;
   String? _passwordError;
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -32,50 +33,79 @@ class _LoginPageState extends State<LoginPage> {
       _submitted = true;
       _emailError = null;
       _passwordError = null;
+      _isLoading = true;
     });
 
     // Validate fields manually for bottom error display
     if (_emailController.text.trim().isEmpty) {
       setState(() {
         _emailError = 'Email is required';
+        _isLoading = false;
       });
+      return;
     } else if (!_emailController.text.contains('@') || !_emailController.text.contains('.com')) {
       setState(() {
         _emailError = 'Invalid email format';
+        _isLoading = false;
       });
+      return;
     }
 
     if (_passwordController.text.trim().isEmpty) {
       setState(() {
         _passwordError = 'Password is required';
+        _isLoading = false;
       });
-    }
-
-    if (_emailError != null || _passwordError != null) {
       return;
     }
 
-    if (_formKey.currentState!.validate()) {
-      try {
-        final response = await Supabase.instance.client.auth.signInWithPassword(
-          email: _emailController.text.trim(),
-          password: _passwordController.text.trim(),
-        );
+    try {
+      final response = await Supabase.instance.client.auth.signInWithPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+      );
 
-        if (response.user != null) {
-          if (mounted) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute<void>(builder: (_) => const HomeScreen()), // This will now use the correct HomeScreen
-            );
-          }
-        }
-      } catch (e) {
+      if (response.user != null) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Login failed: $e')),
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute<void>(builder: (_) => const HomeScreen()),
           );
         }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          // Handle specific error types
+          String errorMessage = e.toString().toLowerCase();
+          
+          if (errorMessage.contains('invalid login credentials') || 
+              errorMessage.contains('invalid_credentials') ||
+              errorMessage.contains('invalid_grant')) {
+            // Default to email not found for invalid credentials
+            _emailError = 'Email not found';
+          } else if (errorMessage.contains('email not confirmed')) {
+            _emailError = 'Please verify your email address';
+          } else if (errorMessage.contains('too many requests')) {
+            _emailError = 'Too many attempts. Please try again later';
+          } else if (errorMessage.contains('user not found') || 
+                     errorMessage.contains('email not found')) {
+            _emailError = 'Email not found';
+          } else if (errorMessage.contains('wrong password') ||
+                     errorMessage.contains('incorrect password')) {
+            _passwordError = 'Wrong password';
+          } else {
+            // Default to email not found for unknown errors
+            _emailError = 'Email not found';
+          }ß
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
       }
     }
   }
@@ -142,17 +172,13 @@ class _LoginPageState extends State<LoginPage> {
                             },
                           ),
                         ),
-                        if (_submitted && _emailController.text.trim().isEmpty)
-                          const Padding(
-                            padding: EdgeInsets.only(left: 8, top: 4),
-                            child: Text('Email is required', style: TextStyle(color: Colors.red, fontSize: 12)),
-                          )
-                        else if (_submitted &&
-                            _emailController.text.isNotEmpty &&
-                            (!_emailController.text.contains('@') || !_emailController.text.contains('.com')))
-                          const Padding(
-                            padding: EdgeInsets.only(left: 8, top: 4),
-                            child: Text('Invalid email format', style: TextStyle(color: Colors.red, fontSize: 12)),
+                        if (_submitted && _emailError != null)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 8, top: 4),
+                            child: Text(
+                              _emailError!,
+                              style: const TextStyle(color: Colors.red, fontSize: 12),
+                            ),
                           ),
                       ],
                     ),
@@ -194,10 +220,13 @@ class _LoginPageState extends State<LoginPage> {
                             },
                           ),
                         ),
-                        if (_submitted && _passwordController.text.trim().isEmpty)
-                          const Padding(
-                            padding: EdgeInsets.only(left: 8, top: 4),
-                            child: Text('Password is required', style: TextStyle(color: Colors.red, fontSize: 12)),
+                        if (_submitted && _passwordError != null)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 8, top: 4),
+                            child: Text(
+                              _passwordError!,
+                              style: const TextStyle(color: Colors.red, fontSize: 12),
+                            ),
                           ),
                       ],
                     ),
@@ -238,15 +267,24 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                           elevation: 0,
                         ),
-                        onPressed: _login,
-                        child: Text(
-                          'Login',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: screenWidth * 0.045,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
+                        onPressed: _isLoading ? null : _login,
+                        child: _isLoading
+                            ? SizedBox(
+                                height: screenWidth * 0.05,
+                                width: screenWidth * 0.05,
+                                child: const CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                ),
+                              )
+                            : Text(
+                                'Login',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: screenWidth * 0.045,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
                       ),
                     ),
 
