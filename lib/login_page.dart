@@ -17,8 +17,7 @@ class _LoginPageState extends State<LoginPage> {
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
   bool _submitted = false;
-  String? _emailError;
-  String? _passwordError;
+  String? _loginError;
   bool _isLoading = false;
 
   @override
@@ -31,21 +30,20 @@ class _LoginPageState extends State<LoginPage> {
   Future<void> _login() async {
     setState(() {
       _submitted = true;
-      _emailError = null;
-      _passwordError = null;
+      _loginError = null;
       _isLoading = true;
     });
 
-    // Validate fields manually for bottom error display
+    // Validate fields manually
     if (_emailController.text.trim().isEmpty) {
       setState(() {
-        _emailError = 'Email is required';
+        _loginError = 'Email is required';
         _isLoading = false;
       });
       return;
     } else if (!_emailController.text.contains('@') || !_emailController.text.contains('.com')) {
       setState(() {
-        _emailError = 'Invalid email format';
+        _loginError = 'Invalid email format';
         _isLoading = false;
       });
       return;
@@ -53,7 +51,7 @@ class _LoginPageState extends State<LoginPage> {
 
     if (_passwordController.text.trim().isEmpty) {
       setState(() {
-        _passwordError = 'Password is required';
+        _loginError = 'Password is required';
         _isLoading = false;
       });
       return;
@@ -77,28 +75,7 @@ class _LoginPageState extends State<LoginPage> {
       if (mounted) {
         setState(() {
           _isLoading = false;
-          // Handle specific error types
-          String errorMessage = e.toString().toLowerCase();
-          
-          if (errorMessage.contains('invalid login credentials') || 
-              errorMessage.contains('invalid_credentials') ||
-              errorMessage.contains('invalid_grant')) {
-            // Default to email not found for invalid credentials
-            _emailError = 'Email not found';
-          } else if (errorMessage.contains('email not confirmed')) {
-            _emailError = 'Please verify your email address';
-          } else if (errorMessage.contains('too many requests')) {
-            _emailError = 'Too many attempts. Please try again later';
-          } else if (errorMessage.contains('user not found') || 
-                     errorMessage.contains('email not found')) {
-            _emailError = 'Email not found';
-          } else if (errorMessage.contains('wrong password') ||
-                     errorMessage.contains('incorrect password')) {
-            _passwordError = 'Wrong password';
-          } else {
-            // Default to email not found for unknown errors
-            _emailError = 'Email not found';
-          }ß
+          _loginError = 'Incorrect email/password';
         });
       }
     } finally {
@@ -141,94 +118,61 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                     SizedBox(height: isSmallScreen ? 24 : 36),
 
-                    // Email Field
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          decoration: BoxDecoration(
-                            border: Border.all(color: Colors.grey.shade400),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: TextFormField(
-                            controller: _emailController,
-                            decoration: InputDecoration(
-                              prefixIcon: const Icon(Icons.person, color: Colors.grey),
-                              hintText: 'Email',
-                              border: InputBorder.none,
-                              contentPadding: EdgeInsets.symmetric(vertical: screenHeight * 0.025), // Dynamic padding
-                            ),
-                            keyboardType: TextInputType.emailAddress,
-                            style: TextStyle(fontSize: screenWidth * 0.045), // Dynamic text size
-                            autovalidateMode: AutovalidateMode.onUserInteraction,
-                            validator: (value) {
-                              if (value == null || value.trim().isEmpty) {
-                                return null;
-                              }
-                              if (!value.contains('@') || !value.contains('.com')) {
-                                return null;
-                              }
-                              return null;
-                            },
-                          ),
+                    // Login Error Message - moved to be above email field
+                    if (_submitted && _loginError != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Text(
+                          _loginError!,
+                          style: TextStyle(color: Colors.red, fontSize: screenWidth * 0.035),
                         ),
-                        if (_submitted && _emailError != null)
-                          Padding(
-                            padding: const EdgeInsets.only(left: 8, top: 4),
-                            child: Text(
-                              _emailError!,
-                              style: const TextStyle(color: Colors.red, fontSize: 12),
-                            ),
-                          ),
-                      ],
+                      ),
+
+                    // Email Field
+                    Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.shade400),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: TextFormField(
+                        controller: _emailController,
+                        decoration: InputDecoration(
+                          prefixIcon: const Icon(Icons.person, color: Colors.grey),
+                          hintText: 'Email',
+                          border: InputBorder.none,
+                          contentPadding: EdgeInsets.symmetric(vertical: screenHeight * 0.025),
+                        ),
+                        keyboardType: TextInputType.emailAddress,
+                        style: TextStyle(fontSize: screenWidth * 0.045),
+                      ),
                     ),
 
                     SizedBox(height: screenHeight * 0.025),
 
                     // Password Field
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          decoration: BoxDecoration(
-                            border: Border.all(color: Colors.grey.shade400),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: TextFormField(
-                            controller: _passwordController,
-                            decoration: InputDecoration(
-                              prefixIcon: const Icon(Icons.lock, color: Colors.grey),
-                              hintText: 'Password',
-                              border: InputBorder.none,
-                              contentPadding: EdgeInsets.symmetric(vertical: screenHeight * 0.025),
-                              suffixIcon: IconButton(
-                                icon: Icon(
-                                  _obscurePassword ? Icons.visibility_off : Icons.visibility,
-                                  color: Colors.grey,
-                                ),
-                                onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                              ),
+                    Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.shade400),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: TextFormField(
+                        controller: _passwordController,
+                        decoration: InputDecoration(
+                          prefixIcon: const Icon(Icons.lock, color: Colors.grey),
+                          hintText: 'Password',
+                          border: InputBorder.none,
+                          contentPadding: EdgeInsets.symmetric(vertical: screenHeight * 0.025),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                              color: Colors.grey,
                             ),
-                            obscureText: _obscurePassword,
-                            style: TextStyle(fontSize: screenWidth * 0.045),
-                            autovalidateMode: AutovalidateMode.onUserInteraction,
-                            validator: (value) {
-                              if (value == null || value.trim().isEmpty) {
-                                return null;
-                              }
-                              return null;
-                            },
+                            onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                           ),
                         ),
-                        if (_submitted && _passwordError != null)
-                          Padding(
-                            padding: const EdgeInsets.only(left: 8, top: 4),
-                            child: Text(
-                              _passwordError!,
-                              style: const TextStyle(color: Colors.red, fontSize: 12),
-                            ),
-                          ),
-                      ],
+                        obscureText: _obscurePassword,
+                        style: TextStyle(fontSize: screenWidth * 0.045),
+                      ),
                     ),
 
                     // Forgot Password

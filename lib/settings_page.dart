@@ -59,15 +59,6 @@ class _SettingsPageState extends State<SettingsPage> {
               },
             ),
             
-            _buildSettingsItem(
-              icon: Icons.security,
-              title: 'Privacy & Security',
-              subtitle: 'Manage your privacy settings',
-              onTap: () {
-                // Navigate to privacy settings
-              },
-            ),
-            
             SizedBox(height: screenHeight * 0.025),
             
             // Emergency Section
@@ -77,15 +68,6 @@ class _SettingsPageState extends State<SettingsPage> {
               color: Colors.black
             )),
             SizedBox(height: screenHeight * 0.015),
-            
-            _buildSettingsItem(
-              icon: Icons.contacts,
-              title: 'Emergency Contacts',
-              subtitle: 'Manage your emergency contacts',
-              onTap: () {
-                // Navigate to emergency contacts
-              },
-            ),
             
             _buildSettingsItem(
               icon: Icons.bluetooth,
@@ -105,15 +87,6 @@ class _SettingsPageState extends State<SettingsPage> {
               color: Colors.black
             )),
             SizedBox(height: screenHeight * 0.015),
-            
-            _buildSettingsItem(
-              icon: Icons.notifications_outlined,
-              title: 'Notifications',
-              subtitle: 'Manage notification preferences',
-              onTap: () {
-                // Navigate to notification settings
-              },
-            ),
             
             _buildSettingsItem(
               icon: Icons.help_outline,
@@ -257,3 +230,6 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 }
+             
+
+
