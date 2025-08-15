@@ -76,9 +76,12 @@ class _SignupPageState extends State<SignupPage> {
       });
       return;
     }
-    if (!_emailController.text.contains('@') || !_emailController.text.contains('.com')) {
+    // More comprehensive email validation
+    String email = _emailController.text.trim();
+    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,}$');
+    if (!emailRegex.hasMatch(email)) {
       setState(() {
-        _emailError = 'Invalid email format.';
+        _emailError = 'Please enter a valid email address';
         _isLoading = false;
       });
       return;
