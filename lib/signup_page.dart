@@ -256,7 +256,7 @@ class _SignupPageState extends State<SignupPage> {
                       )
                     else if (_submitted &&
                         _emailController.text.isNotEmpty &&
-                        (!_emailController.text.contains('@') || !_emailController.text.contains('.com')))
+                        !RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,}$').hasMatch(_emailController.text))
                       const Padding(
                         padding: EdgeInsets.only(left: 8, top: 4),
                         child: Text('Invalid email format.', style: TextStyle(color: Colors.red, fontSize: 12)),

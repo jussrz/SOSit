@@ -41,7 +41,7 @@ class _LoginPageState extends State<LoginPage> {
         _isLoading = false;
       });
       return;
-    } else if (!_emailController.text.contains('@') || !_emailController.text.contains('.com')) {
+    } else if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,}$').hasMatch(_emailController.text.trim())) {
       setState(() {
         _loginError = 'Invalid email format';
         _isLoading = false;
