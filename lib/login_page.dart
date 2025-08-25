@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'signup_page.dart';
+import 'admin_signup_page.dart';
 import 'home_screen.dart';
 
 class LoginPage extends StatefulWidget {
@@ -326,6 +327,38 @@ class _LoginPageState extends State<LoginPage> {
                     },
                     child: Text(
                       'Sign Up',
+                      style: TextStyle(
+                        color: const Color(0xFFFF4081),
+                        fontSize: screenWidth * 0.035,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
+              SizedBox(height: screenHeight * 0.02),
+
+              // Admin Signup Link
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    'Administrator? ',
+                    style: TextStyle(
+                      color: Colors.grey.shade600,
+                      fontSize: screenWidth * 0.035,
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const AdminSignupPage()),
+                      );
+                    },
+                    child: Text(
+                      'Signup as Admin',
                       style: TextStyle(
                         color: const Color(0xFFFF4081),
                         fontSize: screenWidth * 0.035,
