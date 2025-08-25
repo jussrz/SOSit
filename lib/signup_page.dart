@@ -98,98 +98,128 @@ class _SignupPageState extends State<SignupPage> {
     }
   }
 
-  Future<void> _signup() async {
-    setState(() {
-      _submitted = true; // Set this first to trigger error display
-    });
-    
-    if (!_formKey.currentState!.validate()) return;
+Future<void> _signup() async {
+  setState(() {
+    _submitted = true;
+  });
 
-    setState(() {
-      _isLoading = true;
-    });
+  if (!_formKey.currentState!.validate()) return;
 
-    try {
-      final res = await Supabase.instance.client.auth.signUp(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
-      );
+  setState(() {
+    _isLoading = true;
+  });
 
-      if (res.user == null) throw Exception('Failed to create user');
+  try {
+    // 1. Create auth account in Supabase
+    final res = await Supabase.instance.client.auth.signUp(
+      email: _emailController.text.trim(),
+      password: _passwordController.text.trim(),
+    );
 
-      final userId = res.user!.id;
+    if (res.user == null) throw Exception('Failed to create user');
 
-      // Insert basic user info
-      final userData = {
-        'id': userId,
-        'email': _emailController.text.trim(),
-        'phone': _phoneController.text.trim(),
-        'birthdate': _birthdateController.text.trim(),
-        'role': _selectedRole,
-      };
+    final userId = res.user!.id;
 
-      if (_selectedRole == 'citizen') {
-        userData['first_name'] = _firstNameController.text.trim();
-        userData['middle_name'] = _middleNameController.text.trim();
-        userData['last_name'] = _lastNameController.text.trim();
-        await Supabase.instance.client.from('user').insert(userData);
-      } else if (_selectedRole == 'tanod') {
-        // Upload proof if exists
-        String? proofUrl;
-        if (_proofFile != null) {
-          final fileBytes = await _proofFile!.readAsBytes();
-          final filePath = 'tanod_${DateTime.now().millisecondsSinceEpoch}.jpg';
-          await Supabase.instance.client.storage.from('credentials_proof').uploadBinary(filePath, fileBytes);
-          proofUrl = Supabase.instance.client.storage.from('credentials_proof').getPublicUrl(filePath);
-        }
+    // 2. Always insert into user table
+    final userData = {
+      'id': userId,
+      'email': _emailController.text.trim(),
+      'phone': _phoneController.text.trim(),
+      'role': _selectedRole,
+    };
 
-        await Supabase.instance.client.from('tanod').insert({
-          'id': userId,
-          'email': _emailController.text.trim(),
-          'id_number': _idNumberController.text.trim(),
-          'credentials_url': proofUrl ?? _tanodCredentialsController.text.trim(),
-        });
-      } else if (_selectedRole == 'police') {
-        String? proofUrl;
-        if (_proofFile != null) {
-          final fileBytes = await _proofFile!.readAsBytes();
-          final filePath = 'police_${DateTime.now().millisecondsSinceEpoch}.jpg';
-          await Supabase.instance.client.storage.from('credentials_proof').uploadBinary(filePath, fileBytes);
-          proofUrl = Supabase.instance.client.storage.from('credentials_proof').getPublicUrl(filePath);
-        }
-
-        await Supabase.instance.client.from('police').insert({
-          'id': userId,
-          'email': _emailController.text.trim(),
-          'station_name': _stationNameController.text.trim(),
-          'credentials_url': proofUrl ?? _policeCredentialsController.text.trim(),
-        });
-      }
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(_selectedRole == 'citizen'
-              ? 'Account created successfully!'
-              : 'Account created. Please wait for verification of your credentials.'),
-        ),
-      );
-
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const LoginPage()),
-      );
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Signup failed: $e')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+    if (_selectedRole == 'citizen') {
+      userData['first_name'] = _firstNameController.text.trim().isNotEmpty
+          ? _firstNameController.text.trim()
+          : null;
+      userData['middle_name'] = _middleNameController.text.trim().isNotEmpty
+          ? _middleNameController.text.trim()
+          : null;
+      userData['last_name'] = _lastNameController.text.trim().isNotEmpty
+          ? _lastNameController.text.trim()
+          : null;
+      userData['birthdate'] = _birthdateController.text.trim().isNotEmpty
+          ? _birthdateController.text.trim()
+          : null;
     }
+
+    await Supabase.instance.client.from('user').insert(userData);
+
+    // 3. Insert into tanod/police if applicable
+    if (_selectedRole == 'tanod') {
+      String? proofUrl;
+      if (_proofFile != null) {
+        final fileBytes = await _proofFile!.readAsBytes();
+        final filePath = 'tanod_${DateTime.now().millisecondsSinceEpoch}.jpg';
+        await Supabase.instance.client.storage
+            .from('credentials_proof')
+            .uploadBinary(filePath, fileBytes);
+        proofUrl = Supabase.instance.client.storage
+            .from('credentials_proof')
+            .getPublicUrl(filePath);
+      }
+
+      await Supabase.instance.client.from('tanod').insert({
+        'user_id': userId,
+        'id_number': _idNumberController.text.trim().isNotEmpty
+            ? _idNumberController.text.trim()
+            : null,
+        'credentials_url': proofUrl ?? _tanodCredentialsController.text.trim(),
+        'status': 'pending',
+      });
+    } else if (_selectedRole == 'police') {
+      String? proofUrl;
+      if (_proofFile != null) {
+        final fileBytes = await _proofFile!.readAsBytes();
+        final filePath = 'police_${DateTime.now().millisecondsSinceEpoch}.jpg';
+        await Supabase.instance.client.storage
+            .from('credentials_proof')
+            .uploadBinary(filePath, fileBytes);
+        proofUrl = Supabase.instance.client.storage
+            .from('credentials_proof')
+            .getPublicUrl(filePath);
+      }
+
+      await Supabase.instance.client.from('police').insert({
+        'user_id': userId,
+        'station_name': _stationNameController.text.trim().isNotEmpty
+            ? _stationNameController.text.trim()
+            : null,
+        'credentials_url': proofUrl ?? _policeCredentialsController.text.trim(),
+        'status': 'pending',
+      });
+    }
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          _selectedRole == 'citizen'
+              ? 'Account created successfully!'
+              : 'Account created. Please wait for verification of your credentials.',
+        ),
+      ),
+    );
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const LoginPage()),
+    );
+  } catch (e) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Signup failed: $e')),
+      );
+    }
+  } finally {
+    if (mounted) setState(() => _isLoading = false);
   }
+}
+
+
+
+
 
   // Validators
   String? _validateRequired(String? value) => (value == null || value.isEmpty) ? 'This field is required' : null;
