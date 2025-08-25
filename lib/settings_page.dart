@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'change_password_page.dart';
+import 'login_page.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -219,7 +220,10 @@ class _SettingsPageState extends State<SettingsPage> {
     try {
       await supabase.auth.signOut();
       if (mounted) {
-        Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const LoginPage()),
+          (route) => false,
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -230,6 +234,6 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 }
-             
+
 
 
