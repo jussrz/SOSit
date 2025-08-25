@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:flutter_svg/flutter_svg.dart';
+import 'package:flutter_svg/flutter_svg.dart'; // Add this import back
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
@@ -269,46 +269,37 @@ Future<void> _loadUserProfile() async {
             right: 0,
             child: SafeArea(
               child: Container(
-                margin: EdgeInsets.symmetric(horizontal: screenWidth * 0.02, vertical: screenHeight * 0.01),
-                padding: EdgeInsets.symmetric(horizontal: screenWidth * 0.04, vertical: screenHeight * 0.015),
+                margin: EdgeInsets.symmetric(horizontal: screenWidth * 0.04, vertical: screenHeight * 0.01),
+                padding: EdgeInsets.symmetric(horizontal: screenWidth * 0.04, vertical: screenHeight * 0.01),
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(24),
-                  boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 3))],
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2))],
                 ),
-                child: Column(
+                child: Row(
                   children: [
-                    Row(
-                      children: [
-                        // Settings icon
-                        GestureDetector(
-                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsPage())),
-                          child: Icon(Icons.settings, color: const Color(0xFFF73D5C), size: screenWidth * 0.09),
-                        ),
-                        const Spacer(),
-                        // Profile avatar
-                        GestureDetector(
-                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfilePage()))
-                              .then((_) => _loadUserProfile()),
-                          child: _profilePhotoUrl.isNotEmpty
-                              ? CircleAvatar(radius: screenWidth * 0.055, backgroundImage: NetworkImage(_profilePhotoUrl))
-                              : CircleAvatar(
-                                  radius: screenWidth * 0.055,
-                                  backgroundColor: const Color(0xFFF73D5C),
-                                  child: Icon(Icons.person, color: Colors.white, size: screenWidth * 0.07),
-                                ),
-                        ),
-                      ],
+                    // Settings icon
+                    GestureDetector(
+                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsPage())),
+                      child: Icon(Icons.settings, color: const Color(0xFFF73D5C), size: screenWidth * 0.07),
                     ),
-                    const SizedBox(height: 12),
-                    // Display basic profile info
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Email: ${_emailController.text}', style: TextStyle(fontSize: screenWidth * 0.035)),
-                        Text('Phone: ${_phoneController.text}', style: TextStyle(fontSize: screenWidth * 0.035)),
-                        Text('Birthdate: ${_birthdateController.text}', style: TextStyle(fontSize: screenWidth * 0.035)),
-                      ],
+                    // SOSit Logo in the center
+                    Expanded(
+                      child: Center(
+                        child: _buildSositLogo(screenWidth, screenHeight),
+                      ),
+                    ),
+                    // Profile avatar
+                    GestureDetector(
+                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfilePage()))
+                          .then((_) => _loadUserProfile()),
+                      child: _profilePhotoUrl.isNotEmpty
+                          ? CircleAvatar(radius: screenWidth * 0.045, backgroundImage: NetworkImage(_profilePhotoUrl))
+                          : CircleAvatar(
+                              radius: screenWidth * 0.045,
+                              backgroundColor: const Color(0xFFF73D5C),
+                              child: Icon(Icons.person, color: Colors.white, size: screenWidth * 0.05),
+                            ),
                     ),
                   ],
                 ),
@@ -322,7 +313,17 @@ Future<void> _loadUserProfile() async {
             right: 0,
             bottom: _isCardExpanded ? 0 : screenHeight * 0.03,
             child: GestureDetector(
-              onTap: () => setState(() => _isCardExpanded = !_isCardExpanded),
+              onVerticalDragUpdate: (details) {
+                // Detect upward swipe
+                if (details.delta.dy < -5 && !_isCardExpanded) {
+                  setState(() => _isCardExpanded = true);
+                }
+                // Detect downward swipe
+                else if (details.delta.dy > 5 && _isCardExpanded) {
+                  setState(() => _isCardExpanded = false);
+                }
+              },
+              onTap: () => setState(() => _isCardExpanded = !_isCardExpanded), // Keep tap as backup
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 300),
                 curve: Curves.easeInOut,
@@ -436,28 +437,209 @@ Future<void> _loadUserProfile() async {
       );
     }
 
+    // Check if there are no emergency contacts
+    if (_emergencyName.isEmpty && _emergencyName2.isEmpty) {
+      return Padding(
+        padding: EdgeInsets.all(screenWidth * 0.05),
+        child: Center(
+          child: Text(
+            'No emergency contact/s added yet',
+            style: TextStyle(
+              fontSize: screenWidth * 0.035,
+              color: Colors.grey.shade600,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        ),
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // First Emergency Contact
         if (_emergencyName.isNotEmpty)
-          Padding(
-            padding: EdgeInsets.symmetric(vertical: screenHeight * 0.01),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Name: $_emergencyName', style: TextStyle(fontSize: screenWidth * 0.035)),
-              Text('Phone: $_emergencyPhone', style: TextStyle(fontSize: screenWidth * 0.035)),
-              Text('Relationship: $_relationship', style: TextStyle(fontSize: screenWidth * 0.035)),
-            ]),
+          Container(
+            margin: EdgeInsets.only(bottom: screenHeight * 0.015),
+            padding: EdgeInsets.all(screenWidth * 0.04),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade50,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: Row(
+              children: [
+                // Person Icon
+                Container(
+                  padding: EdgeInsets.all(screenWidth * 0.025),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF73D5C).withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.person,
+                    color: const Color(0xFFF73D5C),
+                    size: screenWidth * 0.06,
+                  ),
+                ),
+                SizedBox(width: screenWidth * 0.04),
+                // Contact Info
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _emergencyName,
+                        style: TextStyle(
+                          fontSize: screenWidth * 0.04,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black,
+                        ),
+                      ),
+                      SizedBox(height: screenHeight * 0.002),
+                      Text(
+                        _relationship,
+                        style: TextStyle(
+                          fontSize: screenWidth * 0.035,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                      SizedBox(height: screenHeight * 0.002),
+                      Text(
+                        _emergencyPhone,
+                        style: TextStyle(
+                          fontSize: screenWidth * 0.035,
+                          color: const Color(0xFF2196F3),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
+
+        // Second Emergency Contact
         if (_emergencyName2.isNotEmpty)
-          Padding(
-            padding: EdgeInsets.symmetric(vertical: screenHeight * 0.01),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Name: $_emergencyName2', style: TextStyle(fontSize: screenWidth * 0.035)),
-              Text('Phone: $_emergencyPhone2', style: TextStyle(fontSize: screenWidth * 0.035)),
-              Text('Relationship: $_relationship2', style: TextStyle(fontSize: screenWidth * 0.035)),
-            ]),
+          Container(
+            margin: EdgeInsets.only(bottom: screenHeight * 0.015),
+            padding: EdgeInsets.all(screenWidth * 0.04),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade50,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: Row(
+              children: [
+                // Person Icon
+                Container(
+                  padding: EdgeInsets.all(screenWidth * 0.025),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF73D5C).withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.person,
+                    color: const Color(0xFFF73D5C),
+                    size: screenWidth * 0.06,
+                  ),
+                ),
+                SizedBox(width: screenWidth * 0.04),
+                // Contact Info
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _emergencyName2,
+                        style: TextStyle(
+                          fontSize: screenWidth * 0.04,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black,
+                        ),
+                      ),
+                      SizedBox(height: screenHeight * 0.002),
+                      Text(
+                        _relationship2,
+                        style: TextStyle(
+                          fontSize: screenWidth * 0.035,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                      SizedBox(height: screenHeight * 0.002),
+                      Text(
+                        _emergencyPhone2,
+                        style: TextStyle(
+                          fontSize: screenWidth * 0.035,
+                          color: const Color(0xFF2196F3),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
       ],
     );
+  }
+
+  Widget _buildSositLogo(double screenWidth, double screenHeight) {
+    return FutureBuilder<bool>(
+      future: _checkAssetExists('assets/sositlogo.svg'),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return SizedBox(
+            height: screenWidth * 0.06, // Increased size
+            child: Text(
+              'SOSit',
+              style: TextStyle(
+                fontSize: screenWidth * 0.06, // Increased size
+                fontWeight: FontWeight.bold,
+                color: const Color(0xFFF73D5C),
+                letterSpacing: 0.5,
+              ),
+            ),
+          );
+        }
+        
+        if (snapshot.data == true) {
+          // SVG exists, try to load it
+          return SvgPicture.asset(
+            'assets/sositlogo.svg',
+            height: screenWidth * 0.06, // Increased size
+            width: screenWidth * 0.25, // Increased width
+            placeholderBuilder: (context) => _buildFallbackLogo(screenWidth, screenHeight),
+          );
+        } else {
+          // SVG doesn't exist, show fallback
+          return _buildFallbackLogo(screenWidth, screenHeight);
+        }
+      },
+    );
+  }
+
+  Widget _buildFallbackLogo(double screenWidth, double screenHeight) {
+    return Text(
+      'SOSit',
+      style: TextStyle(
+        fontSize: screenWidth * 0.06, // Increased size
+        fontWeight: FontWeight.bold,
+        color: const Color(0xFFF73D5C),
+        letterSpacing: 0.5,
+      ),
+    );
+  }
+
+  Future<bool> _checkAssetExists(String assetPath) async {
+    try {
+      await DefaultAssetBundle.of(context).load(assetPath);
+      return true;
+    } catch (e) {
+      debugPrint('Asset not found: $assetPath');
+      return false;
+    }
   }
 }
