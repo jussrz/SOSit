@@ -534,54 +534,6 @@ class _SignupPageState extends State<SignupPage> {
 
                 SizedBox(height: screenHeight * 0.02),
 
-                // Email Field for tanod and police - moved after role selector
-                if (_selectedRole == 'tanod' || _selectedRole == 'police') ...[
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        decoration: BoxDecoration(
-                          border: Border.all(color: Colors.grey.shade300),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: TextFormField(
-                          controller: _emailController,
-                          decoration: InputDecoration(
-                            prefixIcon: Icon(Icons.person, color: Colors.grey.shade600),
-                            hintText: 'Email',
-                            hintStyle: TextStyle(color: Colors.grey.shade600),
-                            border: InputBorder.none,
-                            contentPadding: EdgeInsets.symmetric(vertical: screenHeight * 0.025),
-                            errorStyle: TextStyle(height: 0), // Hide default error text
-                          ),
-                          keyboardType: TextInputType.emailAddress,
-                          style: TextStyle(fontSize: screenWidth * 0.04),
-                          // Remove validator completely
-                        ),
-                      ),
-                      // Custom error display
-                      if (_submitted) ...[
-                        Builder(
-                          builder: (context) {
-                            final error = _validateEmail(_emailController.text);
-                            if (error != null) {
-                              return Padding(
-                                padding: EdgeInsets.only(left: 8, top: 4),
-                                child: Text(
-                                  error,
-                                  style: TextStyle(color: Colors.red, fontSize: 12),
-                                ),
-                              );
-                            }
-                            return SizedBox.shrink();
-                          },
-                        ),
-                      ],
-                    ],
-                  ),
-                  SizedBox(height: screenHeight * 0.02),
-                ],
-
                 // Role-specific fields
                 if (_selectedRole == 'citizen') ...[
                   _buildTextField(_firstNameController, 'First Name', Icons.person_outline, _validateRequired),
