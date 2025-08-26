@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'change_password_page.dart';
+import 'account_validation_page.dart';
 import 'login_page.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -12,6 +13,31 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   final supabase = Supabase.instance.client;
+  String? userRole;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserRole();
+  }
+
+  Future<void> _loadUserRole() async {
+    try {
+      final userId = supabase.auth.currentUser?.id;
+      if (userId != null) {
+        final userData = await supabase
+            .from('user')
+            .select('role')
+            .eq('id', userId)
+            .single();
+        setState(() {
+          userRole = userData['role'];
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading user role: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -60,7 +86,29 @@ class _SettingsPageState extends State<SettingsPage> {
               },
             ),
             
-            SizedBox(height: screenHeight * 0.025),
+            // Admin Section (only show for admin users)
+            if (userRole == 'admin') ...[
+              Text('Administration', style: TextStyle(
+                fontWeight: FontWeight.w600, 
+                fontSize: screenWidth * 0.04, 
+                color: Colors.black
+              )),
+              SizedBox(height: screenHeight * 0.015),
+              
+              _buildSettingsItem(
+                icon: Icons.admin_panel_settings,
+                title: 'Account Validation',
+                subtitle: 'Review pending police and tanod accounts',
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const AccountValidationPage()),
+                  );
+                },
+              ),
+              
+              SizedBox(height: screenHeight * 0.025),
+            ],
             
             // Emergency Section
             Text('Emergency', style: TextStyle(
