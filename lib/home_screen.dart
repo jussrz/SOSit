@@ -183,6 +183,10 @@ Future<void> _loadUserProfile() async {
         .order('created_at')
         .limit(2);
 
+    // Add debugging
+    debugPrint('Emergency contacts from home_screen: $emergencyData');
+    debugPrint('Number of contacts found: ${emergencyData.length}');
+
     setState(() {
       _isLoadingProfile = false;
 
@@ -192,16 +196,26 @@ Future<void> _loadUserProfile() async {
       _phoneController.text = userData['phone'] ?? '';
       _birthdateController.text = userData['birthdate'] ?? '';
 
+      // Clear previous emergency contact data
+      _emergencyName = '';
+      _emergencyPhone = '';
+      _relationship = '';
+      _emergencyName2 = '';
+      _emergencyPhone2 = '';
+      _relationship2 = '';
+
       // Emergency contacts
       if (emergencyData.isNotEmpty) {
         _emergencyName = emergencyData[0]['emergency_contact_name'] ?? '';
         _emergencyPhone = emergencyData[0]['emergency_contact_phone'] ?? '';
         _relationship = emergencyData[0]['emergency_contact_relationship'] ?? '';
+        debugPrint('First contact loaded: $_emergencyName');
       }
       if (emergencyData.length > 1) {
         _emergencyName2 = emergencyData[1]['emergency_contact_name'] ?? '';
         _emergencyPhone2 = emergencyData[1]['emergency_contact_phone'] ?? '';
         _relationship2 = emergencyData[1]['emergency_contact_relationship'] ?? '';
+        debugPrint('Second contact loaded: $_emergencyName2');
       }
     });
   } catch (e) {
