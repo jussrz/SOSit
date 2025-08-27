@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'settings_page.dart';
+import 'settings_page.dart' hide MaterialPageRoute;
 import 'login_page.dart';
 
 class AdminHomeScreen extends StatefulWidget {
@@ -542,35 +542,4 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> with SingleTickerProv
     );
   }
 }
-    final screenWidth = MediaQuery.of(context).size.width;
     
-    return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).size.height * 0.005),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: screenWidth * 0.25,
-            child: Text(
-              '$label:',
-              style: TextStyle(
-                fontWeight: FontWeight.w500,
-                fontSize: screenWidth * 0.035,
-                color: Colors.grey.shade700,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: TextStyle(
-                fontSize: screenWidth * 0.035,
-                color: Colors.black87,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}

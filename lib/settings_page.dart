@@ -300,19 +300,7 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 }
-          MaterialPageRoute(builder: (_) => const LoginPage()),
-          (route) => false,
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Logout failed: $e')),
-        );
-      }
-    }
-  }
-}
+  
 
 
 
