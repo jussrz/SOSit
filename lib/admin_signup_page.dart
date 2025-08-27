@@ -45,6 +45,17 @@ class _AdminSignupPageState extends State<AdminSignupPage> {
     });
 
     try {
+      // Check if admin already exists with this email
+      final existingAdmin = await Supabase.instance.client
+          .from('admin')
+          .select('admin_email')
+          .eq('admin_email', _emailController.text.trim())
+          .maybeSingle();
+
+      if (existingAdmin != null) {
+        throw Exception('An admin account with this email already exists');
+      }
+
       // 1. Create auth account in Supabase
       final res = await Supabase.instance.client.auth.signUp(
         email: _emailController.text.trim(),
@@ -78,10 +89,22 @@ class _AdminSignupPageState extends State<AdminSignupPage> {
       );
     } catch (e) {
       if (mounted) {
+        String errorMessage = 'Signup failed: ${e.toString()}';
+        
+        // Handle specific error cases
+        if (e.toString().contains('already exists')) {
+          errorMessage = 'An admin account with this email already exists';
+        } else if (e.toString().contains('User already registered')) {
+          errorMessage = 'This email is already registered. Please use a different email or login instead.';
+        } else if (e.toString().contains('duplicate key')) {
+          errorMessage = 'An admin account with this email already exists';
+        }
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Signup failed: ${e.toString()}'),
+            content: Text(errorMessage),
             backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
           ),
         );
       }

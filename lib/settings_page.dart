@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'change_password_page.dart';
-import 'account_validation_page.dart';
+import 'admin_management_page.dart';
 import 'login_page.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -25,14 +25,31 @@ class _SettingsPageState extends State<SettingsPage> {
     try {
       final userId = supabase.auth.currentUser?.id;
       if (userId != null) {
+        // Check user table first
         final userData = await supabase
             .from('user')
             .select('role')
             .eq('id', userId)
-            .single();
-        setState(() {
-          userRole = userData['role'];
-        });
+            .maybeSingle();
+        
+        if (userData != null && userData['role'] != null) {
+          setState(() {
+            userRole = userData['role'];
+          });
+        } else {
+          // Check if user is an admin
+          final adminData = await supabase
+              .from('admin')
+              .select('id')
+              .eq('id', userId)
+              .maybeSingle();
+          
+          if (adminData != null) {
+            setState(() {
+              userRole = 'admin';
+            });
+          }
+        }
       }
     } catch (e) {
       debugPrint('Error loading user role: $e');
@@ -88,6 +105,7 @@ class _SettingsPageState extends State<SettingsPage> {
             
             // Admin Section (only show for admin users)
             if (userRole == 'admin') ...[
+              SizedBox(height: screenHeight * 0.025),
               Text('Administration', style: TextStyle(
                 fontWeight: FontWeight.w600, 
                 fontSize: screenWidth * 0.04, 
@@ -96,19 +114,19 @@ class _SettingsPageState extends State<SettingsPage> {
               SizedBox(height: screenHeight * 0.015),
               
               _buildSettingsItem(
-                icon: Icons.admin_panel_settings,
-                title: 'Account Validation',
-                subtitle: 'Review pending police and tanod accounts',
+                icon: Icons.manage_accounts,
+                title: 'Admin Management',
+                subtitle: 'View and create admin accounts',
                 onTap: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (_) => const AccountValidationPage()),
+                    MaterialPageRoute(builder: (_) => const AdminManagementPage()),
                   );
                 },
               ),
-              
-              SizedBox(height: screenHeight * 0.025),
             ],
+            
+            SizedBox(height: screenHeight * 0.025),
             
             // Emergency Section
             Text('Emergency', style: TextStyle(
@@ -269,6 +287,19 @@ class _SettingsPageState extends State<SettingsPage> {
       await supabase.auth.signOut();
       if (mounted) {
         Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const LoginPage()),
+          (route) => false,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Logout failed: $e')),
+        );
+      }
+    }
+  }
+}
           MaterialPageRoute(builder: (_) => const LoginPage()),
           (route) => false,
         );

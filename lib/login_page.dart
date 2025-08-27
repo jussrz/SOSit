@@ -4,6 +4,7 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'signup_page.dart';
 import 'admin_signup_page.dart';
 import 'home_screen.dart';
+import 'admin_home_screen.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -19,9 +20,38 @@ class _LoginPageState extends State<LoginPage> {
   bool _isLoading = false;
   bool _submitted = false;
   String? _errorMsg;
+  bool _showAdminSignup = false;
+  bool _checkingAdminStatus = true;
 
   final RegExp _emailRegex =
       RegExp(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$");
+
+  @override
+  void initState() {
+    super.initState();
+    _checkAdminExists();
+  }
+
+  Future<void> _checkAdminExists() async {
+    try {
+      // Check if any admin exists in the database
+      final adminCount = await Supabase.instance.client
+          .from('admin')
+          .select('id')
+          .count(CountOption.exact);
+
+      setState(() {
+        _showAdminSignup = adminCount == 0; // Show only if no admins exist
+        _checkingAdminStatus = false;
+      });
+    } catch (e) {
+      debugPrint('Error checking admin status: $e');
+      setState(() {
+        _showAdminSignup = true; // Show by default if error occurs
+        _checkingAdminStatus = false;
+      });
+    }
+  }
 
   String? _validateEmail(String? value) {
     if (value == null || value.isEmpty) return 'Enter an email';
@@ -61,6 +91,24 @@ class _LoginPageState extends State<LoginPage> {
         return;
       }
 
+      // Check if user is an admin first
+      final adminData = await Supabase.instance.client
+          .from('admin')
+          .select('id')
+          .eq('id', user.id)
+          .maybeSingle();
+
+      if (adminData != null) {
+        // User is an admin, redirect to admin home screen
+        if (!mounted) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const AdminHomeScreen()),
+        );
+        return;
+      }
+
+      // Not an admin, check regular user role
       final roleData = await Supabase.instance.client
           .from('user')
           .select('role')
@@ -337,37 +385,38 @@ class _LoginPageState extends State<LoginPage> {
                 ],
               ),
 
-              SizedBox(height: screenHeight * 0.02),
-
-              // Admin Signup Link
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    'Administrator? ',
-                    style: TextStyle(
-                      color: Colors.grey.shade600,
-                      fontSize: screenWidth * 0.035,
-                    ),
-                  ),
-                  GestureDetector(
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const AdminSignupPage()),
-                      );
-                    },
-                    child: Text(
-                      'Signup as Admin',
+              // Conditional Admin Signup Link
+              if (!_checkingAdminStatus && _showAdminSignup) ...[
+                SizedBox(height: screenHeight * 0.02),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      'Administrator? ',
                       style: TextStyle(
-                        color: const Color(0xFFFF4081),
+                        color: Colors.grey.shade600,
                         fontSize: screenWidth * 0.035,
-                        fontWeight: FontWeight.bold,
                       ),
                     ),
-                  ),
-                ],
-              ),
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const AdminSignupPage()),
+                        ).then((_) => _checkAdminExists()); // Refresh admin status after returning
+                      },
+                      child: Text(
+                        'Signup as Admin',
+                        style: TextStyle(
+                          color: const Color(0xFFFF4081),
+                          fontSize: screenWidth * 0.035,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
 
               SizedBox(height: screenHeight * 0.06),
             ],
