@@ -171,7 +171,7 @@ class _AdminSignupPageState extends State<AdminSignupPage> {
                   children: [
                     Icon(
                       Icons.admin_panel_settings,
-                      color: const Color(0xFFFF4081),
+                      color: const Color(0xFFF73D5C),
                       size: screenWidth * 0.08,
                     ),
                     SizedBox(width: screenWidth * 0.03),
@@ -234,7 +234,7 @@ class _AdminSignupPageState extends State<AdminSignupPage> {
                   width: double.infinity,
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFFF4081),
+                      backgroundColor: const Color(0xFFF73D5C),
                       padding: EdgeInsets.symmetric(vertical: screenHeight * 0.02),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(30),
@@ -278,7 +278,7 @@ class _AdminSignupPageState extends State<AdminSignupPage> {
                       child: Text(
                         'Login',
                         style: TextStyle(
-                          color: const Color(0xFFFF4081),
+                          color: const Color(0xFFF73D5C),
                           fontSize: screenWidth * 0.035,
                           fontWeight: FontWeight.bold,
                         ),

@@ -598,12 +598,12 @@ Future<void> _signup() async {
                       children: [
                         TextSpan(
                           text: 'Create Account',
-                          style: TextStyle(color: Color(0xFFFF4081), fontWeight: FontWeight.w600),
+                          style: TextStyle(color: Color(0xFFF73D5C), fontWeight: FontWeight.w600),
                         ),
                         TextSpan(text: ' button, you agree\nto the '),
                         TextSpan(
                           text: 'Terms and Conditions',
-                          style: TextStyle(color: Color(0xFFFF4081), fontWeight: FontWeight.w600),
+                          style: TextStyle(color: Color(0xFFF73D5C), fontWeight: FontWeight.w600),
                         ),
                       ],
                     ),
@@ -617,7 +617,7 @@ Future<void> _signup() async {
                   width: double.infinity,
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Color(0xFFFF4081),
+                      backgroundColor: Color(0xFFF73D5C),
                       padding: EdgeInsets.symmetric(vertical: screenHeight * 0.02),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(30),
@@ -693,7 +693,7 @@ Future<void> _signup() async {
                       child: Text(
                         'Login',
                         style: TextStyle(
-                          color: Color(0xFFFF4081),
+                          color: Color(0xFFF73D5C),
                           fontSize: screenWidth * 0.035,
                           fontWeight: FontWeight.bold,
                         ),
@@ -798,12 +798,12 @@ Future<void> _signup() async {
       height: screenWidth * 0.12,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        border: Border.all(color: Color(0xFFFF4081), width: 2),
+        border: Border.all(color: Color(0xFFF73D5C), width: 2),
       ),
       child: Center(
         child: FaIcon(
           icon,
-          color: Color(0xFFFF4081),
+          color: Color(0xFFF73D5C),
           size: screenWidth * 0.05,
         ),
       ),
