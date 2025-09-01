@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 import 'settings_page.dart' hide MaterialPageRoute;
 import 'login_page.dart';
 
@@ -14,22 +17,41 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> with SingleTickerProv
   final supabase = Supabase.instance.client;
   late TabController _tabController;
   
-  List<Map<String, dynamic>> pendingTanods = [];
-  List<Map<String, dynamic>> pendingPolice = [];
-  bool _isLoading = true;
+  bool _isLoading = false;
   String _adminName = '';
+  
+  // Form controllers
+  final _formKey = GlobalKey<FormState>();
+  bool _submitted = false;
+  bool _obscurePassword = true;
+  String? _selectedRole;
+  File? _proofFile;
+
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _phoneController = TextEditingController();
+  
+  // Tanod fields
+  final _idNumberController = TextEditingController();
+  
+  // Police fields
+  final _stationNameController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _loadAdminData();
-    _loadPendingAccounts();
   }
 
   @override
   void dispose() {
     _tabController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    _phoneController.dispose();
+    _idNumberController.dispose();
+    _stationNameController.dispose();
     super.dispose();
   }
 
@@ -52,155 +74,159 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> with SingleTickerProv
     }
   }
 
-  Future<void> _loadPendingAccounts() async {
-    setState(() => _isLoading = true);
-    
-    try {
-      // Load pending tanod accounts from pending_tanod table
-      final tanodData = await supabase
-          .from('pending_tanod')
-          .select('*')
-          .order('created_at', ascending: false);
-
-      // Load pending police accounts from pending_police table
-      final policeData = await supabase
-          .from('pending_police')
-          .select('*')
-          .order('created_at', ascending: false);
-
+  Future<void> _pickProofFile() async {
+    final picker = ImagePicker();
+    final image = await picker.pickImage(source: ImageSource.gallery);
+    if (image != null && mounted) {
       setState(() {
-        pendingTanods = List<Map<String, dynamic>>.from(tanodData);
-        pendingPolice = List<Map<String, dynamic>>.from(policeData);
-        _isLoading = false;
+        _proofFile = File(image.path);
       });
-
-      debugPrint('Loaded ${pendingTanods.length} pending tanod accounts');
-      debugPrint('Loaded ${pendingPolice.length} pending police accounts');
-    } catch (e) {
-      setState(() => _isLoading = false);
-      debugPrint('Error loading pending accounts: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading pending accounts: $e')),
-        );
-      }
     }
   }
+Future<void> _createAccount() async {
+  setState(() {
+    _submitted = true;
+  });
 
-  Future<void> _approveAccount(String table, String userId, String userEmail) async {
-    try {
-      if (table == 'tanod') {
-        // Move from pending_tanod to tanod table
-        final pendingData = await supabase
-            .from('pending_tanod')
-            .select('*')
-            .eq('user_id', userId)
-            .single();
-
-        // Insert into tanod table with approved status
-        await supabase.from('tanod').insert({
-          'user_id': pendingData['user_id'],
-          'id_number': pendingData['id_number'],
-          'credentials_url': pendingData['credentials_url'],
-          'status': 'approved',
-        });
-
-        // Update user role
-        await supabase.from('user').update({
-          'role': 'tanod'
-        }).eq('id', userId);
-
-        // Delete from pending table
-        await supabase
-            .from('pending_tanod')
-            .delete()
-            .eq('user_id', userId);
-
-      } else if (table == 'police') {
-        // Move from pending_police to police table
-        final pendingData = await supabase
-            .from('pending_police')
-            .select('*')
-            .eq('user_id', userId)
-            .single();
-
-        // Insert into police table with approved status
-        await supabase.from('police').insert({
-          'user_id': pendingData['user_id'],
-          'station_name': pendingData['station_name'],
-          'credentials_url': pendingData['credentials_url'],
-          'status': 'approved',
-        });
-
-        // Update user role
-        await supabase.from('user').update({
-          'role': 'police'
-        }).eq('id', userId);
-
-        // Delete from pending table
-        await supabase
-            .from('pending_police')
-            .delete()
-            .eq('user_id', userId);
-      }
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Account for $userEmail approved successfully!'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-
-      _loadPendingAccounts(); // Refresh the lists
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error approving account: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+  if (!_formKey.currentState!.validate() || _selectedRole == null) {
+    if (_selectedRole == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a role')),
+      );
     }
+    return;
   }
 
-  Future<void> _rejectAccount(String table, String userId, String userEmail) async {
-    try {
-      // Simply delete from pending table (rejection)
-      if (table == 'tanod') {
-        await supabase
-            .from('pending_tanod')
-            .delete()
-            .eq('user_id', userId);
-      } else if (table == 'police') {
-        await supabase
-            .from('pending_police')
-            .delete()
-            .eq('user_id', userId);
+  setState(() {
+    _isLoading = true;
+  });
+
+  try {
+    // 1. Create auth account in Supabase
+    final res = await supabase.auth.signUp(
+      email: _emailController.text.trim(),
+      password: _passwordController.text.trim(),
+    );
+
+    if (res.user == null) throw Exception('Failed to create user');
+
+    final userId = res.user!.id;
+    final email = _emailController.text.trim(); // Store email for reuse
+
+    // 2. Insert into user table
+    await supabase.from('user').insert({
+      'id': userId,
+      'email': email,
+      'phone': _phoneController.text.trim(),
+      'role': _selectedRole,
+    });
+
+    // 3. Insert into specific role table
+    if (_selectedRole == 'tanod') {
+      String? proofUrl;
+      if (_proofFile != null) {
+        final fileBytes = await _proofFile!.readAsBytes();
+        final filePath = 'tanod_${DateTime.now().millisecondsSinceEpoch}.jpg';
+        await supabase.storage
+            .from('credentials_proof')
+            .uploadBinary(filePath, fileBytes);
+        proofUrl = supabase.storage
+            .from('credentials_proof')
+            .getPublicUrl(filePath);
       }
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Account for $userEmail rejected and removed'),
-            backgroundColor: Colors.orange,
-          ),
-        );
+      await supabase.from('tanod').insert({
+        'user_id': userId,
+        'email': email, // Add email to tanod table
+        'id_number': _idNumberController.text.trim().isNotEmpty
+            ? _idNumberController.text.trim()
+            : null,
+        'credentials_url': proofUrl,
+        'status': 'approved',
+      });
+    } else if (_selectedRole == 'police') {
+      String? proofUrl;
+      if (_proofFile != null) {
+        final fileBytes = await _proofFile!.readAsBytes();
+        final filePath = 'police_${DateTime.now().millisecondsSinceEpoch}.jpg';
+        await supabase.storage
+            .from('credentials_proof')
+            .uploadBinary(filePath, fileBytes);
+        proofUrl = supabase.storage
+            .from('credentials_proof')
+            .getPublicUrl(filePath);
       }
 
-      _loadPendingAccounts(); // Refresh the lists
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error rejecting account: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      await supabase.from('police').insert({
+        'user_id': userId,
+        'email': email, // Add email to police table
+        'station_name': _stationNameController.text.trim().isNotEmpty
+            ? _stationNameController.text.trim()
+            : null,
+        'credentials_url': proofUrl,
+        'status': 'approved',
+      });
     }
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('${_selectedRole!.toUpperCase()} account created successfully!'),
+        backgroundColor: Colors.green,
+      ),
+    );
+
+    _clearForm();
+  } catch (e) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to create account: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  } finally {
+    if (mounted) setState(() => _isLoading = false);
+  }
+}
+
+  void _clearForm() {
+    _emailController.clear();
+    _passwordController.clear();
+    _phoneController.clear();
+    _idNumberController.clear();
+    _stationNameController.clear();
+    setState(() {
+      _selectedRole = null;
+      _proofFile = null;
+      _submitted = false;
+    });
+  }
+
+  // Validators
+  String? _validateRequired(String? value) => (value == null || value.isEmpty) ? 'This field is required' : null;
+  
+  String? _validateEmail(String? value) {
+    if (value == null || value.isEmpty) return 'Enter an email';
+    final regex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+    if (!regex.hasMatch(value)) return 'Enter a valid email format';
+    return null;
+  }
+  
+  String? _validatePassword(String? value) {
+    if (value == null || value.isEmpty) return 'Enter a password';
+    if (value.length < 6) return 'Password must be at least 6 characters';
+    return null;
+  }
+  
+  String? _validatePhone(String? value) {
+    if (value == null || value.isEmpty) return 'Phone number is required';
+    String cleanedValue = value.replaceAll(RegExp(r'[^\d]'), '');
+    if (cleanedValue.length != 11) return 'Phone number must be 11 digits';
+    if (!cleanedValue.startsWith('09')) return 'Phone number must start with 09';
+    return null;
   }
 
   @override
@@ -256,290 +282,326 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> with SingleTickerProv
           labelColor: const Color(0xFFF73D5C),
           unselectedLabelColor: Colors.grey.shade600,
           indicatorColor: const Color(0xFFF73D5C),
-          tabs: [
+          tabs: const [
             Tab(
               icon: Icon(Icons.security),
-              text: 'Tanod (${pendingTanods.length})',
+              text: 'Add Tanod',
             ),
             Tab(
               icon: Icon(Icons.local_police),
-              text: 'Police (${pendingPolice.length})',
+              text: 'Add Police',
             ),
           ],
         ),
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : TabBarView(
-              controller: _tabController,
-              children: [
-                _buildPendingList('tanod', pendingTanods),
-                _buildPendingList('police', pendingPolice),
-              ],
-            ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: const Color(0xFFF73D5C),
-        onPressed: _loadPendingAccounts,
-        child: Icon(Icons.refresh, color: Colors.white),
-      ),
-    );
-  }
-
-  Widget _buildPendingList(String type, List<Map<String, dynamic>> accounts) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final screenHeight = MediaQuery.of(context).size.height;
-
-    if (accounts.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              type == 'tanod' ? Icons.security : Icons.local_police,
-              size: screenWidth * 0.2,
-              color: Colors.grey.shade400,
-            ),
-            SizedBox(height: screenHeight * 0.02),
-            Text(
-              'No pending ${type} accounts',
-              style: TextStyle(
-                fontSize: screenWidth * 0.045,
-                color: Colors.grey.shade600,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            SizedBox(height: screenHeight * 0.01),
-            Text(
-              'All ${type} applications have been processed',
-              style: TextStyle(
-                fontSize: screenWidth * 0.035,
-                color: Colors.grey.shade500,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return RefreshIndicator(
-      onRefresh: _loadPendingAccounts,
-      child: ListView.builder(
-        padding: EdgeInsets.all(screenWidth * 0.04),
-        itemCount: accounts.length,
-        itemBuilder: (context, index) {
-          final account = accounts[index];
-          
-          return Container(
-            margin: EdgeInsets.only(bottom: screenHeight * 0.015),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 4,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Padding(
-              padding: EdgeInsets.all(screenWidth * 0.04),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Header with icon and type
-                  Row(
-                    children: [
-                      CircleAvatar(
-                        backgroundColor: const Color(0xFFF73D5C).withOpacity(0.1),
-                        child: Icon(
-                          type == 'tanod' ? Icons.security : Icons.local_police,
-                          color: const Color(0xFFF73D5C),
-                        ),
-                      ),
-                      SizedBox(width: screenWidth * 0.03),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '${type.toUpperCase()} Application',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: screenWidth * 0.04,
-                              ),
-                            ),
-                            Text(
-                              account['email'] ?? 'No email',
-                              style: TextStyle(
-                                color: Colors.grey.shade600,
-                                fontSize: screenWidth * 0.035,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Container(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: screenWidth * 0.025,
-                          vertical: screenHeight * 0.005,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.orange.shade100,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          'PENDING',
-                          style: TextStyle(
-                            color: Colors.orange.shade700,
-                            fontSize: screenWidth * 0.03,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  
-                  SizedBox(height: screenHeight * 0.015),
-                  
-                  // Account details
-                  _buildDetailRow('Email', account['email'] ?? 'N/A'),
-                  _buildDetailRow('Phone', account['phone'] ?? 'N/A'),
-                  
-                  if (type == 'tanod') ...[
-                    _buildDetailRow('ID Number', account['id_number'] ?? 'N/A'),
-                  ] else ...[
-                    _buildDetailRow('Station Name', account['station_name'] ?? 'N/A'),
-                  ],
-                  
-                  if (account['credentials_url'] != null) ...[
-                    SizedBox(height: screenHeight * 0.01),
-                    GestureDetector(
-                      onTap: () {
-                        // TODO: Open credentials image/document
-                      },
-                      child: Container(
-                        padding: EdgeInsets.all(screenWidth * 0.03),
-                        decoration: BoxDecoration(
-                          color: Colors.blue.shade50,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.blue.shade200),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.file_present, color: Colors.blue.shade700, size: screenWidth * 0.04),
-                            SizedBox(width: screenWidth * 0.02),
-                            Text(
-                              'View Credentials',
-                              style: TextStyle(
-                                color: Colors.blue.shade700,
-                                fontSize: screenWidth * 0.035,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                  
-                  SizedBox(height: screenHeight * 0.02),
-                  
-                  // Action buttons
-                  Row(
-                    children: [
-                      Expanded(
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.red.shade500,
-                            padding: EdgeInsets.symmetric(vertical: screenHeight * 0.012),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                          onPressed: () => _rejectAccount(
-                            type,
-                            account['user_id'],
-                            account['email'] ?? 'Unknown',
-                          ),
-                          child: Text(
-                            'Reject',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: screenWidth * 0.035,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ),
-                      SizedBox(width: screenWidth * 0.03),
-                      Expanded(
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green.shade500,
-                            padding: EdgeInsets.symmetric(vertical: screenHeight * 0.012),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                          onPressed: () => _approveAccount(
-                            type,
-                            account['user_id'],
-                            account['email'] ?? 'Unknown',
-                          ),
-                          child: Text(
-                            'Approve',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: screenWidth * 0.035,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildDetailRow(String label, String value) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    
-    return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).size.height * 0.005),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      body: TabBarView(
+        controller: _tabController,
         children: [
-          SizedBox(
-            width: screenWidth * 0.25,
-            child: Text(
-              '$label:',
-              style: TextStyle(
-                fontWeight: FontWeight.w500,
-                fontSize: screenWidth * 0.035,
-                color: Colors.grey.shade700,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: TextStyle(
-                fontSize: screenWidth * 0.035,
-                color: Colors.black87,
-              ),
-            ),
-          ),
+          _buildAddAccountForm('tanod'),
+          _buildAddAccountForm('police'),
         ],
       ),
     );
   }
+
+  Widget _buildAddAccountForm(String type) {
+    final screenSize = MediaQuery.of(context).size;
+    final screenWidth = screenSize.width;
+    final screenHeight = screenSize.height;
+
+    return SingleChildScrollView(
+      padding: EdgeInsets.all(screenWidth * 0.04),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Title
+            Container(
+              width: double.infinity,
+              padding: EdgeInsets.all(screenWidth * 0.04),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  Icon(
+                    type == 'tanod' ? Icons.security : Icons.local_police,
+                    size: screenWidth * 0.15,
+                    color: const Color(0xFFF73D5C),
+                  ),
+                  SizedBox(height: screenHeight * 0.02),
+                  Text(
+                    'Add New ${type.toUpperCase()}',
+                    style: TextStyle(
+                      fontSize: screenWidth * 0.055,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black,
+                    ),
+                  ),
+                  Text(
+                    'Create a new ${type} account',
+                    style: TextStyle(
+                      fontSize: screenWidth * 0.035,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            SizedBox(height: screenHeight * 0.03),
+
+            // Email Field
+            _buildFormField(
+              controller: _emailController,
+              hint: 'Email',
+              icon: Icons.email,
+              validator: _validateEmail,
+              keyboardType: TextInputType.emailAddress,
+            ),
+
+            SizedBox(height: screenHeight * 0.02),
+
+            // Phone Field
+            _buildFormField(
+              controller: _phoneController,
+              hint: 'Phone Number',
+              icon: Icons.phone,
+              validator: _validatePhone,
+              keyboardType: TextInputType.phone,
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(11),
+              ],
+            ),
+
+            SizedBox(height: screenHeight * 0.02),
+
+            // Password Field
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    border: Border.all(color: Colors.grey.shade300),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: TextFormField(
+                    controller: _passwordController,
+                    obscureText: _obscurePassword,
+                    decoration: InputDecoration(
+                      prefixIcon: Icon(Icons.lock, color: Colors.grey.shade600),
+                      hintText: 'Password',
+                      hintStyle: TextStyle(color: Colors.grey.shade600),
+                      border: InputBorder.none,
+                      contentPadding: EdgeInsets.symmetric(vertical: screenHeight * 0.025),
+                      errorStyle: const TextStyle(height: 0),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                          color: Colors.grey.shade600,
+                        ),
+                        onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                      ),
+                    ),
+                    style: TextStyle(fontSize: screenWidth * 0.04),
+                  ),
+                ),
+                if (_submitted) ...[
+                  Builder(
+                    builder: (context) {
+                      final error = _validatePassword(_passwordController.text);
+                      if (error != null) {
+                        return Padding(
+                          padding: const EdgeInsets.only(left: 8, top: 4),
+                          child: Text(
+                            error,
+                            style: const TextStyle(color: Colors.red, fontSize: 12),
+                          ),
+                        );
+                      }
+                      return const SizedBox.shrink();
+                    },
+                  ),
+                ],
+              ],
+            ),
+
+            SizedBox(height: screenHeight * 0.02),
+
+            // Role-specific fields
+            if (type == 'tanod') ...[
+              _buildFormField(
+                controller: _idNumberController,
+                hint: 'ID Number',
+                icon: Icons.badge,
+                validator: _validateRequired,
+              ),
+            ] else ...[
+              _buildFormField(
+                controller: _stationNameController,
+                hint: 'Station Name',
+                icon: Icons.location_city,
+                validator: _validateRequired,
+              ),
+            ],
+
+            SizedBox(height: screenHeight * 0.02),
+
+            // Upload Credentials
+            Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                border: Border.all(color: Colors.grey.shade300),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: InkWell(
+                onTap: _pickProofFile,
+                borderRadius: BorderRadius.circular(12),
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+                  child: Row(
+                    children: [
+                      Icon(Icons.upload_file, color: Colors.grey.shade600),
+                      const SizedBox(width: 12),
+                      Text(
+                        _proofFile == null ? 'Upload Credentials Proof (Optional)' : 'Document Selected',
+                        style: TextStyle(
+                          color: _proofFile == null ? Colors.grey.shade600 : Colors.black,
+                          fontSize: screenWidth * 0.04,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            SizedBox(height: screenHeight * 0.04),
+
+            // Create Account Button
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFF73D5C),
+                  padding: EdgeInsets.symmetric(vertical: screenHeight * 0.02),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  elevation: 0,
+                ),
+                onPressed: _isLoading ? null : () {
+                  setState(() => _selectedRole = type);
+                  _createAccount();
+                },
+                child: _isLoading
+                    ? const CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
+                    : Text(
+                        'Create ${type.toUpperCase()} Account',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: screenWidth * 0.045,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+              ),
+            ),
+
+            SizedBox(height: screenHeight * 0.02),
+
+            // Clear Form Button
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Color(0xFFF73D5C)),
+                  padding: EdgeInsets.symmetric(vertical: screenHeight * 0.02),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                onPressed: _clearForm,
+                child: Text(
+                  'Clear Form',
+                  style: TextStyle(
+                    color: const Color(0xFFF73D5C),
+                    fontSize: screenWidth * 0.045,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFormField({
+    required TextEditingController controller,
+    required String hint,
+    required IconData icon,
+    String? Function(String?)? validator,
+    TextInputType? keyboardType,
+    List<TextInputFormatter>? inputFormatters,
+  }) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            border: Border.all(color: Colors.grey.shade300),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: TextFormField(
+            controller: controller,
+            decoration: InputDecoration(
+              prefixIcon: Icon(icon, color: Colors.grey.shade600),
+              hintText: hint,
+              hintStyle: TextStyle(color: Colors.grey.shade600),
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.symmetric(vertical: screenHeight * 0.025),
+              errorStyle: const TextStyle(height: 0),
+            ),
+            keyboardType: keyboardType,
+            inputFormatters: inputFormatters,
+            style: TextStyle(fontSize: screenWidth * 0.04),
+          ),
+        ),
+        if (_submitted && validator != null) ...[
+          Builder(
+            builder: (context) {
+              final error = validator(controller.text);
+              if (error != null) {
+                return Padding(
+                  padding: const EdgeInsets.only(left: 8, top: 4),
+                  child: Text(
+                    error,
+                    style: const TextStyle(color: Colors.red, fontSize: 12),
+                  ),
+                );
+              }
+              return const SizedBox.shrink();
+            },
+          ),
+        ],
+      ],
+    );
+  }
 }
-    
