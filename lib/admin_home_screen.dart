@@ -15,11 +15,13 @@ class AdminHomeScreen extends StatefulWidget {
 
 class _AdminHomeScreenState extends State<AdminHomeScreen> with SingleTickerProviderStateMixin {
   final supabase = Supabase.instance.client;
+
   late TabController _tabController;
-  
+  final int _numTabs = 3;
+
   bool _isLoading = false;
   String _adminName = '';
-  
+
   // Form controllers
   final _formKey = GlobalKey<FormState>();
   bool _submitted = false;
@@ -37,11 +39,21 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> with SingleTickerProv
   // Police fields
   final _stationNameController = TextEditingController();
 
+  // Users tab state
+  List<Map<String, dynamic>> _allUsers = [];
+  List<Map<String, dynamic>> _filteredUsers = [];
+  String _userRoleFilter = 'all';
+  String _userNameFilter = '';
+
+  // Add state for selected user
+  Map<String, dynamic>? _selectedUser;
+
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: _numTabs, vsync: this);
     _loadAdminData();
+    _loadAllUsers();
   }
 
   @override
@@ -229,6 +241,56 @@ Future<void> _createAccount() async {
     return null;
   }
 
+  Future<void> _loadAllUsers() async {
+    setState(() => _isLoading = true);
+    try {
+      // Load all users from the user table
+      final users = await supabase
+          .from('user')
+          .select('id, first_name, middle_name, last_name, birthdate, phone, email, role, created_at')
+          .order('created_at', ascending: false);
+
+      debugPrint('Supabase user query result: $users');
+      debugPrint('Type of users: ${users.runtimeType}');
+      debugPrint('Is users a List? ${users is List}');
+      debugPrint('Number of users loaded: ${users is List ? users.length : 'not a list'}');
+
+      setState(() {
+        // Defensive: ensure _allUsers is always a List<Map<String, dynamic>>
+        if (users is List && users.isNotEmpty) {
+          _allUsers = List<Map<String, dynamic>>.from(users);
+        } else {
+          _allUsers = [];
+        }
+        _applyUserFilters();
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() => _isLoading = false);
+      debugPrint('Error loading users: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading users: $e')),
+        );
+      }
+    }
+  }
+
+  void _applyUserFilters() {
+    setState(() {
+      _filteredUsers = _allUsers.where((user) {
+        final matchesRole = _userRoleFilter == 'all' || user['role'] == _userRoleFilter;
+        final name = [
+          user['first_name'] ?? '',
+          user['middle_name'] ?? '',
+          user['last_name'] ?? ''
+        ].join(' ').toLowerCase();
+        final matchesName = _userNameFilter.isEmpty || name.contains(_userNameFilter.toLowerCase());
+        return matchesRole && matchesName;
+      }).toList();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final screenSize = MediaQuery.of(context).size;
@@ -291,6 +353,10 @@ Future<void> _createAccount() async {
               icon: Icon(Icons.local_police),
               text: 'Add Police',
             ),
+            Tab(
+              icon: Icon(Icons.people),
+              text: 'Users',
+            ),
           ],
         ),
       ),
@@ -299,6 +365,7 @@ Future<void> _createAccount() async {
         children: [
           _buildAddAccountForm('tanod'),
           _buildAddAccountForm('police'),
+          _buildUsersTab(),
         ],
       ),
     );
@@ -601,6 +668,215 @@ Future<void> _createAccount() async {
             },
           ),
         ],
+      ],
+    );
+  }
+
+  Widget _buildUsersTab() {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
+
+    return Column(
+      children: [
+        Padding(
+          padding: EdgeInsets.all(screenWidth * 0.03),
+          child: Row(
+            children: [
+              // Role filter
+              DropdownButton<String>(
+                value: _userRoleFilter,
+                items: const [
+                  DropdownMenuItem(value: 'all', child: Text('All Roles')),
+                  DropdownMenuItem(value: 'citizen', child: Text('Citizen')),
+                  DropdownMenuItem(value: 'tanod', child: Text('Tanod')),
+                  DropdownMenuItem(value: 'police', child: Text('Police')),
+                  DropdownMenuItem(value: 'admin', child: Text('Admin')),
+                ],
+                onChanged: (val) {
+                  setState(() {
+                    _userRoleFilter = val ?? 'all';
+                    _applyUserFilters();
+                    _selectedUser = null; // Clear selection on filter change
+                  });
+                },
+              ),
+              SizedBox(width: screenWidth * 0.04),
+              // Name filter
+              Expanded(
+                child: TextField(
+                  decoration: InputDecoration(
+                    hintText: 'Search by name',
+                    prefixIcon: Icon(Icons.search, color: Colors.grey.shade600),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    contentPadding: EdgeInsets.symmetric(vertical: 0, horizontal: 12),
+                  ),
+                  onChanged: (val) {
+                    _userNameFilter = val;
+                    _applyUserFilters();
+                    _selectedUser = null; // Clear selection on search
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : Column(
+                  children: [
+                    Expanded(
+                      child: RefreshIndicator(
+                        onRefresh: _loadAllUsers,
+                        child: _filteredUsers.isEmpty
+                            ? Center(
+                                child: Text(
+                                  'No users found.',
+                                  style: TextStyle(
+                                    color: Colors.grey.shade600,
+                                    fontSize: screenWidth * 0.04,
+                                  ),
+                                ),
+                              )
+                            : ListView.builder(
+                                padding: EdgeInsets.all(screenWidth * 0.02),
+                                itemCount: _filteredUsers.length,
+                                itemBuilder: (context, index) {
+                                  final user = _filteredUsers[index];
+                                  final fullName = [
+                                    user['first_name'] ?? '',
+                                    user['middle_name'] ?? '',
+                                    user['last_name'] ?? ''
+                                  ].where((n) => n.isNotEmpty).join(' ');
+                                  return Card(
+                                    margin: EdgeInsets.only(bottom: screenHeight * 0.012),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                    child: ListTile(
+                                      leading: CircleAvatar(
+                                        backgroundColor: const Color(0xFFF73D5C).withOpacity(0.1),
+                                        child: Icon(Icons.person, color: const Color(0xFFF73D5C)),
+                                      ),
+                                      title: Text(fullName.isNotEmpty ? fullName : user['email'] ?? 'No Name'),
+                                      subtitle: Text('Role: ${user['role'] ?? 'N/A'}'),
+                                      onTap: () {
+                                        setState(() {
+                                          _selectedUser = user;
+                                        });
+                                      },
+                                    ),
+                                  );
+                                },
+                              ),
+                      ),
+                    ),
+                    if (_selectedUser != null)
+                      Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: screenWidth * 0.03,
+                          vertical: screenHeight * 0.01,
+                        ),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black12,
+                                blurRadius: 8,
+                                offset: Offset(0, 2),
+                              ),
+                            ],
+                            border: Border.all(color: Colors.grey.shade200),
+                          ),
+                          padding: EdgeInsets.all(screenWidth * 0.04),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.center, // <-- Center vertically
+                            children: [
+                              Container(
+                                padding: EdgeInsets.all(screenWidth * 0.025),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF73D5C).withOpacity(0.1),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  Icons.person,
+                                  color: const Color(0xFFF73D5C),
+                                  size: screenWidth * 0.06,
+                                ),
+                              ),
+                              SizedBox(width: screenWidth * 0.04),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisAlignment: MainAxisAlignment.center, // <-- Center vertically
+                                  children: [
+                                    Text(
+                                      [
+                                        _selectedUser!['first_name'] ?? '',
+                                        _selectedUser!['middle_name'] ?? '',
+                                        _selectedUser!['last_name'] ?? ''
+                                      ].where((n) => n.isNotEmpty).join(' '),
+                                      style: TextStyle(
+                                        fontSize: screenWidth * 0.04,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.black,
+                                      ),
+                                    ),
+                                    SizedBox(height: screenHeight * 0.002),
+                                    Text(
+                                      'Role: ${_selectedUser!['role'] ?? 'N/A'}',
+                                      style: TextStyle(
+                                        fontSize: screenWidth * 0.035,
+                                        color: Colors.grey.shade600,
+                                      ),
+                                    ),
+                                    SizedBox(height: screenHeight * 0.002),
+                                    if (_selectedUser!['email'] != null)
+                                      Text(
+                                        _selectedUser!['email'],
+                                        style: TextStyle(
+                                          fontSize: screenWidth * 0.035,
+                                          color: Colors.grey.shade600,
+                                        ),
+                                      ),
+                                    if (_selectedUser!['phone'] != null)
+                                      Text(
+                                        _selectedUser!['phone'],
+                                        style: TextStyle(
+                                          fontSize: screenWidth * 0.035,
+                                          color: const Color(0xFF2196F3),
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    if (_selectedUser!['birthdate'] != null)
+                                      Text(
+                                        'Birthdate: ${_selectedUser!['birthdate']}',
+                                        style: TextStyle(
+                                          fontSize: screenWidth * 0.035,
+                                          color: Colors.grey.shade600,
+                                        ),
+                                      ),
+                                    if (_selectedUser!['created_at'] != null)
+                                      Text(
+                                        'Created: ${_selectedUser!['created_at']}',
+                                        style: TextStyle(
+                                          fontSize: screenWidth * 0.035,
+                                          color: Colors.grey.shade600,
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+        ),
       ],
     );
   }

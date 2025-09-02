@@ -284,7 +284,7 @@ class _LoginPageState extends State<LoginPage> {
                       child: Text(
                         'Forgot Password?',
                         style: TextStyle(
-                          color: const Color(0xFFF73D5C),
+                          color: const Color(0xFFFF4081),
                           fontSize: screenWidth * 0.035,
                         ),
                       ),
@@ -300,7 +300,7 @@ class _LoginPageState extends State<LoginPage> {
                 width: double.infinity,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFF73D5C),
+                    backgroundColor: const Color(0xFFFF4081),
                     padding: EdgeInsets.symmetric(vertical: screenHeight * 0.02),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(30),
@@ -376,7 +376,7 @@ class _LoginPageState extends State<LoginPage> {
                     child: Text(
                       'Sign Up',
                       style: TextStyle(
-                        color: const Color(0xFFF73D5C),
+                        color: const Color(0xFFFF4081),
                         fontSize: screenWidth * 0.035,
                         fontWeight: FontWeight.bold,
                       ),
@@ -408,7 +408,7 @@ class _LoginPageState extends State<LoginPage> {
                       child: Text(
                         'Signup as Admin',
                         style: TextStyle(
-                          color: const Color(0xFFF73D5C),
+                          color: const Color(0xFFFF4081),
                           fontSize: screenWidth * 0.035,
                           fontWeight: FontWeight.bold,
                         ),
@@ -434,12 +434,12 @@ class _LoginPageState extends State<LoginPage> {
       height: screenWidth * 0.12,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        border: Border.all(color: const Color(0xFFF73D5C), width: 2),
+        border: Border.all(color: const Color(0xFFFF4081), width: 2),
       ),
       child: Center(
         child: FaIcon(
           icon,
-          color: const Color(0xFFF73D5C),
+          color: const Color(0xFFFF4081),
           size: screenWidth * 0.05,
         ),
       ),
