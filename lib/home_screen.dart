@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:flutter_svg/flutter_svg.dart'; // Add this import back
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
+import 'package:provider/provider.dart';
+import 'services/ble_service.dart';
+import 'services/emergency_service.dart';
 import 'profile_page.dart';
 import 'settings_page.dart';
 
@@ -15,7 +18,6 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  String _deviceStatus = 'Panic Button Not Connected';
   String _gpsSignal = 'Getting signal...';
   String _location = 'Getting location...';
   String _emergencyName = '';
@@ -41,25 +43,6 @@ class _HomeScreenState extends State<HomeScreen> {
     _isLoadingProfile = true;
     _loadUserProfile();
     _getCurrentLocation();
-    _simulateDeviceStatus();
-  }
-
-  // Simulate device status
-  void _simulateDeviceStatus() {
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) {
-        setState(() {
-          _deviceStatus = 'Searching for Panic Button...';
-        });
-      }
-    });
-    Future.delayed(const Duration(seconds: 4), () {
-      if (mounted) {
-        setState(() {
-          _deviceStatus = 'Panic Button Not Found';
-        });
-      }
-    });
   }
 
   Future<void> _getCurrentLocation() async {
@@ -94,7 +77,8 @@ class _HomeScreenState extends State<HomeScreen> {
       if (permission == LocationPermission.deniedForever) {
         setState(() {
           _gpsSignal = 'Permission Denied';
-          _location = 'Location permission permanently denied. Please enable in settings.';
+          _location =
+              'Location permission permanently denied. Please enable in settings.';
         });
         await Geolocator.openAppSettings();
         return;
@@ -107,10 +91,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
       setState(() {
         _currentPosition = position;
-        if (position.accuracy <= 5) _gpsSignal = 'Excellent';
-        else if (position.accuracy <= 10) _gpsSignal = 'Good';
-        else if (position.accuracy <= 20) _gpsSignal = 'Fair';
-        else _gpsSignal = 'Poor';
+        if (position.accuracy <= 5) {
+          _gpsSignal = 'Excellent';
+        } else if (position.accuracy <= 10) {
+          _gpsSignal = 'Good';
+        } else if (position.accuracy <= 20) {
+          _gpsSignal = 'Fair';
+        } else {
+          _gpsSignal = 'Poor';
+        }
       });
 
       try {
@@ -121,12 +110,20 @@ class _HomeScreenState extends State<HomeScreen> {
         if (placemarks.isNotEmpty) {
           Placemark place = placemarks[0];
           String address = '';
-          if (place.street != null && place.street!.isNotEmpty) address += '${place.street}, ';
-          if (place.locality != null && place.locality!.isNotEmpty) address += '${place.locality}, ';
-          if (place.subAdministrativeArea != null && place.subAdministrativeArea!.isNotEmpty)
+          if (place.street != null && place.street!.isNotEmpty) {
+            address += '${place.street}, ';
+          }
+          if (place.locality != null && place.locality!.isNotEmpty) {
+            address += '${place.locality}, ';
+          }
+          if (place.subAdministrativeArea != null &&
+              place.subAdministrativeArea!.isNotEmpty) {
             address += '${place.subAdministrativeArea}, ';
-          if (place.administrativeArea != null && place.administrativeArea!.isNotEmpty)
+          }
+          if (place.administrativeArea != null &&
+              place.administrativeArea!.isNotEmpty) {
             address += place.administrativeArea!;
+          }
           setState(() {
             _location = address.isNotEmpty ? address : 'Address not found';
           });
@@ -155,82 +152,82 @@ class _HomeScreenState extends State<HomeScreen> {
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Location error: ${e.toString()}'), duration: const Duration(seconds: 3)),
+          SnackBar(
+              content: Text('Location error: ${e.toString()}'),
+              duration: const Duration(seconds: 3)),
         );
       }
     }
   }
 
-Future<void> _loadUserProfile() async {
-  final supabase = Supabase.instance.client;
-  final userId = supabase.auth.currentUser?.id;
-  if (userId == null) {
-    setState(() {
-      _isLoadingProfile = false;
-    });
-    return;
+  Future<void> _loadUserProfile() async {
+    final supabase = Supabase.instance.client;
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) {
+      setState(() {
+        _isLoadingProfile = false;
+      });
+      return;
+    }
+
+    try {
+      // Load basic user info
+      final userData =
+          await supabase.from('user').select().eq('id', userId).single();
+
+      // Load emergency contacts (limit 2)
+      final emergencyData = await supabase
+          .from('emergency_contacts')
+          .select()
+          .eq('user_id', userId)
+          .order('created_at')
+          .limit(2);
+
+      setState(() {
+        _isLoadingProfile = false;
+
+        // Basic profile info
+        _profilePhotoUrl = userData['profile_photo_url'] ?? '';
+        _emailController.text = userData['email'] ?? '';
+        _phoneController.text = userData['phone'] ?? '';
+        _birthdateController.text = userData['birthdate'] ?? '';
+
+        // Clear previous emergency contact data
+        _emergencyName = '';
+        _emergencyPhone = '';
+        _relationship = '';
+        _emergencyName2 = '';
+        _emergencyPhone2 = '';
+        _relationship2 = '';
+
+        // Emergency contacts
+        if (emergencyData.isNotEmpty) {
+          _emergencyName = emergencyData[0]['emergency_contact_name'] ?? '';
+          _emergencyPhone = emergencyData[0]['emergency_contact_phone'] ?? '';
+          _relationship =
+              emergencyData[0]['emergency_contact_relationship'] ?? '';
+        }
+        if (emergencyData.length > 1) {
+          _emergencyName2 = emergencyData[1]['emergency_contact_name'] ?? '';
+          _emergencyPhone2 = emergencyData[1]['emergency_contact_phone'] ?? '';
+          _relationship2 =
+              emergencyData[1]['emergency_contact_relationship'] ?? '';
+        }
+      });
+    } catch (e) {
+      setState(() {
+        _isLoadingProfile = false;
+      });
+      debugPrint('Error loading profile or emergency contacts: $e');
+    }
   }
-
-  try {
-    // Load basic user info
-    final userData = await supabase.from('user').select().eq('id', userId).single();
-
-    // Load emergency contacts (limit 2 for this example)
-    final emergencyData = await supabase
-        .from('emergency_contacts')
-        .select()
-        .eq('user_id', userId)
-        .order('created_at')
-        .limit(2);
-
-    // Add debugging
-    debugPrint('Emergency contacts from home_screen: $emergencyData');
-    debugPrint('Number of contacts found: ${emergencyData.length}');
-
-    setState(() {
-      _isLoadingProfile = false;
-
-      // Basic profile info
-      _profilePhotoUrl = userData['profile_photo_url'] ?? '';
-      _emailController.text = userData['email'] ?? '';
-      _phoneController.text = userData['phone'] ?? '';
-      _birthdateController.text = userData['birthdate'] ?? '';
-
-      // Clear previous emergency contact data
-      _emergencyName = '';
-      _emergencyPhone = '';
-      _relationship = '';
-      _emergencyName2 = '';
-      _emergencyPhone2 = '';
-      _relationship2 = '';
-
-      // Emergency contacts
-      if (emergencyData.isNotEmpty) {
-        _emergencyName = emergencyData[0]['emergency_contact_name'] ?? '';
-        _emergencyPhone = emergencyData[0]['emergency_contact_phone'] ?? '';
-        _relationship = emergencyData[0]['emergency_contact_relationship'] ?? '';
-        debugPrint('First contact loaded: $_emergencyName');
-      }
-      if (emergencyData.length > 1) {
-        _emergencyName2 = emergencyData[1]['emergency_contact_name'] ?? '';
-        _emergencyPhone2 = emergencyData[1]['emergency_contact_phone'] ?? '';
-        _relationship2 = emergencyData[1]['emergency_contact_relationship'] ?? '';
-        debugPrint('Second contact loaded: $_emergencyName2');
-      }
-    });
-  } catch (e) {
-    setState(() {
-      _isLoadingProfile = false;
-    });
-    debugPrint('Error loading profile or emergency contacts: $e');
-  }
-}
-
 
   Color _getDeviceStatusColor(String status) {
-    if (status.toLowerCase().contains('connected') && !status.toLowerCase().contains('not')) {
+    if (status.toLowerCase().contains('connected') &&
+        !status.toLowerCase().contains('not')) {
       return Colors.green;
-    } else if (status.toLowerCase().contains('searching')) {
+    } else if (status.toLowerCase().contains('searching') ||
+        status.toLowerCase().contains('found')) {
       return Colors.orange;
     } else {
       return Colors.red;
@@ -283,41 +280,87 @@ Future<void> _loadUserProfile() async {
             right: 0,
             child: SafeArea(
               child: Container(
-                margin: EdgeInsets.symmetric(horizontal: screenWidth * 0.04, vertical: screenHeight * 0.01),
-                padding: EdgeInsets.symmetric(horizontal: screenWidth * 0.04, vertical: screenHeight * 0.01),
+                margin: EdgeInsets.symmetric(
+                    horizontal: screenWidth * 0.04,
+                    vertical: screenHeight * 0.01),
+                padding: EdgeInsets.symmetric(
+                    horizontal: screenWidth * 0.04,
+                    vertical: screenHeight * 0.01),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(16),
-                  boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2))],
+                  boxShadow: const [
+                    BoxShadow(
+                        color: Colors.black12,
+                        blurRadius: 6,
+                        offset: Offset(0, 2))
+                  ],
                 ),
                 child: Row(
                   children: [
                     // Settings icon
                     GestureDetector(
-                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsPage())),
-                      child: Icon(Icons.settings, color: const Color(0xFFF73D5C), size: screenWidth * 0.07),
+                      onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => const SettingsPage())),
+                      child: Icon(Icons.settings,
+                          color: const Color(0xFFF73D5C),
+                          size: screenWidth * 0.07),
                     ),
                     // SOSit Logo in the center
                     Expanded(
                       child: Center(
-                        child: _buildSositLogo(screenWidth, screenHeight),
-                      ),
+                          child: _buildSositLogo(screenWidth, screenHeight)),
                     ),
                     // Profile avatar
                     GestureDetector(
-                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfilePage()))
+                      onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (_) => const ProfilePage()))
                           .then((_) => _loadUserProfile()),
                       child: _profilePhotoUrl.isNotEmpty
-                          ? CircleAvatar(radius: screenWidth * 0.045, backgroundImage: NetworkImage(_profilePhotoUrl))
+                          ? CircleAvatar(
+                              radius: screenWidth * 0.045,
+                              backgroundImage: NetworkImage(_profilePhotoUrl))
                           : CircleAvatar(
                               radius: screenWidth * 0.045,
                               backgroundColor: const Color(0xFFF73D5C),
-                              child: Icon(Icons.person, color: Colors.white, size: screenWidth * 0.05),
+                              child: Icon(Icons.person,
+                                  color: Colors.white,
+                                  size: screenWidth * 0.05),
                             ),
                     ),
                   ],
                 ),
               ),
+            ),
+          ),
+
+          // Floating Emergency Button
+          Positioned(
+            right: screenWidth * 0.05,
+            bottom: screenHeight * 0.45,
+            child: Consumer<EmergencyService>(
+              builder: (context, emergencyService, child) {
+                return FloatingActionButton(
+                  onPressed: emergencyService.isEmergencyActive
+                      ? () =>
+                          emergencyService.handleEmergencyAlert('CANCEL', null)
+                      : () => _showEmergencyDialog(emergencyService),
+                  backgroundColor: emergencyService.isEmergencyActive
+                      ? Colors.orange
+                      : const Color(0xFFF73D5C),
+                  child: Icon(
+                    emergencyService.isEmergencyActive
+                        ? Icons.stop
+                        : Icons.warning,
+                    color: Colors.white,
+                    size: 30,
+                  ),
+                );
+              },
             ),
           ),
 
@@ -328,25 +371,27 @@ Future<void> _loadUserProfile() async {
             bottom: _isCardExpanded ? 0 : screenHeight * 0.03,
             child: GestureDetector(
               onVerticalDragUpdate: (details) {
-                // Detect upward swipe
                 if (details.delta.dy < -5 && !_isCardExpanded) {
                   setState(() => _isCardExpanded = true);
-                }
-                // Detect downward swipe
-                else if (details.delta.dy > 5 && _isCardExpanded) {
+                } else if (details.delta.dy > 5 && _isCardExpanded) {
                   setState(() => _isCardExpanded = false);
                 }
               },
-              onTap: () => setState(() => _isCardExpanded = !_isCardExpanded), // Keep tap as backup
+              onTap: () => setState(() => _isCardExpanded = !_isCardExpanded),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 300),
                 curve: Curves.easeInOut,
                 height: _isCardExpanded ? screenHeight * 0.7 : null,
                 constraints: _isCardExpanded
                     ? null
-                    : BoxConstraints(maxHeight: screenHeight * 0.4, minHeight: screenHeight * 0.2),
-                margin: EdgeInsets.symmetric(horizontal: _isCardExpanded ? 0 : screenWidth * 0.04),
-                padding: EdgeInsets.symmetric(vertical: screenHeight * 0.02, horizontal: screenWidth * 0.045),
+                    : BoxConstraints(
+                        maxHeight: screenHeight * 0.4,
+                        minHeight: screenHeight * 0.2),
+                margin: EdgeInsets.symmetric(
+                    horizontal: _isCardExpanded ? 0 : screenWidth * 0.04),
+                padding: EdgeInsets.symmetric(
+                    vertical: screenHeight * 0.02,
+                    horizontal: screenWidth * 0.045),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.only(
@@ -355,9 +400,16 @@ Future<void> _loadUserProfile() async {
                     bottomLeft: Radius.circular(_isCardExpanded ? 0 : 20),
                     bottomRight: Radius.circular(_isCardExpanded ? 0 : 20),
                   ),
-                  boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 12, offset: Offset(0, -4))],
+                  boxShadow: const [
+                    BoxShadow(
+                        color: Colors.black12,
+                        blurRadius: 12,
+                        offset: Offset(0, -4))
+                  ],
                 ),
-                child: _isCardExpanded ? _buildExpandedCard(screenWidth, screenHeight) : _buildCollapsedCard(screenWidth, screenHeight),
+                child: _isCardExpanded
+                    ? _buildExpandedCard(screenWidth, screenHeight)
+                    : _buildCollapsedCard(screenWidth, screenHeight),
               ),
             ),
           ),
@@ -366,19 +418,72 @@ Future<void> _loadUserProfile() async {
     );
   }
 
+  void _showEmergencyDialog(EmergencyService emergencyService) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Emergency Alert'),
+          content: const Text('Choose emergency type:'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                emergencyService.triggerManualEmergency('CHECKIN');
+              },
+              child: const Text('Check-in'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                emergencyService.triggerManualEmergency('REGULAR');
+              },
+              child: const Text('Regular'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                emergencyService.triggerManualEmergency('CRITICAL');
+              },
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: const Text('CRITICAL'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Widget _buildCollapsedCard(double screenWidth, double screenHeight) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Container(width: screenWidth * 0.12, height: 4, margin: EdgeInsets.only(bottom: screenHeight * 0.015), decoration: BoxDecoration(color: Colors.grey.shade400, borderRadius: BorderRadius.circular(2))),
-        Text('Your Safety Status', style: TextStyle(fontWeight: FontWeight.bold, fontSize: screenWidth * 0.045)),
+        Container(
+            width: screenWidth * 0.12,
+            height: 4,
+            margin: EdgeInsets.only(bottom: screenHeight * 0.015),
+            decoration: BoxDecoration(
+                color: Colors.grey.shade400,
+                borderRadius: BorderRadius.circular(2))),
+        Text('Your Safety Status',
+            style: TextStyle(
+                fontWeight: FontWeight.bold, fontSize: screenWidth * 0.045)),
         const SizedBox(height: 12),
         _buildStatusInfo(),
         const SizedBox(height: 12),
         Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(Icons.keyboard_arrow_up, color: Colors.grey.shade600, size: screenWidth * 0.05),
+          Icon(Icons.keyboard_arrow_up,
+              color: Colors.grey.shade600, size: screenWidth * 0.05),
           const SizedBox(width: 4),
-          Text('Swipe up for Emergency Contacts', style: TextStyle(color: Colors.grey.shade600, fontSize: screenWidth * 0.03, fontStyle: FontStyle.italic)),
+          Text('Swipe up for Emergency Contacts',
+              style: TextStyle(
+                  color: Colors.grey.shade600,
+                  fontSize: screenWidth * 0.03,
+                  fontStyle: FontStyle.italic)),
         ]),
       ],
     );
@@ -387,18 +492,30 @@ Future<void> _loadUserProfile() async {
   Widget _buildExpandedCard(double screenWidth, double screenHeight) {
     return Column(
       children: [
-        Container(width: screenWidth * 0.12, height: 4, margin: EdgeInsets.only(bottom: screenHeight * 0.015), decoration: BoxDecoration(color: Colors.grey.shade400, borderRadius: BorderRadius.circular(2))),
-        Text('Your Safety Status', style: TextStyle(fontWeight: FontWeight.bold, fontSize: screenWidth * 0.045)),
+        Container(
+            width: screenWidth * 0.12,
+            height: 4,
+            margin: EdgeInsets.only(bottom: screenHeight * 0.015),
+            decoration: BoxDecoration(
+                color: Colors.grey.shade400,
+                borderRadius: BorderRadius.circular(2))),
+        Text('Your Safety Status',
+            style: TextStyle(
+                fontWeight: FontWeight.bold, fontSize: screenWidth * 0.045)),
         const SizedBox(height: 12),
         _buildStatusInfo(),
         const SizedBox(height: 20),
         Row(children: [
-          Text('Emergency Contacts', style: TextStyle(fontWeight: FontWeight.bold, fontSize: screenWidth * 0.04)),
+          Text('Emergency Contacts',
+              style: TextStyle(
+                  fontWeight: FontWeight.bold, fontSize: screenWidth * 0.04)),
           const Spacer(),
-          Icon(Icons.keyboard_arrow_down, color: Colors.grey.shade600, size: screenWidth * 0.05),
+          Icon(Icons.keyboard_arrow_down,
+              color: Colors.grey.shade600, size: screenWidth * 0.05),
         ]),
         const SizedBox(height: 12),
-        Expanded(child: SingleChildScrollView(child: _buildEmergencyContacts())),
+        Expanded(
+            child: SingleChildScrollView(child: _buildEmergencyContacts())),
       ],
     );
   }
@@ -407,36 +524,99 @@ Future<void> _loadUserProfile() async {
     final screenWidth = MediaQuery.of(context).size.width;
     final screenHeight = MediaQuery.of(context).size.height;
 
-    return Column(
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    return Consumer2<BLEService, EmergencyService>(
+      builder: (context, bleService, emergencyService, child) {
+        return Column(
           children: [
-            Text('Device Status: ', style: TextStyle(fontWeight: FontWeight.w500, fontSize: screenWidth * 0.035)),
-            Expanded(child: Text(_deviceStatus, style: TextStyle(color: _getDeviceStatusColor(_deviceStatus), fontSize: screenWidth * 0.035))),
-          ],
-        ),
-        SizedBox(height: screenHeight * 0.005),
-        Row(
-          children: [
-            Text('GPS Signal: ', style: TextStyle(fontWeight: FontWeight.w500, fontSize: screenWidth * 0.035)),
-            Text(_gpsSignal, style: TextStyle(color: _getGpsColor(_gpsSignal), fontSize: screenWidth * 0.035)),
-          ],
-        ),
-        SizedBox(height: screenHeight * 0.005),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Location: ', style: TextStyle(fontWeight: FontWeight.w500, fontSize: screenWidth * 0.035)),
-            Expanded(
-              child: Text(_location.isNotEmpty ? _location : 'Getting location...',
-                  style: TextStyle(color: Colors.black87, fontSize: screenWidth * 0.035),
-                  maxLines: _isCardExpanded ? null : 2,
-                  overflow: _isCardExpanded ? null : TextOverflow.ellipsis),
+            // Panic Button Status
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Device Status: ',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w500,
+                        fontSize: screenWidth * 0.035)),
+                Expanded(
+                    child: Text(bleService.connectionStatus,
+                        style: TextStyle(
+                            color: _getDeviceStatusColor(
+                                bleService.connectionStatus),
+                            fontSize: screenWidth * 0.035))),
+              ],
+            ),
+            SizedBox(height: screenHeight * 0.005),
+
+            // Battery Level (if connected)
+            if (bleService.isConnected) ...[
+              Row(
+                children: [
+                  Text('Battery: ',
+                      style: TextStyle(
+                          fontWeight: FontWeight.w500,
+                          fontSize: screenWidth * 0.035)),
+                  Text('${bleService.batteryLevel}%',
+                      style: TextStyle(
+                          color: bleService.batteryLevel > 20
+                              ? Colors.green
+                              : Colors.red,
+                          fontSize: screenWidth * 0.035)),
+                ],
+              ),
+              SizedBox(height: screenHeight * 0.005),
+            ],
+
+            // Emergency Status
+            if (emergencyService.isEmergencyActive) ...[
+              Row(
+                children: [
+                  Text('Emergency: ',
+                      style: TextStyle(
+                          fontWeight: FontWeight.w500,
+                          fontSize: screenWidth * 0.035)),
+                  Text('${emergencyService.activeEmergencyType} ACTIVE',
+                      style: TextStyle(
+                          color: Colors.red,
+                          fontSize: screenWidth * 0.035,
+                          fontWeight: FontWeight.bold)),
+                ],
+              ),
+              SizedBox(height: screenHeight * 0.005),
+            ],
+
+            // GPS Status
+            Row(
+              children: [
+                Text('GPS Signal: ',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w500,
+                        fontSize: screenWidth * 0.035)),
+                Text(_gpsSignal,
+                    style: TextStyle(
+                        color: _getGpsColor(_gpsSignal),
+                        fontSize: screenWidth * 0.035)),
+              ],
+            ),
+            SizedBox(height: screenHeight * 0.005),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Location: ',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w500,
+                        fontSize: screenWidth * 0.035)),
+                Expanded(
+                  child: Text(
+                      _location.isNotEmpty ? _location : 'Getting location...',
+                      style: TextStyle(
+                          color: Colors.black87, fontSize: screenWidth * 0.035),
+                      maxLines: _isCardExpanded ? null : 2,
+                      overflow: _isCardExpanded ? null : TextOverflow.ellipsis),
+                ),
+              ],
             ),
           ],
-        ),
-      ],
+        );
+      },
     );
   }
 
@@ -596,6 +776,51 @@ Future<void> _loadUserProfile() async {
               ],
             ),
           ),
+
+        // Emergency System Status
+        Consumer<EmergencyService>(
+          builder: (context, emergencyService, child) {
+            return Container(
+              margin: EdgeInsets.only(top: screenHeight * 0.02),
+              padding: EdgeInsets.all(screenWidth * 0.04),
+              decoration: BoxDecoration(
+                color: emergencyService.isEmergencySystemReady()
+                    ? Colors.green.shade50
+                    : Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                    color: emergencyService.isEmergencySystemReady()
+                        ? Colors.green.shade200
+                        : Colors.orange.shade200),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    emergencyService.isEmergencySystemReady()
+                        ? Icons.check_circle
+                        : Icons.warning,
+                    color: emergencyService.isEmergencySystemReady()
+                        ? Colors.green
+                        : Colors.orange,
+                    size: screenWidth * 0.05,
+                  ),
+                  SizedBox(width: screenWidth * 0.03),
+                  Expanded(
+                    child: Text(
+                      emergencyService.getSystemStatus(),
+                      style: TextStyle(
+                        fontSize: screenWidth * 0.035,
+                        color: emergencyService.isEmergencySystemReady()
+                            ? Colors.green.shade700
+                            : Colors.orange.shade700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
       ],
     );
   }
@@ -606,11 +831,11 @@ Future<void> _loadUserProfile() async {
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return SizedBox(
-            height: screenWidth * 0.06, // Increased size
+            height: screenWidth * 0.06,
             child: Text(
               'SOSit',
               style: TextStyle(
-                fontSize: screenWidth * 0.06, // Increased size
+                fontSize: screenWidth * 0.06,
                 fontWeight: FontWeight.bold,
                 color: const Color(0xFFF73D5C),
                 letterSpacing: 0.5,
@@ -618,17 +843,16 @@ Future<void> _loadUserProfile() async {
             ),
           );
         }
-        
+
         if (snapshot.data == true) {
-          // SVG exists, try to load it
           return SvgPicture.asset(
             'assets/sositlogo.svg',
-            height: screenWidth * 0.06, // Increased size
-            width: screenWidth * 0.25, // Increased width
-            placeholderBuilder: (context) => _buildFallbackLogo(screenWidth, screenHeight),
+            height: screenWidth * 0.06,
+            width: screenWidth * 0.25,
+            placeholderBuilder: (context) =>
+                _buildFallbackLogo(screenWidth, screenHeight),
           );
         } else {
-          // SVG doesn't exist, show fallback
           return _buildFallbackLogo(screenWidth, screenHeight);
         }
       },
@@ -639,7 +863,7 @@ Future<void> _loadUserProfile() async {
     return Text(
       'SOSit',
       style: TextStyle(
-        fontSize: screenWidth * 0.06, // Increased size
+        fontSize: screenWidth * 0.06,
         fontWeight: FontWeight.bold,
         color: const Color(0xFFF73D5C),
         letterSpacing: 0.5,

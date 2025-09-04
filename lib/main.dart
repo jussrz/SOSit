@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:provider/provider.dart';
+import 'services/ble_service.dart';
+import 'services/emergency_service.dart';
 import 'signup_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // ✅ Initialize Supabase
+  // Initialize Supabase
   await Supabase.initialize(
-    url: 'https://ctsnpupbpcznwbbtqdln.supabase.co', // replace with your project URL
-    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN0c25wdXBicGN6bndiYnRxZGxuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDgzNjMxMjksImV4cCI6MjA2MzkzOTEyOX0.qerDMur3ms75KP2ahzQV6znO2Ri4NLtOAZorUf6soag', // replace with your anon key
+    url: 'https://ctsnpupbpcznwbbtqdln.supabase.co',
+    anonKey:
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN0c25wdXBicGN6bndiYnRxZGxuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDgzNjMxMjksImV4cCI6MjA2MzkzOTEyOX0.qerDMur3ms75KP2ahzQV6znO2Ri4NLtOAZorUf6soag',
   );
 
   runApp(const MyApp());
@@ -19,13 +23,67 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'SOS IT App',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => BLEService()),
+        ChangeNotifierProvider(create: (_) => EmergencyService()),
+        // Connect BLE alerts to Emergency service
+        ChangeNotifierProxyProvider2<BLEService, EmergencyService,
+            EmergencyAlertHandler>(
+          create: (_) => EmergencyAlertHandler(),
+          update: (_, bleService, emergencyService, handler) {
+            handler?.updateServices(bleService, emergencyService);
+            return handler!;
+          },
+        ),
+      ],
+      child: MaterialApp(
+        title: 'SOSit App',
+        debugShowCheckedModeBanner: false,
+        theme: ThemeData(
+          primarySwatch: Colors.blue,
+          fontFamily: 'Roboto',
+        ),
+        home: const SignupPage(),
       ),
-      home: const SignupPage(), // ✅ Start with signup page directly
     );
+  }
+}
+
+// Handler to connect BLE service alerts to Emergency service
+class EmergencyAlertHandler extends ChangeNotifier {
+  BLEService? _bleService;
+  EmergencyService? _emergencyService;
+
+  void updateServices(
+      BLEService bleService, EmergencyService emergencyService) {
+    _bleService = bleService;
+    _emergencyService = emergencyService;
+
+    // Listen for BLE alerts and forward to emergency service
+    bleService.addListener(_handleBLEUpdate);
+  }
+
+  void _handleBLEUpdate() {
+    if (_bleService?.lastAlert.isNotEmpty == true &&
+        _emergencyService != null) {
+      // Parse the alert from BLE service
+      String alert = _bleService!.lastAlert;
+      if (alert.contains('REGULAR')) {
+        _emergencyService!.handleEmergencyAlert('REGULAR', null);
+      } else if (alert.contains('CRITICAL')) {
+        _emergencyService!.handleEmergencyAlert('CRITICAL', null);
+      } else if (alert.contains('CHECKIN')) {
+        _emergencyService!.handleEmergencyAlert('CHECKIN', null);
+      } else if (alert.contains('CANCEL')) {
+        _emergencyService!.handleEmergencyAlert('CANCEL', null);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _bleService?.removeListener(_handleBLEUpdate); // Fix: _ not *
+    super.dispose();
   }
 }

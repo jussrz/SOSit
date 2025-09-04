@@ -4,7 +4,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'settings_page.dart' hide MaterialPageRoute;
-import 'login_page.dart';
 
 class AdminHomeScreen extends StatefulWidget {
   const AdminHomeScreen({super.key});
@@ -13,7 +12,8 @@ class AdminHomeScreen extends StatefulWidget {
   State<AdminHomeScreen> createState() => _AdminHomeScreenState();
 }
 
-class _AdminHomeScreenState extends State<AdminHomeScreen> with SingleTickerProviderStateMixin {
+class _AdminHomeScreenState extends State<AdminHomeScreen>
+    with SingleTickerProviderStateMixin {
   final supabase = Supabase.instance.client;
 
   late TabController _tabController;
@@ -32,10 +32,10 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> with SingleTickerProv
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _phoneController = TextEditingController();
-  
+
   // Tanod fields
   final _idNumberController = TextEditingController();
-  
+
   // Police fields
   final _stationNameController = TextEditingController();
 
@@ -76,9 +76,10 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> with SingleTickerProv
             .select('admin_firstname, admin_lastname')
             .eq('id', userId)
             .single();
-        
+
         setState(() {
-          _adminName = '${adminData['admin_firstname']} ${adminData['admin_lastname']}';
+          _adminName =
+              '${adminData['admin_firstname']} ${adminData['admin_lastname']}';
         });
       }
     } catch (e) {
@@ -95,114 +96,115 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> with SingleTickerProv
       });
     }
   }
-Future<void> _createAccount() async {
-  setState(() {
-    _submitted = true;
-  });
 
-  if (!_formKey.currentState!.validate() || _selectedRole == null) {
-    if (_selectedRole == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a role')),
-      );
-    }
-    return;
-  }
-
-  setState(() {
-    _isLoading = true;
-  });
-
-  try {
-    // 1. Create auth account in Supabase
-    final res = await supabase.auth.signUp(
-      email: _emailController.text.trim(),
-      password: _passwordController.text.trim(),
-    );
-
-    if (res.user == null) throw Exception('Failed to create user');
-
-    final userId = res.user!.id;
-    final email = _emailController.text.trim(); // Store email for reuse
-
-    // 2. Insert into user table
-    await supabase.from('user').insert({
-      'id': userId,
-      'email': email,
-      'phone': _phoneController.text.trim(),
-      'role': _selectedRole,
+  Future<void> _createAccount() async {
+    setState(() {
+      _submitted = true;
     });
 
-    // 3. Insert into specific role table
-    if (_selectedRole == 'tanod') {
-      String? proofUrl;
-      if (_proofFile != null) {
-        final fileBytes = await _proofFile!.readAsBytes();
-        final filePath = 'tanod_${DateTime.now().millisecondsSinceEpoch}.jpg';
-        await supabase.storage
-            .from('credentials_proof')
-            .uploadBinary(filePath, fileBytes);
-        proofUrl = supabase.storage
-            .from('credentials_proof')
-            .getPublicUrl(filePath);
+    if (!_formKey.currentState!.validate() || _selectedRole == null) {
+      if (_selectedRole == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please select a role')),
+        );
       }
-
-      await supabase.from('tanod').insert({
-        'user_id': userId,
-        'email': email, // Add email to tanod table
-        'id_number': _idNumberController.text.trim().isNotEmpty
-            ? _idNumberController.text.trim()
-            : null,
-        'credentials_url': proofUrl,
-        'status': 'approved',
-      });
-    } else if (_selectedRole == 'police') {
-      String? proofUrl;
-      if (_proofFile != null) {
-        final fileBytes = await _proofFile!.readAsBytes();
-        final filePath = 'police_${DateTime.now().millisecondsSinceEpoch}.jpg';
-        await supabase.storage
-            .from('credentials_proof')
-            .uploadBinary(filePath, fileBytes);
-        proofUrl = supabase.storage
-            .from('credentials_proof')
-            .getPublicUrl(filePath);
-      }
-
-      await supabase.from('police').insert({
-        'user_id': userId,
-        'email': email, // Add email to police table
-        'station_name': _stationNameController.text.trim().isNotEmpty
-            ? _stationNameController.text.trim()
-            : null,
-        'credentials_url': proofUrl,
-        'status': 'approved',
-      });
+      return;
     }
 
-    if (!mounted) return;
+    setState(() {
+      _isLoading = true;
+    });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('${_selectedRole!.toUpperCase()} account created successfully!'),
-        backgroundColor: Colors.green,
-      ),
-    );
+    try {
+      // 1. Create auth account in Supabase
+      final res = await supabase.auth.signUp(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+      );
 
-    _clearForm();
-  } catch (e) {
-    if (mounted) {
+      if (res.user == null) throw Exception('Failed to create user');
+
+      final userId = res.user!.id;
+      final email = _emailController.text.trim(); // Store email for reuse
+
+      // 2. Insert into user table
+      await supabase.from('user').insert({
+        'id': userId,
+        'email': email,
+        'phone': _phoneController.text.trim(),
+        'role': _selectedRole,
+      });
+
+      // 3. Insert into specific role table
+      if (_selectedRole == 'tanod') {
+        String? proofUrl;
+        if (_proofFile != null) {
+          final fileBytes = await _proofFile!.readAsBytes();
+          final filePath = 'tanod_${DateTime.now().millisecondsSinceEpoch}.jpg';
+          await supabase.storage
+              .from('credentials_proof')
+              .uploadBinary(filePath, fileBytes);
+          proofUrl =
+              supabase.storage.from('credentials_proof').getPublicUrl(filePath);
+        }
+
+        await supabase.from('tanod').insert({
+          'user_id': userId,
+          'email': email, // Add email to tanod table
+          'id_number': _idNumberController.text.trim().isNotEmpty
+              ? _idNumberController.text.trim()
+              : null,
+          'credentials_url': proofUrl,
+          'status': 'approved',
+        });
+      } else if (_selectedRole == 'police') {
+        String? proofUrl;
+        if (_proofFile != null) {
+          final fileBytes = await _proofFile!.readAsBytes();
+          final filePath =
+              'police_${DateTime.now().millisecondsSinceEpoch}.jpg';
+          await supabase.storage
+              .from('credentials_proof')
+              .uploadBinary(filePath, fileBytes);
+          proofUrl =
+              supabase.storage.from('credentials_proof').getPublicUrl(filePath);
+        }
+
+        await supabase.from('police').insert({
+          'user_id': userId,
+          'email': email, // Add email to police table
+          'station_name': _stationNameController.text.trim().isNotEmpty
+              ? _stationNameController.text.trim()
+              : null,
+          'credentials_url': proofUrl,
+          'status': 'approved',
+        });
+      }
+
+      if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to create account: $e'),
-          backgroundColor: Colors.red,
+          content: Text(
+              '${_selectedRole!.toUpperCase()} account created successfully!'),
+          backgroundColor: Colors.green,
         ),
       );
+
+      _clearForm();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to create account: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
-  } finally {
-    if (mounted) setState(() => _isLoading = false);
   }
-}
 
   void _clearForm() {
     _emailController.clear();
@@ -218,26 +220,29 @@ Future<void> _createAccount() async {
   }
 
   // Validators
-  String? _validateRequired(String? value) => (value == null || value.isEmpty) ? 'This field is required' : null;
-  
+  String? _validateRequired(String? value) =>
+      (value == null || value.isEmpty) ? 'This field is required' : null;
+
   String? _validateEmail(String? value) {
     if (value == null || value.isEmpty) return 'Enter an email';
     final regex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
     if (!regex.hasMatch(value)) return 'Enter a valid email format';
     return null;
   }
-  
+
   String? _validatePassword(String? value) {
     if (value == null || value.isEmpty) return 'Enter a password';
     if (value.length < 6) return 'Password must be at least 6 characters';
     return null;
   }
-  
+
   String? _validatePhone(String? value) {
     if (value == null || value.isEmpty) return 'Phone number is required';
     String cleanedValue = value.replaceAll(RegExp(r'[^\d]'), '');
     if (cleanedValue.length != 11) return 'Phone number must be 11 digits';
-    if (!cleanedValue.startsWith('09')) return 'Phone number must start with 09';
+    if (!cleanedValue.startsWith('09')) {
+      return 'Phone number must start with 09';
+    }
     return null;
   }
 
@@ -247,17 +252,19 @@ Future<void> _createAccount() async {
       // Load all users from the user table
       final users = await supabase
           .from('user')
-          .select('id, first_name, middle_name, last_name, birthdate, phone, email, role, created_at')
+          .select(
+              'id, first_name, middle_name, last_name, birthdate, phone, email, role, created_at')
           .order('created_at', ascending: false);
 
       debugPrint('Supabase user query result: $users');
       debugPrint('Type of users: ${users.runtimeType}');
       debugPrint('Is users a List? ${users is List}');
-      debugPrint('Number of users loaded: ${users is List ? users.length : 'not a list'}');
+      debugPrint(
+          'Number of users loaded: ${users is List ? users.length : 'not a list'}');
 
       setState(() {
         // Defensive: ensure _allUsers is always a List<Map<String, dynamic>>
-        if (users is List && users.isNotEmpty) {
+        if (users.isNotEmpty) {
           _allUsers = List<Map<String, dynamic>>.from(users);
         } else {
           _allUsers = [];
@@ -279,13 +286,15 @@ Future<void> _createAccount() async {
   void _applyUserFilters() {
     setState(() {
       _filteredUsers = _allUsers.where((user) {
-        final matchesRole = _userRoleFilter == 'all' || user['role'] == _userRoleFilter;
+        final matchesRole =
+            _userRoleFilter == 'all' || user['role'] == _userRoleFilter;
         final name = [
           user['first_name'] ?? '',
           user['middle_name'] ?? '',
           user['last_name'] ?? ''
         ].join(' ').toLowerCase();
-        final matchesName = _userNameFilter.isEmpty || name.contains(_userNameFilter.toLowerCase());
+        final matchesName = _userNameFilter.isEmpty ||
+            name.contains(_userNameFilter.toLowerCase());
         return matchesRole && matchesName;
       }).toList();
     });
@@ -305,7 +314,8 @@ Future<void> _createAccount() async {
         automaticallyImplyLeading: false,
         title: Row(
           children: [
-            Icon(Icons.admin_panel_settings, color: const Color(0xFFF73D5C), size: screenWidth * 0.07),
+            Icon(Icons.admin_panel_settings,
+                color: const Color(0xFFF73D5C), size: screenWidth * 0.07),
             SizedBox(width: screenWidth * 0.03),
             Expanded(
               child: Column(
@@ -331,7 +341,8 @@ Future<void> _createAccount() async {
               ),
             ),
             IconButton(
-              icon: Icon(Icons.settings, color: const Color(0xFFF73D5C), size: screenWidth * 0.06),
+              icon: Icon(Icons.settings,
+                  color: const Color(0xFFF73D5C), size: screenWidth * 0.06),
               onPressed: () => Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const SettingsPage()),
@@ -415,7 +426,7 @@ Future<void> _createAccount() async {
                     ),
                   ),
                   Text(
-                    'Create a new ${type} account',
+                    'Create a new $type account',
                     style: TextStyle(
                       fontSize: screenWidth * 0.035,
                       color: Colors.grey.shade600,
@@ -471,14 +482,18 @@ Future<void> _createAccount() async {
                       hintText: 'Password',
                       hintStyle: TextStyle(color: Colors.grey.shade600),
                       border: InputBorder.none,
-                      contentPadding: EdgeInsets.symmetric(vertical: screenHeight * 0.025),
+                      contentPadding:
+                          EdgeInsets.symmetric(vertical: screenHeight * 0.025),
                       errorStyle: const TextStyle(height: 0),
                       suffixIcon: IconButton(
                         icon: Icon(
-                          _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                          _obscurePassword
+                              ? Icons.visibility_off
+                              : Icons.visibility,
                           color: Colors.grey.shade600,
                         ),
-                        onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                        onPressed: () => setState(
+                            () => _obscurePassword = !_obscurePassword),
                       ),
                     ),
                     style: TextStyle(fontSize: screenWidth * 0.04),
@@ -493,7 +508,8 @@ Future<void> _createAccount() async {
                           padding: const EdgeInsets.only(left: 8, top: 4),
                           child: Text(
                             error,
-                            style: const TextStyle(color: Colors.red, fontSize: 12),
+                            style: const TextStyle(
+                                color: Colors.red, fontSize: 12),
                           ),
                         );
                       }
@@ -543,9 +559,13 @@ Future<void> _createAccount() async {
                       Icon(Icons.upload_file, color: Colors.grey.shade600),
                       const SizedBox(width: 12),
                       Text(
-                        _proofFile == null ? 'Upload Credentials Proof (Optional)' : 'Document Selected',
+                        _proofFile == null
+                            ? 'Upload Credentials Proof (Optional)'
+                            : 'Document Selected',
                         style: TextStyle(
-                          color: _proofFile == null ? Colors.grey.shade600 : Colors.black,
+                          color: _proofFile == null
+                              ? Colors.grey.shade600
+                              : Colors.black,
                           fontSize: screenWidth * 0.04,
                         ),
                       ),
@@ -569,12 +589,15 @@ Future<void> _createAccount() async {
                   ),
                   elevation: 0,
                 ),
-                onPressed: _isLoading ? null : () {
-                  setState(() => _selectedRole = type);
-                  _createAccount();
-                },
+                onPressed: _isLoading
+                    ? null
+                    : () {
+                        setState(() => _selectedRole = type);
+                        _createAccount();
+                      },
                 child: _isLoading
-                    ? const CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
+                    ? const CircularProgressIndicator(
+                        color: Colors.white, strokeWidth: 2)
                     : Text(
                         'Create ${type.toUpperCase()} Account',
                         style: TextStyle(
@@ -643,7 +666,8 @@ Future<void> _createAccount() async {
               hintText: hint,
               hintStyle: TextStyle(color: Colors.grey.shade600),
               border: InputBorder.none,
-              contentPadding: EdgeInsets.symmetric(vertical: screenHeight * 0.025),
+              contentPadding:
+                  EdgeInsets.symmetric(vertical: screenHeight * 0.025),
               errorStyle: const TextStyle(height: 0),
             ),
             keyboardType: keyboardType,
@@ -711,7 +735,8 @@ Future<void> _createAccount() async {
                       borderRadius: BorderRadius.circular(12),
                       borderSide: BorderSide(color: Colors.grey.shade300),
                     ),
-                    contentPadding: EdgeInsets.symmetric(vertical: 0, horizontal: 12),
+                    contentPadding:
+                        EdgeInsets.symmetric(vertical: 0, horizontal: 12),
                   ),
                   onChanged: (val) {
                     _userNameFilter = val;
@@ -752,15 +777,23 @@ Future<void> _createAccount() async {
                                     user['last_name'] ?? ''
                                   ].where((n) => n.isNotEmpty).join(' ');
                                   return Card(
-                                    margin: EdgeInsets.only(bottom: screenHeight * 0.012),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                    margin: EdgeInsets.only(
+                                        bottom: screenHeight * 0.012),
+                                    shape: RoundedRectangleBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(12)),
                                     child: ListTile(
                                       leading: CircleAvatar(
-                                        backgroundColor: const Color(0xFFF73D5C).withOpacity(0.1),
-                                        child: Icon(Icons.person, color: const Color(0xFFF73D5C)),
+                                        backgroundColor: const Color(0xFFF73D5C)
+                                            .withOpacity(0.1),
+                                        child: Icon(Icons.person,
+                                            color: const Color(0xFFF73D5C)),
                                       ),
-                                      title: Text(fullName.isNotEmpty ? fullName : user['email'] ?? 'No Name'),
-                                      subtitle: Text('Role: ${user['role'] ?? 'N/A'}'),
+                                      title: Text(fullName.isNotEmpty
+                                          ? fullName
+                                          : user['email'] ?? 'No Name'),
+                                      subtitle: Text(
+                                          'Role: ${user['role'] ?? 'N/A'}'),
                                       onTap: () {
                                         setState(() {
                                           _selectedUser = user;
@@ -793,12 +826,14 @@ Future<void> _createAccount() async {
                           ),
                           padding: EdgeInsets.all(screenWidth * 0.04),
                           child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.center, // <-- Center vertically
+                            crossAxisAlignment: CrossAxisAlignment
+                                .center, // <-- Center vertically
                             children: [
                               Container(
                                 padding: EdgeInsets.all(screenWidth * 0.025),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFFF73D5C).withOpacity(0.1),
+                                  color:
+                                      const Color(0xFFF73D5C).withOpacity(0.1),
                                   shape: BoxShape.circle,
                                 ),
                                 child: Icon(
@@ -811,7 +846,8 @@ Future<void> _createAccount() async {
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisAlignment: MainAxisAlignment.center, // <-- Center vertically
+                                  mainAxisAlignment: MainAxisAlignment
+                                      .center, // <-- Center vertically
                                   children: [
                                     Text(
                                       [

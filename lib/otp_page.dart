@@ -25,7 +25,7 @@ class _OtpPageState extends State<OtpPage> {
   Future<void> _verifyOtp() async {
     setState(() => _loading = true);
     try {
-      final res = await _sb.auth.verifyOtp(
+      final res = await _sb.auth.verifyOTP(
         type: OtpType.email, // 📌 verify email
         token: _otpCtrl.text.trim(),
         email: widget.email,

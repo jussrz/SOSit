@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'login_page.dart';
 
@@ -90,12 +89,13 @@ class _AdminSignupPageState extends State<AdminSignupPage> {
     } catch (e) {
       if (mounted) {
         String errorMessage = 'Signup failed: ${e.toString()}';
-        
+
         // Handle specific error cases
         if (e.toString().contains('already exists')) {
           errorMessage = 'An admin account with this email already exists';
         } else if (e.toString().contains('User already registered')) {
-          errorMessage = 'This email is already registered. Please use a different email or login instead.';
+          errorMessage =
+              'This email is already registered. Please use a different email or login instead.';
         } else if (e.toString().contains('duplicate key')) {
           errorMessage = 'An admin account with this email already exists';
         }
@@ -191,17 +191,20 @@ class _AdminSignupPageState extends State<AdminSignupPage> {
                 SizedBox(height: screenHeight * 0.04),
 
                 // First Name Field
-                _buildTextField(_firstNameController, 'First Name', Icons.person_outline, _validateRequired),
+                _buildTextField(_firstNameController, 'First Name',
+                    Icons.person_outline, _validateRequired),
 
                 SizedBox(height: screenHeight * 0.02),
 
                 // Last Name Field
-                _buildTextField(_lastNameController, 'Last Name', Icons.person_outline, _validateRequired),
+                _buildTextField(_lastNameController, 'Last Name',
+                    Icons.person_outline, _validateRequired),
 
                 SizedBox(height: screenHeight * 0.02),
 
                 // Email Field
-                _buildTextField(_emailController, 'Email', Icons.email, _validateEmail),
+                _buildTextField(
+                    _emailController, 'Email', Icons.email, _validateEmail),
 
                 SizedBox(height: screenHeight * 0.02),
 
@@ -212,7 +215,8 @@ class _AdminSignupPageState extends State<AdminSignupPage> {
                   Icons.lock,
                   _validatePassword,
                   obscureText: _obscurePassword,
-                  toggleObscure: () => setState(() => _obscurePassword = !_obscurePassword),
+                  toggleObscure: () =>
+                      setState(() => _obscurePassword = !_obscurePassword),
                 ),
 
                 SizedBox(height: screenHeight * 0.02),
@@ -224,7 +228,8 @@ class _AdminSignupPageState extends State<AdminSignupPage> {
                   Icons.lock,
                   _validateConfirmPassword,
                   obscureText: _obscureConfirmPassword,
-                  toggleObscure: () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
+                  toggleObscure: () => setState(
+                      () => _obscureConfirmPassword = !_obscureConfirmPassword),
                 ),
 
                 SizedBox(height: screenHeight * 0.04),
@@ -235,7 +240,8 @@ class _AdminSignupPageState extends State<AdminSignupPage> {
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFFFF4081),
-                      padding: EdgeInsets.symmetric(vertical: screenHeight * 0.02),
+                      padding:
+                          EdgeInsets.symmetric(vertical: screenHeight * 0.02),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(30),
                       ),
@@ -243,7 +249,8 @@ class _AdminSignupPageState extends State<AdminSignupPage> {
                     ),
                     onPressed: _isLoading ? null : _signup,
                     child: _isLoading
-                        ? CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
+                        ? CircularProgressIndicator(
+                            color: Colors.white, strokeWidth: 2)
                         : Text(
                             'Create Admin Account',
                             style: TextStyle(
@@ -323,7 +330,8 @@ class _AdminSignupPageState extends State<AdminSignupPage> {
               hintText: hint,
               hintStyle: TextStyle(color: Colors.grey.shade600),
               border: InputBorder.none,
-              contentPadding: EdgeInsets.symmetric(vertical: screenHeight * 0.025),
+              contentPadding:
+                  EdgeInsets.symmetric(vertical: screenHeight * 0.025),
               errorStyle: TextStyle(height: 0),
               suffixIcon: toggleObscure != null
                   ? IconButton(
@@ -359,4 +367,3 @@ class _AdminSignupPageState extends State<AdminSignupPage> {
     );
   }
 }
-

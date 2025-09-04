@@ -5,8 +5,6 @@ import 'dart:io';
 // Only import image_picker if available, otherwise instruct user to add it to pubspec.yaml
 // import 'package:image_picker/image_picker.dart';
 
-
-
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
 
@@ -19,11 +17,12 @@ class _ProfilePageState extends State<ProfilePage> {
 
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _fullNameController = TextEditingController();
-  final TextEditingController _dobController = TextEditingController();
   final TextEditingController _userPhoneController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _emergencyNameController = TextEditingController();
-  final TextEditingController _emergencyPhoneController = TextEditingController();
+  final TextEditingController _emergencyNameController =
+      TextEditingController();
+  final TextEditingController _emergencyPhoneController =
+      TextEditingController();
   final TextEditingController _relationshipController = TextEditingController();
 
   // Add missing controllers
@@ -33,9 +32,12 @@ class _ProfilePageState extends State<ProfilePage> {
   final TextEditingController _birthdateController = TextEditingController();
 
   // Second emergency contact controllers
-  final TextEditingController _emergencyName2Controller = TextEditingController();
-  final TextEditingController _emergencyPhone2Controller = TextEditingController();
-  final TextEditingController _relationship2Controller = TextEditingController();
+  final TextEditingController _emergencyName2Controller =
+      TextEditingController();
+  final TextEditingController _emergencyPhone2Controller =
+      TextEditingController();
+  final TextEditingController _relationship2Controller =
+      TextEditingController();
 
   // Change contact ID tracking back to String?
   String? _firstContactId;
@@ -43,14 +45,16 @@ class _ProfilePageState extends State<ProfilePage> {
 
   String _profilePhotoUrl = '';
   File? _newProfilePhoto;
-  bool _isEditingPhoto = false;
+  final bool _isEditingPhoto = false;
   bool _isLoading = false;
   bool _showSecondContact = false;
   bool _hasSecondContact = false;
 
   // Add controllers for "Other" text inputs
-  final TextEditingController _otherRelationshipController = TextEditingController();
-  final TextEditingController _otherRelationship2Controller = TextEditingController();
+  final TextEditingController _otherRelationshipController =
+      TextEditingController();
+  final TextEditingController _otherRelationship2Controller =
+      TextEditingController();
 
   // Add state variables to track if "Other" is selected
   bool _isOtherSelected = false;
@@ -74,11 +78,8 @@ class _ProfilePageState extends State<ProfilePage> {
 
     try {
       // Load user data from 'user' table
-      final userData = await supabase
-          .from('user')
-          .select()
-          .eq('id', userId)
-          .single();
+      final userData =
+          await supabase.from('user').select().eq('id', userId).single();
 
       debugPrint('User data from database: $userData');
 
@@ -96,7 +97,7 @@ class _ProfilePageState extends State<ProfilePage> {
         _firstNameController.text = userData['first_name'] ?? '';
         _middleNameController.text = userData['middle_name'] ?? '';
         _lastNameController.text = userData['last_name'] ?? '';
-        
+
         // Combine names for full name display
         String fullName = [
           userData['first_name'] ?? '',
@@ -107,7 +108,8 @@ class _ProfilePageState extends State<ProfilePage> {
 
         _birthdateController.text = userData['birthdate'] ?? '';
         _userPhoneController.text = userData['phone'] ?? '';
-        _emailController.text = userData['email'] ?? supabase.auth.currentUser?.email ?? '';
+        _emailController.text =
+            userData['email'] ?? supabase.auth.currentUser?.email ?? '';
         _profilePhotoUrl = userData['profile_photo_url'] ?? '';
 
         // Clear previous emergency contact data
@@ -126,14 +128,18 @@ class _ProfilePageState extends State<ProfilePage> {
         if (emergencyData.isNotEmpty) {
           // First emergency contact
           _firstContactId = emergencyData[0]['id']?.toString();
-          _emergencyNameController.text = emergencyData[0]['emergency_contact_name'] ?? '';
-          _emergencyPhoneController.text = emergencyData[0]['emergency_contact_phone'] ?? '';
-          
+          _emergencyNameController.text =
+              emergencyData[0]['emergency_contact_name'] ?? '';
+          _emergencyPhoneController.text =
+              emergencyData[0]['emergency_contact_phone'] ?? '';
+
           // Handle "Other:" relationships
-          String relationship = emergencyData[0]['emergency_contact_relationship'] ?? '';
+          String relationship =
+              emergencyData[0]['emergency_contact_relationship'] ?? '';
           if (relationship.startsWith('Other: ')) {
             _relationshipController.text = 'Other';
-            _otherRelationshipController.text = relationship.substring(7); // Remove "Other: " prefix
+            _otherRelationshipController.text =
+                relationship.substring(7); // Remove "Other: " prefix
             _isOtherSelected = true;
           } else {
             _relationshipController.text = relationship;
@@ -145,14 +151,18 @@ class _ProfilePageState extends State<ProfilePage> {
         if (emergencyData.length > 1) {
           // Second emergency contact
           _secondContactId = emergencyData[1]['id']?.toString();
-          _emergencyName2Controller.text = emergencyData[1]['emergency_contact_name'] ?? '';
-          _emergencyPhone2Controller.text = emergencyData[1]['emergency_contact_phone'] ?? '';
-          
+          _emergencyName2Controller.text =
+              emergencyData[1]['emergency_contact_name'] ?? '';
+          _emergencyPhone2Controller.text =
+              emergencyData[1]['emergency_contact_phone'] ?? '';
+
           // Handle "Other:" relationships
-          String relationship2 = emergencyData[1]['emergency_contact_relationship'] ?? '';
+          String relationship2 =
+              emergencyData[1]['emergency_contact_relationship'] ?? '';
           if (relationship2.startsWith('Other: ')) {
             _relationship2Controller.text = 'Other';
-            _otherRelationship2Controller.text = relationship2.substring(7); // Remove "Other: " prefix
+            _otherRelationship2Controller.text =
+                relationship2.substring(7); // Remove "Other: " prefix
             _isOther2Selected = true;
           } else {
             _relationship2Controller.text = relationship2;
@@ -170,7 +180,6 @@ class _ProfilePageState extends State<ProfilePage> {
       debugPrint('First contact ID: $_firstContactId');
       debugPrint('Second contact ID: $_secondContactId');
       debugPrint('Emergency contacts loaded: ${emergencyData.length}');
-
     } catch (e) {
       setState(() => _isLoading = false);
       debugPrint('Error loading profile: $e');
@@ -202,7 +211,8 @@ class _ProfilePageState extends State<ProfilePage> {
         case 'other':
           return 'Relative';
         default:
-          if (['Spouse', 'Mother', 'Father', 'Sibling', 'Friend', 'Relative'].contains(relationship)) {
+          if (['Spouse', 'Mother', 'Father', 'Sibling', 'Friend', 'Relative']
+              .contains(relationship)) {
             return relationship;
           } else {
             return 'Relative';
@@ -223,7 +233,8 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Future<void> _removeFirstEmergencyContact() async {
-    final confirmed = await _showRemoveConfirmationDialog('Delete this contact?');
+    final confirmed =
+        await _showRemoveConfirmationDialog('Delete this contact?');
     final userId = supabase.auth.currentUser?.id;
     if (!confirmed || _firstContactId == null || userId == null) return;
 
@@ -231,18 +242,19 @@ class _ProfilePageState extends State<ProfilePage> {
       final deleted = await supabase
           .from('emergency_contacts')
           .delete()
-          .eq('id', _firstContactId!)              // uuid OR int, both ok if policy allows
-          .eq('user_id', userId)                   // helpful with RLS
-          .select();                               // return the deleted rows
+          .eq('id', _firstContactId!) // uuid OR int, both ok if policy allows
+          .eq('user_id', userId) // helpful with RLS
+          .select(); // return the deleted rows
 
-      final didDelete = deleted is List && deleted.isNotEmpty;
+      final didDelete = deleted.isNotEmpty;
 
       if (!didDelete) {
         // Most likely RLS blocked it. Tell the user/dev clearly.
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Could not delete contact (RLS policy likely missing).'),
+              content:
+                  Text('Could not delete contact (RLS policy likely missing).'),
               backgroundColor: Colors.red,
             ),
           );
@@ -272,14 +284,17 @@ class _ProfilePageState extends State<ProfilePage> {
       debugPrint('Error removing first contact: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error removing contact: $e'), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text('Error removing contact: $e'),
+              backgroundColor: Colors.red),
         );
       }
     }
   }
 
   Future<void> _removeSecondEmergencyContact() async {
-    final confirmed = await _showRemoveConfirmationDialog('Delete this contact?');
+    final confirmed =
+        await _showRemoveConfirmationDialog('Delete this contact?');
     final userId = supabase.auth.currentUser?.id;
     if (!confirmed || _secondContactId == null || userId == null) return;
 
@@ -291,13 +306,14 @@ class _ProfilePageState extends State<ProfilePage> {
           .eq('user_id', userId)
           .select();
 
-      final didDelete = deleted is List && deleted.isNotEmpty;
+      final didDelete = deleted.isNotEmpty;
 
       if (!didDelete) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Could not delete contact (RLS policy likely missing).'),
+              content:
+                  Text('Could not delete contact (RLS policy likely missing).'),
               backgroundColor: Colors.red,
             ),
           );
@@ -329,7 +345,9 @@ class _ProfilePageState extends State<ProfilePage> {
       debugPrint('Error removing second contact: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error removing contact: $e'), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text('Error removing contact: $e'),
+              backgroundColor: Colors.red),
         );
       }
     }
@@ -337,23 +355,22 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Future<bool> _showRemoveConfirmationDialog(String message) async {
     return await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Delete contact'),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false), 
-            child: const Text('Cancel')
+          context: context,
+          builder: (_) => AlertDialog(
+            title: const Text('Delete contact'),
+            content: Text(message),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('Cancel')),
+              TextButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  style: TextButton.styleFrom(foregroundColor: Colors.red),
+                  child: const Text('Delete')),
+            ],
           ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true), 
-            style: TextButton.styleFrom(foregroundColor: Colors.red), 
-            child: const Text('Delete')
-          ),
-        ],
-      ),
-    ) ?? false;
+        ) ??
+        false;
   }
 
   Future<void> _pickProfilePhoto() async {
@@ -372,7 +389,9 @@ class _ProfilePageState extends State<ProfilePage> {
     //   });
     // }
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Please add image_picker to your pubspec.yaml to pick images.')),
+      const SnackBar(
+          content: Text(
+              'Please add image_picker to your pubspec.yaml to pick images.')),
     );
   }
 
@@ -380,9 +399,12 @@ class _ProfilePageState extends State<ProfilePage> {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) return null;
     final fileExt = file.path.split('.').last;
-    final filePath = 'profile_photos/$userId.${DateTime.now().millisecondsSinceEpoch}.$fileExt';
+    final filePath =
+        'profile_photos/$userId.${DateTime.now().millisecondsSinceEpoch}.$fileExt';
     final bytes = await file.readAsBytes();
-    final res = await supabase.storage.from('profile-photos').uploadBinary(filePath, bytes, fileOptions: const FileOptions(upsert: true));
+    final res = await supabase.storage.from('profile-photos').uploadBinary(
+        filePath, bytes,
+        fileOptions: const FileOptions(upsert: true));
     if (res.isEmpty) return null;
     final url = supabase.storage.from('profile-photos').getPublicUrl(filePath);
     return url;
@@ -417,12 +439,12 @@ class _ProfilePageState extends State<ProfilePage> {
       if (_emergencyNameController.text.trim().isNotEmpty &&
           _emergencyPhoneController.text.trim().isNotEmpty &&
           _relationshipController.text.trim().isNotEmpty) {
-        
         final contactData = {
           'user_id': userId,
           'emergency_contact_name': _emergencyNameController.text.trim(),
           'emergency_contact_phone': _emergencyPhoneController.text.trim(),
-          'emergency_contact_relationship': _getFinalRelationship(_relationshipController.text, _otherRelationshipController.text),
+          'emergency_contact_relationship': _getFinalRelationship(
+              _relationshipController.text, _otherRelationshipController.text),
         };
 
         if (_firstContactId != null) {
@@ -438,7 +460,8 @@ class _ProfilePageState extends State<ProfilePage> {
               .insert(contactData)
               .select()
               .single();
-          _firstContactId = inserted['id']?.toString(); // Convert to String safely
+          _firstContactId =
+              inserted['id']?.toString(); // Convert to String safely
         }
       } else if (_firstContactId != null) {
         // If fields are empty but contact exists, delete it
@@ -450,16 +473,17 @@ class _ProfilePageState extends State<ProfilePage> {
       }
 
       // Handle second emergency contact
-      if (_showSecondContact && 
+      if (_showSecondContact &&
           _emergencyName2Controller.text.trim().isNotEmpty &&
           _emergencyPhone2Controller.text.trim().isNotEmpty &&
           _relationship2Controller.text.trim().isNotEmpty) {
-        
         final contactData = {
           'user_id': userId,
           'emergency_contact_name': _emergencyName2Controller.text.trim(),
           'emergency_contact_phone': _emergencyPhone2Controller.text.trim(),
-          'emergency_contact_relationship': _getFinalRelationship(_relationship2Controller.text, _otherRelationship2Controller.text),
+          'emergency_contact_relationship': _getFinalRelationship(
+              _relationship2Controller.text,
+              _otherRelationship2Controller.text),
         };
 
         if (_secondContactId != null) {
@@ -475,7 +499,8 @@ class _ProfilePageState extends State<ProfilePage> {
               .insert(contactData)
               .select()
               .single();
-          _secondContactId = inserted['id']?.toString(); // Convert to String safely
+          _secondContactId =
+              inserted['id']?.toString(); // Convert to String safely
         }
       } else if (_secondContactId != null) {
         // If fields are empty but contact exists, delete it
@@ -501,7 +526,6 @@ class _ProfilePageState extends State<ProfilePage> {
         // Reload to verify changes and get correct IDs
         await _loadUserProfile();
       }
-
     } catch (e) {
       debugPrint('Error saving profile: $e');
       if (mounted) {
@@ -529,7 +553,8 @@ class _ProfilePageState extends State<ProfilePage> {
           onPressed: () => Navigator.of(context).pop(),
         ),
         centerTitle: true,
-        title: const Text('User Information', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w500)),
+        title: const Text('User Information',
+            style: TextStyle(color: Colors.black, fontWeight: FontWeight.w500)),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
@@ -561,9 +586,11 @@ class _ProfilePageState extends State<ProfilePage> {
                                   )
                                 : null),
                       ),
-                      child: (_newProfilePhoto == null && _profilePhotoUrl.isEmpty)
-                          ? Icon(Icons.person, size: 40, color: Colors.grey[600])
-                          : null,
+                      child:
+                          (_newProfilePhoto == null && _profilePhotoUrl.isEmpty)
+                              ? Icon(Icons.person,
+                                  size: 40, color: Colors.grey[600])
+                              : null,
                     ),
                     Positioned(
                       bottom: 2,
@@ -577,7 +604,8 @@ class _ProfilePageState extends State<ProfilePage> {
                             color: Colors.blue,
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(Icons.edit, color: Colors.white, size: 16),
+                          child: const Icon(Icons.edit,
+                              color: Colors.white, size: 16),
                         ),
                       ),
                     ),
@@ -587,49 +615,69 @@ class _ProfilePageState extends State<ProfilePage> {
               const SizedBox(height: 32),
 
               // Personal Details Section
-              const Text('Personal Details', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16, color: Colors.black)),
+              const Text('Personal Details',
+                  style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
+                      color: Colors.black)),
               const SizedBox(height: 16),
 
               _buildTextField('Full Name', _fullNameController),
               const SizedBox(height: 12),
-              _buildTextField('Date of Birth', _birthdateController, readOnly: true, onTap: () async {
+              _buildTextField('Date of Birth', _birthdateController,
+                  readOnly: true, onTap: () async {
                 DateTime? picked = await showDatePicker(
                   context: context,
-                  initialDate: _birthdateController.text.isNotEmpty 
-                      ? DateTime.tryParse(_birthdateController.text) ?? DateTime(2000, 1, 1) 
+                  initialDate: _birthdateController.text.isNotEmpty
+                      ? DateTime.tryParse(_birthdateController.text) ??
+                          DateTime(2000, 1, 1)
                       : DateTime(2000, 1, 1),
                   firstDate: DateTime(1900),
                   lastDate: DateTime.now(),
                 );
                 if (picked != null) {
-                  _birthdateController.text = "${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}";
+                  _birthdateController.text =
+                      "${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}";
                 }
               }),
               const SizedBox(height: 12),
-              _buildTextField('Phone Number', _userPhoneController, keyboardType: TextInputType.phone),
+              _buildTextField('Phone Number', _userPhoneController,
+                  keyboardType: TextInputType.phone),
               const SizedBox(height: 12),
-              _buildTextField('Email Address', _emailController, readOnly: true),
+              _buildTextField('Email Address', _emailController,
+                  readOnly: true),
 
               const SizedBox(height: 32),
 
               // Emergency Contact Section
-              const Text('Emergency Contacts', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16, color: Colors.black)),
+              const Text('Emergency Contacts',
+                  style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
+                      color: Colors.black)),
               const SizedBox(height: 16),
 
               // First Emergency Contact with Remove Button
               Row(
                 children: [
                   const Expanded(
-                    child: Text('Emergency Contact', style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14, color: Colors.black87)),
+                    child: Text('Emergency Contact',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w500,
+                            fontSize: 14,
+                            color: Colors.black87)),
                   ),
                   // Show remove button if contact exists (based on ID, not text)
                   if (_firstContactId != null)
                     TextButton.icon(
                       onPressed: _removeFirstEmergencyContact,
-                      icon: const Icon(Icons.delete_outline, color: Colors.red, size: 18),
-                      label: const Text('Remove', style: TextStyle(color: Colors.red, fontSize: 12)),
+                      icon: const Icon(Icons.delete_outline,
+                          color: Colors.red, size: 18),
+                      label: const Text('Remove',
+                          style: TextStyle(color: Colors.red, fontSize: 12)),
                       style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
                         minimumSize: const Size(0, 0),
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
@@ -638,17 +686,24 @@ class _ProfilePageState extends State<ProfilePage> {
               ),
               const SizedBox(height: 8),
 
-              _buildTextField('Emergency Contact Name', _emergencyNameController),
+              _buildTextField(
+                  'Emergency Contact Name', _emergencyNameController),
               const SizedBox(height: 12),
-              _buildDropdownTextField('Relationship to User', _relationshipController, _otherRelationshipController, (isOther) {
+              _buildDropdownTextField(
+                  'Relationship to User',
+                  _relationshipController,
+                  _otherRelationshipController, (isOther) {
                 setState(() => _isOtherSelected = isOther);
               }),
               if (_isOtherSelected) ...[
                 const SizedBox(height: 12),
-                _buildTextField('Specify relationship', _otherRelationshipController),
+                _buildTextField(
+                    'Specify relationship', _otherRelationshipController),
               ],
               const SizedBox(height: 12),
-              _buildTextField('Emergency Contact\'s Phone Number', _emergencyPhoneController, keyboardType: TextInputType.phone),
+              _buildTextField('Emergency Contact\'s Phone Number',
+                  _emergencyPhoneController,
+                  keyboardType: TextInputType.phone),
 
               // Second Emergency Contact Section
               if (_showSecondContact) ...[
@@ -658,16 +713,23 @@ class _ProfilePageState extends State<ProfilePage> {
                 Row(
                   children: [
                     const Expanded(
-                      child: Text('Second Emergency Contact', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16, color: Colors.black)),
+                      child: Text('Second Emergency Contact',
+                          style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 16,
+                              color: Colors.black)),
                     ),
                     // Show remove button if contact exists (based on ID, not text)
                     if (_secondContactId != null)
                       TextButton.icon(
                         onPressed: _removeSecondEmergencyContact,
-                        icon: const Icon(Icons.delete_outline, color: Colors.red, size: 18),
-                        label: const Text('Remove', style: TextStyle(color: Colors.red, fontSize: 12)),
+                        icon: const Icon(Icons.delete_outline,
+                            color: Colors.red, size: 18),
+                        label: const Text('Remove',
+                            style: TextStyle(color: Colors.red, fontSize: 12)),
                         style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
                           minimumSize: const Size(0, 0),
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
@@ -676,17 +738,24 @@ class _ProfilePageState extends State<ProfilePage> {
                 ),
                 const SizedBox(height: 16),
 
-                _buildTextField('Emergency Contact Name 2', _emergencyName2Controller),
+                _buildTextField(
+                    'Emergency Contact Name 2', _emergencyName2Controller),
                 const SizedBox(height: 12),
-                _buildDropdownTextField('Relationship to User 2', _relationship2Controller, _otherRelationship2Controller, (isOther) {
+                _buildDropdownTextField(
+                    'Relationship to User 2',
+                    _relationship2Controller,
+                    _otherRelationship2Controller, (isOther) {
                   setState(() => _isOther2Selected = isOther);
                 }),
                 if (_isOther2Selected) ...[
                   const SizedBox(height: 12),
-                  _buildTextField('Specify relationship', _otherRelationship2Controller),
+                  _buildTextField(
+                      'Specify relationship', _otherRelationship2Controller),
                 ],
                 const SizedBox(height: 12),
-                _buildTextField('Emergency Contact\'s Phone Number 2', _emergencyPhone2Controller, keyboardType: TextInputType.phone),
+                _buildTextField('Emergency Contact\'s Phone Number 2',
+                    _emergencyPhone2Controller,
+                    keyboardType: TextInputType.phone),
               ],
 
               const SizedBox(height: 32),
@@ -697,18 +766,25 @@ class _ProfilePageState extends State<ProfilePage> {
                   width: double.infinity,
                   height: 48,
                   decoration: BoxDecoration(
-                    border: Border.all(color: const Color(0xFFF73D5C), width: 1),
+                    border:
+                        Border.all(color: const Color(0xFFF73D5C), width: 1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: TextButton.icon(
                     onPressed: _addSecondEmergencyContact,
-                    icon: const Icon(Icons.add, color: Color(0xFFF73D5C), size: 18),
-                    label: const Text('Add Emergency Contact', style: TextStyle(color: Color(0xFFF73D5C), fontSize: 15, fontWeight: FontWeight.w500)),
+                    icon: const Icon(Icons.add,
+                        color: Color(0xFFF73D5C), size: 18),
+                    label: const Text('Add Emergency Contact',
+                        style: TextStyle(
+                            color: Color(0xFFF73D5C),
+                            fontSize: 15,
+                            fontWeight: FontWeight.w500)),
                   ),
                 ),
 
               // Conditional spacing - less space when no add button is shown
-              SizedBox(height: (!_hasSecondContact && !_showSecondContact) ? 16 : 8),
+              SizedBox(
+                  height: (!_hasSecondContact && !_showSecondContact) ? 16 : 8),
 
               // Save Button
               Container(
@@ -720,16 +796,21 @@ class _ProfilePageState extends State<ProfilePage> {
                 ),
                 child: TextButton(
                   onPressed: _isLoading ? null : _saveProfile,
-                  child: _isLoading 
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                        ),
-                      )
-                    : const Text('Save', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600)),
+                  child: _isLoading
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor:
+                                AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : const Text('Save',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600)),
                 ),
               ),
             ],
@@ -739,7 +820,9 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  Widget _buildTextField(String label, TextEditingController controller, {
+  Widget _buildTextField(
+    String label,
+    TextEditingController controller, {
     bool readOnly = false,
     VoidCallback? onTap,
     TextInputType? keyboardType,
@@ -763,18 +846,22 @@ class _ProfilePageState extends State<ProfilePage> {
             fontSize: 16,
           ),
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           floatingLabelBehavior: FloatingLabelBehavior.auto,
         ),
         style: TextStyle(
-          fontSize: 16, 
-          color: (readOnly && label == 'Email Address') ? Colors.grey.shade500 : Colors.black,
+          fontSize: 16,
+          color: (readOnly && label == 'Email Address')
+              ? Colors.grey.shade500
+              : Colors.black,
         ),
       ),
     );
   }
 
-  Widget _buildDropdownTextField(String label, TextEditingController controller, TextEditingController otherController, Function(bool) onOtherSelected) {
+  Widget _buildDropdownTextField(String label, TextEditingController controller,
+      TextEditingController otherController, Function(bool) onOtherSelected) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
@@ -782,10 +869,18 @@ class _ProfilePageState extends State<ProfilePage> {
         borderRadius: BorderRadius.circular(12),
       ),
       child: DropdownButtonFormField<String>(
-        value: controller.text.isNotEmpty && 
-               ['Spouse', 'Mother', 'Father', 'Sibling', 'Friend', 'Relative', 'Other'].contains(controller.text) 
-               ? controller.text 
-               : null,
+        value: controller.text.isNotEmpty &&
+                [
+                  'Spouse',
+                  'Mother',
+                  'Father',
+                  'Sibling',
+                  'Friend',
+                  'Relative',
+                  'Other'
+                ].contains(controller.text)
+            ? controller.text
+            : null,
         items: const [
           DropdownMenuItem(value: 'Spouse', child: Text('Spouse')),
           DropdownMenuItem(value: 'Mother', child: Text('Mother')),
@@ -802,7 +897,8 @@ class _ProfilePageState extends State<ProfilePage> {
               onOtherSelected(true);
             } else {
               onOtherSelected(false);
-              otherController.clear(); // Clear the other text field when not "Other"
+              otherController
+                  .clear(); // Clear the other text field when not "Other"
             }
           });
         },
@@ -813,7 +909,8 @@ class _ProfilePageState extends State<ProfilePage> {
             fontSize: 16,
           ),
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           floatingLabelBehavior: FloatingLabelBehavior.auto,
         ),
         style: const TextStyle(fontSize: 16, color: Colors.black),
@@ -840,10 +937,11 @@ class _ProfilePageState extends State<ProfilePage> {
           Expanded(
             flex: 3,
             child: DropdownButtonFormField<String>(
-              value: controller.text.isNotEmpty && 
-                     ['Spouse', 'Parent', 'Sibling', 'Friend', 'Relative'].contains(controller.text) 
-                     ? controller.text 
-                     : null,
+              value: controller.text.isNotEmpty &&
+                      ['Spouse', 'Parent', 'Sibling', 'Friend', 'Relative']
+                          .contains(controller.text)
+                  ? controller.text
+                  : null,
               items: const [
                 DropdownMenuItem(value: 'Spouse', child: Text('Spouse')),
                 DropdownMenuItem(value: 'Parent', child: Text('Parent')),
@@ -863,7 +961,8 @@ class _ProfilePageState extends State<ProfilePage> {
               ),
               style: const TextStyle(fontSize: 16, color: Colors.black),
               alignment: Alignment.centerRight,
-              icon: const Icon(Icons.keyboard_arrow_down, color: Colors.grey, size: 20),
+              icon: const Icon(Icons.keyboard_arrow_down,
+                  color: Colors.grey, size: 20),
             ),
           ),
         ],
@@ -871,12 +970,12 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  Widget _buildCleanTextField(String label, TextEditingController controller, {
+  Widget _buildCleanTextField(
+    String label,
+    TextEditingController controller, {
     bool readOnly = false,
     VoidCallback? onTap,
     TextInputType? keyboardType,
-    bool isFirst = false,
-    bool isLast = false,
   }) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),

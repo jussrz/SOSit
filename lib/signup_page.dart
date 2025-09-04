@@ -5,7 +5,6 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'login_page.dart';
-import 'home_screen.dart';
 
 class SignupPage extends StatefulWidget {
   const SignupPage({super.key});
@@ -79,12 +78,13 @@ class _SignupPageState extends State<SignupPage> {
         return Theme(
           data: Theme.of(context).copyWith(
             colorScheme: const ColorScheme.light(
-              primary: Color(0xFFFF4081), // Pink color for header and selected date
+              primary:
+                  Color(0xFFFF4081), // Pink color for header and selected date
               onPrimary: Colors.white, // Text color on primary
               surface: Colors.white, // Background color
               onSurface: Colors.black, // Text color
             ),
-            dialogBackgroundColor: Colors.white,
+            dialogTheme: DialogThemeData(backgroundColor: Colors.white),
           ),
           child: child!,
         );
@@ -93,158 +93,164 @@ class _SignupPageState extends State<SignupPage> {
 
     if (picked != null) {
       setState(() {
-        _birthdateController.text = "${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}";
+        _birthdateController.text =
+            "${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}";
       });
     }
   }
 
-Future<void> _signup() async {
-  setState(() {
-    _submitted = true;
-  });
+  Future<void> _signup() async {
+    setState(() {
+      _submitted = true;
+    });
 
-  if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) return;
 
-  setState(() {
-    _isLoading = true;
-  });
+    setState(() {
+      _isLoading = true;
+    });
 
-  try {
-    // 1. Create auth account in Supabase
-    final res = await Supabase.instance.client.auth.signUp(
-      email: _emailController.text.trim(),
-      password: _passwordController.text.trim(),
-    );
-
-    if (res.user == null) throw Exception('Failed to create user');
-
-    final userId = res.user!.id;
-
-    // 2. Always insert into user table
-    final userData = {
-      'id': userId,
-      'email': _emailController.text.trim(),
-      'phone': _phoneController.text.trim(),
-      'role': _selectedRole,
-    };
-
-    if (_selectedRole == 'citizen') {
-      userData['first_name'] = _firstNameController.text.trim().isNotEmpty
-          ? _firstNameController.text.trim()
-          : null;
-      userData['middle_name'] = _middleNameController.text.trim().isNotEmpty
-          ? _middleNameController.text.trim()
-          : null;
-      userData['last_name'] = _lastNameController.text.trim().isNotEmpty
-          ? _lastNameController.text.trim()
-          : null;
-      userData['birthdate'] = _birthdateController.text.trim().isNotEmpty
-          ? _birthdateController.text.trim()
-          : null;
-    }
-
-    await Supabase.instance.client.from('user').insert(userData);
-
-    // 3. Insert into tanod/police if applicable
-    if (_selectedRole == 'tanod') {
-      String? proofUrl;
-      if (_proofFile != null) {
-        final fileBytes = await _proofFile!.readAsBytes();
-        final filePath = 'tanod_${DateTime.now().millisecondsSinceEpoch}.jpg';
-        await Supabase.instance.client.storage
-            .from('credentials_proof')
-            .uploadBinary(filePath, fileBytes);
-        proofUrl = Supabase.instance.client.storage
-            .from('credentials_proof')
-            .getPublicUrl(filePath);
-      }
-
-      await Supabase.instance.client.from('tanod').insert({
-        'user_id': userId,
-        'id_number': _idNumberController.text.trim().isNotEmpty
-            ? _idNumberController.text.trim()
-            : null,
-        'credentials_url': proofUrl ?? _tanodCredentialsController.text.trim(),
-        'status': 'pending',
-      });
-    } else if (_selectedRole == 'police') {
-      String? proofUrl;
-      if (_proofFile != null) {
-        final fileBytes = await _proofFile!.readAsBytes();
-        final filePath = 'police_${DateTime.now().millisecondsSinceEpoch}.jpg';
-        await Supabase.instance.client.storage
-            .from('credentials_proof')
-            .uploadBinary(filePath, fileBytes);
-        proofUrl = Supabase.instance.client.storage
-            .from('credentials_proof')
-            .getPublicUrl(filePath);
-      }
-
-      await Supabase.instance.client.from('police').insert({
-        'user_id': userId,
-        'station_name': _stationNameController.text.trim().isNotEmpty
-            ? _stationNameController.text.trim()
-            : null,
-        'credentials_url': proofUrl ?? _policeCredentialsController.text.trim(),
-        'status': 'pending',
-      });
-    }
-
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          _selectedRole == 'citizen'
-              ? 'Account created successfully!'
-              : 'Account created. Please wait for verification of your credentials.',
-        ),
-      ),
-    );
-
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => const LoginPage()),
-    );
-  } catch (e) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Signup failed: $e')),
+    try {
+      // 1. Create auth account in Supabase
+      final res = await Supabase.instance.client.auth.signUp(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
       );
+
+      if (res.user == null) throw Exception('Failed to create user');
+
+      final userId = res.user!.id;
+
+      // 2. Always insert into user table
+      final userData = {
+        'id': userId,
+        'email': _emailController.text.trim(),
+        'phone': _phoneController.text.trim(),
+        'role': _selectedRole,
+      };
+
+      if (_selectedRole == 'citizen') {
+        userData['first_name'] = _firstNameController.text.trim().isNotEmpty
+            ? _firstNameController.text.trim()
+            : null;
+        userData['middle_name'] = _middleNameController.text.trim().isNotEmpty
+            ? _middleNameController.text.trim()
+            : null;
+        userData['last_name'] = _lastNameController.text.trim().isNotEmpty
+            ? _lastNameController.text.trim()
+            : null;
+        userData['birthdate'] = _birthdateController.text.trim().isNotEmpty
+            ? _birthdateController.text.trim()
+            : null;
+      }
+
+      await Supabase.instance.client.from('user').insert(userData);
+
+      // 3. Insert into tanod/police if applicable
+      if (_selectedRole == 'tanod') {
+        String? proofUrl;
+        if (_proofFile != null) {
+          final fileBytes = await _proofFile!.readAsBytes();
+          final filePath = 'tanod_${DateTime.now().millisecondsSinceEpoch}.jpg';
+          await Supabase.instance.client.storage
+              .from('credentials_proof')
+              .uploadBinary(filePath, fileBytes);
+          proofUrl = Supabase.instance.client.storage
+              .from('credentials_proof')
+              .getPublicUrl(filePath);
+        }
+
+        await Supabase.instance.client.from('tanod').insert({
+          'user_id': userId,
+          'id_number': _idNumberController.text.trim().isNotEmpty
+              ? _idNumberController.text.trim()
+              : null,
+          'credentials_url':
+              proofUrl ?? _tanodCredentialsController.text.trim(),
+          'status': 'pending',
+        });
+      } else if (_selectedRole == 'police') {
+        String? proofUrl;
+        if (_proofFile != null) {
+          final fileBytes = await _proofFile!.readAsBytes();
+          final filePath =
+              'police_${DateTime.now().millisecondsSinceEpoch}.jpg';
+          await Supabase.instance.client.storage
+              .from('credentials_proof')
+              .uploadBinary(filePath, fileBytes);
+          proofUrl = Supabase.instance.client.storage
+              .from('credentials_proof')
+              .getPublicUrl(filePath);
+        }
+
+        await Supabase.instance.client.from('police').insert({
+          'user_id': userId,
+          'station_name': _stationNameController.text.trim().isNotEmpty
+              ? _stationNameController.text.trim()
+              : null,
+          'credentials_url':
+              proofUrl ?? _policeCredentialsController.text.trim(),
+          'status': 'pending',
+        });
+      }
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _selectedRole == 'citizen'
+                ? 'Account created successfully!'
+                : 'Account created. Please wait for verification of your credentials.',
+          ),
+        ),
+      );
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const LoginPage()),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Signup failed: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
-  } finally {
-    if (mounted) setState(() => _isLoading = false);
   }
-}
-
-
-
-
 
   // Validators
-  String? _validateRequired(String? value) => (value == null || value.isEmpty) ? 'This field is required' : null;
+  String? _validateRequired(String? value) =>
+      (value == null || value.isEmpty) ? 'This field is required' : null;
   String? _validateEmail(String? value) {
     if (value == null || value.isEmpty) return 'Enter an email';
     final regex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
     if (!regex.hasMatch(value)) return 'Enter a valid email format';
     return null;
   }
+
   String? _validatePassword(String? value) {
     if (value == null || value.isEmpty) return 'Enter a password';
     if (value.length < 6) return 'Password must be at least 6 characters';
     return null;
   }
+
   String? _validateConfirmPassword(String? value) {
     if (value == null || value.isEmpty) return 'Confirm your password';
     if (value != _passwordController.text) return 'Passwords do not match';
     return null;
   }
+
   String? _validatePhone(String? value) {
     if (value == null || value.isEmpty) return 'Phone number is required';
     // Remove any spaces or special characters
     String cleanedValue = value.replaceAll(RegExp(r'[^\d]'), '');
     if (cleanedValue.length != 11) return 'Phone number must be 11 digits';
-    if (!cleanedValue.startsWith('09')) return 'Phone number must start with 09';
+    if (!cleanedValue.startsWith('09')) {
+      return 'Phone number must start with 09';
+    }
     return null;
   }
 
@@ -265,7 +271,7 @@ Future<void> _signup() async {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 SizedBox(height: screenHeight * 0.04),
-                
+
                 // Title
                 Text(
                   'Create an\naccount',
@@ -275,7 +281,7 @@ Future<void> _signup() async {
                     color: Colors.black,
                   ),
                 ),
-                
+
                 SizedBox(height: screenHeight * 0.04),
 
                 // Email Field - show for all roles at the top
@@ -290,12 +296,15 @@ Future<void> _signup() async {
                       child: TextFormField(
                         controller: _emailController,
                         decoration: InputDecoration(
-                          prefixIcon: Icon(Icons.person, color: Colors.grey.shade600),
+                          prefixIcon:
+                              Icon(Icons.person, color: Colors.grey.shade600),
                           hintText: 'Email',
                           hintStyle: TextStyle(color: Colors.grey.shade600),
                           border: InputBorder.none,
-                          contentPadding: EdgeInsets.symmetric(vertical: screenHeight * 0.025),
-                          errorStyle: TextStyle(height: 0), // Hide default error text
+                          contentPadding: EdgeInsets.symmetric(
+                              vertical: screenHeight * 0.025),
+                          errorStyle:
+                              TextStyle(height: 0), // Hide default error text
                         ),
                         keyboardType: TextInputType.emailAddress,
                         style: TextStyle(fontSize: screenWidth * 0.04),
@@ -312,7 +321,8 @@ Future<void> _signup() async {
                               padding: EdgeInsets.only(left: 8, top: 4),
                               child: Text(
                                 error,
-                                style: TextStyle(color: Colors.red, fontSize: 12),
+                                style:
+                                    TextStyle(color: Colors.red, fontSize: 12),
                               ),
                             );
                           }
@@ -340,11 +350,13 @@ Future<void> _signup() async {
                           readOnly: true,
                           onTap: _selectDate,
                           decoration: InputDecoration(
-                            prefixIcon: Icon(Icons.calendar_today, color: Colors.grey.shade600),
+                            prefixIcon: Icon(Icons.calendar_today,
+                                color: Colors.grey.shade600),
                             hintText: 'Date of Birth',
                             hintStyle: TextStyle(color: Colors.grey.shade600),
                             border: InputBorder.none,
-                            contentPadding: EdgeInsets.symmetric(vertical: screenHeight * 0.025),
+                            contentPadding: EdgeInsets.symmetric(
+                                vertical: screenHeight * 0.025),
                             errorStyle: TextStyle(height: 0),
                           ),
                           style: TextStyle(fontSize: screenWidth * 0.04),
@@ -354,13 +366,15 @@ Future<void> _signup() async {
                       if (_submitted) ...[
                         Builder(
                           builder: (context) {
-                            final error = _validateRequired(_birthdateController.text);
+                            final error =
+                                _validateRequired(_birthdateController.text);
                             if (error != null) {
                               return Padding(
                                 padding: EdgeInsets.only(left: 8, top: 4),
                                 child: Text(
                                   error,
-                                  style: TextStyle(color: Colors.red, fontSize: 12),
+                                  style: TextStyle(
+                                      color: Colors.red, fontSize: 12),
                                 ),
                               );
                             }
@@ -385,11 +399,13 @@ Future<void> _signup() async {
                       child: TextFormField(
                         controller: _phoneController,
                         decoration: InputDecoration(
-                          prefixIcon: Icon(Icons.phone, color: Colors.grey.shade600),
+                          prefixIcon:
+                              Icon(Icons.phone, color: Colors.grey.shade600),
                           hintText: 'Phone Number',
                           hintStyle: TextStyle(color: Colors.grey.shade600),
                           border: InputBorder.none,
-                          contentPadding: EdgeInsets.symmetric(vertical: screenHeight * 0.025),
+                          contentPadding: EdgeInsets.symmetric(
+                              vertical: screenHeight * 0.025),
                           errorStyle: TextStyle(height: 0),
                         ),
                         keyboardType: TextInputType.phone,
@@ -410,7 +426,8 @@ Future<void> _signup() async {
                               padding: EdgeInsets.only(left: 8, top: 4),
                               child: Text(
                                 error,
-                                style: TextStyle(color: Colors.red, fontSize: 12),
+                                style:
+                                    TextStyle(color: Colors.red, fontSize: 12),
                               ),
                             );
                           }
@@ -436,18 +453,23 @@ Future<void> _signup() async {
                         controller: _passwordController,
                         obscureText: _obscurePassword,
                         decoration: InputDecoration(
-                          prefixIcon: Icon(Icons.lock, color: Colors.grey.shade600),
+                          prefixIcon:
+                              Icon(Icons.lock, color: Colors.grey.shade600),
                           hintText: 'Password',
                           hintStyle: TextStyle(color: Colors.grey.shade600),
                           border: InputBorder.none,
-                          contentPadding: EdgeInsets.symmetric(vertical: screenHeight * 0.025),
+                          contentPadding: EdgeInsets.symmetric(
+                              vertical: screenHeight * 0.025),
                           errorStyle: TextStyle(height: 0),
                           suffixIcon: IconButton(
                             icon: Icon(
-                              _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                              _obscurePassword
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
                               color: Colors.grey.shade600,
                             ),
-                            onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                            onPressed: () => setState(
+                                () => _obscurePassword = !_obscurePassword),
                           ),
                         ),
                         style: TextStyle(fontSize: screenWidth * 0.04),
@@ -457,13 +479,15 @@ Future<void> _signup() async {
                     if (_submitted) ...[
                       Builder(
                         builder: (context) {
-                          final error = _validatePassword(_passwordController.text);
+                          final error =
+                              _validatePassword(_passwordController.text);
                           if (error != null) {
                             return Padding(
                               padding: EdgeInsets.only(left: 8, top: 4),
                               child: Text(
                                 error,
-                                style: TextStyle(color: Colors.red, fontSize: 12),
+                                style:
+                                    TextStyle(color: Colors.red, fontSize: 12),
                               ),
                             );
                           }
@@ -489,18 +513,24 @@ Future<void> _signup() async {
                         controller: _confirmPasswordController,
                         obscureText: _obscureConfirmPassword,
                         decoration: InputDecoration(
-                          prefixIcon: Icon(Icons.lock, color: Colors.grey.shade600),
+                          prefixIcon:
+                              Icon(Icons.lock, color: Colors.grey.shade600),
                           hintText: 'Confirm Password',
                           hintStyle: TextStyle(color: Colors.grey.shade600),
                           border: InputBorder.none,
-                          contentPadding: EdgeInsets.symmetric(vertical: screenHeight * 0.025),
+                          contentPadding: EdgeInsets.symmetric(
+                              vertical: screenHeight * 0.025),
                           errorStyle: TextStyle(height: 0),
                           suffixIcon: IconButton(
                             icon: Icon(
-                              _obscureConfirmPassword ? Icons.visibility_off : Icons.visibility,
+                              _obscureConfirmPassword
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
                               color: Colors.grey.shade600,
                             ),
-                            onPressed: () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
+                            onPressed: () => setState(() =>
+                                _obscureConfirmPassword =
+                                    !_obscureConfirmPassword),
                           ),
                         ),
                         style: TextStyle(fontSize: screenWidth * 0.04),
@@ -510,13 +540,15 @@ Future<void> _signup() async {
                     if (_submitted) ...[
                       Builder(
                         builder: (context) {
-                          final error = _validateConfirmPassword(_confirmPasswordController.text);
+                          final error = _validateConfirmPassword(
+                              _confirmPasswordController.text);
                           if (error != null) {
                             return Padding(
                               padding: EdgeInsets.only(left: 8, top: 4),
                               child: Text(
                                 error,
-                                style: TextStyle(color: Colors.red, fontSize: 12),
+                                style:
+                                    TextStyle(color: Colors.red, fontSize: 12),
                               ),
                             );
                           }
@@ -538,7 +570,8 @@ Future<void> _signup() async {
                   child: DropdownButtonFormField<String>(
                     value: _selectedRole,
                     decoration: InputDecoration(
-                      prefixIcon: Icon(Icons.badge, color: Colors.grey.shade600),
+                      prefixIcon:
+                          Icon(Icons.badge, color: Colors.grey.shade600),
                       border: InputBorder.none,
                       contentPadding: EdgeInsets.symmetric(
                         vertical: screenHeight * 0.025,
@@ -553,12 +586,14 @@ Future<void> _signup() async {
                       ),
                     ),
                     items: const [
-                      DropdownMenuItem(value: 'citizen', child: Text('Citizen')),
+                      DropdownMenuItem(
+                          value: 'citizen', child: Text('Citizen')),
                       DropdownMenuItem(value: 'tanod', child: Text('Tanod')),
                       DropdownMenuItem(value: 'police', child: Text('Police')),
                     ],
                     onChanged: (val) => setState(() => _selectedRole = val),
-                    style: TextStyle(fontSize: screenWidth * 0.04, color: Colors.black),
+                    style: TextStyle(
+                        fontSize: screenWidth * 0.04, color: Colors.black),
                   ),
                 ),
 
@@ -566,23 +601,28 @@ Future<void> _signup() async {
 
                 // Role-specific fields
                 if (_selectedRole == 'citizen') ...[
-                  _buildTextField(_firstNameController, 'First Name', Icons.person_outline, _validateRequired),
+                  _buildTextField(_firstNameController, 'First Name',
+                      Icons.person_outline, _validateRequired),
                   SizedBox(height: screenHeight * 0.02),
-                  _buildTextField(_middleNameController, 'Middle Name', Icons.person_outline, null),
+                  _buildTextField(_middleNameController, 'Middle Name',
+                      Icons.person_outline, null),
                   SizedBox(height: screenHeight * 0.02),
-                  _buildTextField(_lastNameController, 'Last Name', Icons.person_outline, _validateRequired),
+                  _buildTextField(_lastNameController, 'Last Name',
+                      Icons.person_outline, _validateRequired),
                   SizedBox(height: screenHeight * 0.02),
                 ],
 
                 if (_selectedRole == 'tanod') ...[
-                  _buildTextField(_idNumberController, 'ID Number', Icons.badge, _validateRequired),
+                  _buildTextField(_idNumberController, 'ID Number', Icons.badge,
+                      _validateRequired),
                   SizedBox(height: screenHeight * 0.02),
                   _buildUploadButton('Upload Credentials Proof'),
                   SizedBox(height: screenHeight * 0.02),
                 ],
 
                 if (_selectedRole == 'police') ...[
-                  _buildTextField(_stationNameController, 'Station Name', Icons.location_city, _validateRequired),
+                  _buildTextField(_stationNameController, 'Station Name',
+                      Icons.location_city, _validateRequired),
                   SizedBox(height: screenHeight * 0.02),
                   _buildUploadButton('Upload Credentials Proof'),
                   SizedBox(height: screenHeight * 0.02),
@@ -594,16 +634,22 @@ Future<void> _signup() async {
                   child: RichText(
                     text: TextSpan(
                       text: 'By clicking the ',
-                      style: TextStyle(color: Colors.grey.shade600, fontSize: screenWidth * 0.035),
+                      style: TextStyle(
+                          color: Colors.grey.shade600,
+                          fontSize: screenWidth * 0.035),
                       children: [
                         TextSpan(
                           text: 'Create Account',
-                          style: TextStyle(color: Color(0xFFF73D5C), fontWeight: FontWeight.w600),
+                          style: TextStyle(
+                              color: Color(0xFFF73D5C),
+                              fontWeight: FontWeight.w600),
                         ),
                         TextSpan(text: ' button, you agree\nto the '),
                         TextSpan(
                           text: 'Terms and Conditions',
-                          style: TextStyle(color: Color(0xFFF73D5C), fontWeight: FontWeight.w600),
+                          style: TextStyle(
+                              color: Color(0xFFF73D5C),
+                              fontWeight: FontWeight.w600),
                         ),
                       ],
                     ),
@@ -618,7 +664,8 @@ Future<void> _signup() async {
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Color(0xFFF73D5C),
-                      padding: EdgeInsets.symmetric(vertical: screenHeight * 0.02),
+                      padding:
+                          EdgeInsets.symmetric(vertical: screenHeight * 0.02),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(30),
                       ),
@@ -626,7 +673,8 @@ Future<void> _signup() async {
                     ),
                     onPressed: _isLoading ? null : _signup,
                     child: _isLoading
-                        ? CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
+                        ? CircularProgressIndicator(
+                            color: Colors.white, strokeWidth: 2)
                         : Text(
                             'Create Account',
                             style: TextStyle(
@@ -643,7 +691,9 @@ Future<void> _signup() async {
                 // OR Continue with
                 Row(
                   children: [
-                    Expanded(child: Divider(thickness: 1, color: Colors.grey.shade300)),
+                    Expanded(
+                        child:
+                            Divider(thickness: 1, color: Colors.grey.shade300)),
                     Padding(
                       padding: EdgeInsets.symmetric(horizontal: 12),
                       child: Text(
@@ -654,7 +704,9 @@ Future<void> _signup() async {
                         ),
                       ),
                     ),
-                    Expanded(child: Divider(thickness: 1, color: Colors.grey.shade300)),
+                    Expanded(
+                        child:
+                            Divider(thickness: 1, color: Colors.grey.shade300)),
                   ],
                 ),
 
@@ -711,10 +763,11 @@ Future<void> _signup() async {
     );
   }
 
-  Widget _buildTextField(TextEditingController controller, String hint, IconData icon, String? Function(String?)? validator) {
+  Widget _buildTextField(TextEditingController controller, String hint,
+      IconData icon, String? Function(String?)? validator) {
     final screenWidth = MediaQuery.of(context).size.width;
     final screenHeight = MediaQuery.of(context).size.height;
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -730,7 +783,8 @@ Future<void> _signup() async {
               hintText: hint,
               hintStyle: TextStyle(color: Colors.grey.shade600),
               border: InputBorder.none,
-              contentPadding: EdgeInsets.symmetric(vertical: screenHeight * 0.025),
+              contentPadding:
+                  EdgeInsets.symmetric(vertical: screenHeight * 0.025),
               errorStyle: TextStyle(height: 0),
             ),
             style: TextStyle(fontSize: screenWidth * 0.04),
@@ -760,7 +814,7 @@ Future<void> _signup() async {
 
   Widget _buildUploadButton(String text) {
     final screenWidth = MediaQuery.of(context).size.width;
-    
+
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
@@ -779,7 +833,8 @@ Future<void> _signup() async {
               Text(
                 _proofFile == null ? text : 'Document Selected',
                 style: TextStyle(
-                  color: _proofFile == null ? Colors.grey.shade600 : Colors.black,
+                  color:
+                      _proofFile == null ? Colors.grey.shade600 : Colors.black,
                   fontSize: screenWidth * 0.04,
                 ),
               ),
@@ -792,7 +847,7 @@ Future<void> _signup() async {
 
   Widget _buildSocialButton(IconData icon) {
     final screenWidth = MediaQuery.of(context).size.width;
-    
+
     return Container(
       width: screenWidth * 0.12,
       height: screenWidth * 0.12,

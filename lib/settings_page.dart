@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'change_password_page.dart';
 import 'admin_management_page.dart';
 import 'login_page.dart';
+import 'panic_button_settings_page.dart'; // Add this import
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -31,7 +32,7 @@ class _SettingsPageState extends State<SettingsPage> {
             .select('role')
             .eq('id', userId)
             .maybeSingle();
-        
+
         if (userData != null && userData['role'] != null) {
           setState(() {
             userRole = userData['role'];
@@ -43,7 +44,7 @@ class _SettingsPageState extends State<SettingsPage> {
               .select('id')
               .eq('id', userId)
               .maybeSingle();
-          
+
           if (adminData != null) {
             setState(() {
               userRole = 'admin';
@@ -61,22 +62,23 @@ class _SettingsPageState extends State<SettingsPage> {
     final screenSize = MediaQuery.of(context).size;
     final screenWidth = screenSize.width;
     final screenHeight = screenSize.height;
-    
+
     return Scaffold(
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: Colors.black, size: screenWidth * 0.06),
+          icon: Icon(Icons.arrow_back,
+              color: Colors.black, size: screenWidth * 0.06),
           onPressed: () => Navigator.of(context).pop(),
         ),
         centerTitle: true,
-        title: Text('Settings', style: TextStyle(
-          color: Colors.black, 
-          fontWeight: FontWeight.w500, 
-          fontSize: screenWidth * 0.045
-        )),
+        title: Text('Settings',
+            style: TextStyle(
+                color: Colors.black,
+                fontWeight: FontWeight.w500,
+                fontSize: screenWidth * 0.045)),
       ),
       body: SingleChildScrollView(
         padding: EdgeInsets.all(screenWidth * 0.04),
@@ -84,13 +86,13 @@ class _SettingsPageState extends State<SettingsPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Account Section
-            Text('Account', style: TextStyle(
-              fontWeight: FontWeight.w600, 
-              fontSize: screenWidth * 0.04, 
-              color: Colors.black
-            )),
+            Text('Account',
+                style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: screenWidth * 0.04,
+                    color: Colors.black)),
             SizedBox(height: screenHeight * 0.015),
-            
+
             _buildSettingsItem(
               icon: Icons.person_outline,
               title: 'Change Password',
@@ -102,17 +104,16 @@ class _SettingsPageState extends State<SettingsPage> {
                 );
               },
             ),
-            
+
             // Admin Section (only show for admin users)
             if (userRole == 'admin') ...[
               SizedBox(height: screenHeight * 0.025),
-              Text('Administration', style: TextStyle(
-                fontWeight: FontWeight.w600, 
-                fontSize: screenWidth * 0.04, 
-                color: Colors.black
-              )),
+              Text('Administration',
+                  style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: screenWidth * 0.04,
+                      color: Colors.black)),
               SizedBox(height: screenHeight * 0.015),
-              
               _buildSettingsItem(
                 icon: Icons.manage_accounts,
                 title: 'Admin Management',
@@ -120,41 +121,46 @@ class _SettingsPageState extends State<SettingsPage> {
                 onTap: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (_) => const AdminManagementPage()),
+                    MaterialPageRoute(
+                        builder: (_) => const AdminManagementPage()),
                   );
                 },
               ),
             ],
-            
+
             SizedBox(height: screenHeight * 0.025),
-            
+
             // Emergency Section
-            Text('Emergency', style: TextStyle(
-              fontWeight: FontWeight.w600, 
-              fontSize: screenWidth * 0.04, 
-              color: Colors.black
-            )),
+            Text('Emergency',
+                style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: screenWidth * 0.04,
+                    color: Colors.black)),
             SizedBox(height: screenHeight * 0.015),
-            
+
             _buildSettingsItem(
               icon: Icons.bluetooth,
               title: 'Panic Button',
-              subtitle: 'Manage panic button connection',
+              subtitle: 'Manage panic button connection and settings',
               onTap: () {
-                // Navigate to panic button settings
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => const PanicButtonSettingsPage()),
+                );
               },
             ),
-            
+
             SizedBox(height: screenHeight * 0.025),
-            
+
             // App Section
-            Text('App', style: TextStyle(
-              fontWeight: FontWeight.w600, 
-              fontSize: screenWidth * 0.04, 
-              color: Colors.black
-            )),
+            Text('App',
+                style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: screenWidth * 0.04,
+                    color: Colors.black)),
             SizedBox(height: screenHeight * 0.015),
-            
+
             _buildSettingsItem(
               icon: Icons.help_outline,
               title: 'Help & Support',
@@ -163,18 +169,18 @@ class _SettingsPageState extends State<SettingsPage> {
                 // Navigate to help page
               },
             ),
-            
+
             _buildSettingsItem(
               icon: Icons.info_outline,
               title: 'About',
               subtitle: 'App version and information',
               onTap: () {
-                // Show about dialog
+                _showAboutDialog(context);
               },
             ),
-            
+
             SizedBox(height: screenHeight * 0.025),
-            
+
             // Logout Button
             Container(
               width: double.infinity,
@@ -217,9 +223,10 @@ class _SettingsPageState extends State<SettingsPage> {
     required VoidCallback onTap,
   }) {
     final screenWidth = MediaQuery.of(context).size.width;
-    
+
     return Container(
-      margin: EdgeInsets.only(bottom: MediaQuery.of(context).size.height * 0.01),
+      margin:
+          EdgeInsets.only(bottom: MediaQuery.of(context).size.height * 0.01),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -232,7 +239,8 @@ class _SettingsPageState extends State<SettingsPage> {
         ],
       ),
       child: ListTile(
-        leading: Icon(icon, color: const Color(0xFFF73D5C), size: screenWidth * 0.055),
+        leading: Icon(icon,
+            color: const Color(0xFFF73D5C), size: screenWidth * 0.055),
         title: Text(
           title,
           style: TextStyle(
@@ -247,39 +255,75 @@ class _SettingsPageState extends State<SettingsPage> {
             fontSize: screenWidth * 0.03,
           ),
         ),
-        trailing: Icon(Icons.arrow_forward_ios, color: Colors.grey, size: screenWidth * 0.035),
+        trailing: Icon(Icons.arrow_forward_ios,
+            color: Colors.grey, size: screenWidth * 0.035),
         onTap: onTap,
         contentPadding: EdgeInsets.symmetric(
-          horizontal: screenWidth * 0.035, 
-          vertical: MediaQuery.of(context).size.height * 0.008
-        ),
+            horizontal: screenWidth * 0.035,
+            vertical: MediaQuery.of(context).size.height * 0.008),
       ),
+    );
+  }
+
+  void _showAboutDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('About SOSit'),
+          content: const Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('SOSit Panic Button App'),
+              SizedBox(height: 8),
+              Text('Version: 1.0.0'),
+              SizedBox(height: 8),
+              Text(
+                  'An emergency response system with ESP32 panic button integration.'),
+              SizedBox(height: 16),
+              Text('Features:'),
+              Text('• Bluetooth panic button connection'),
+              Text('• Emergency contact alerts'),
+              Text('• GPS location sharing'),
+              Text('• Real-time emergency response'),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
     );
   }
 
   Future<bool> _showLogoutConfirmationDialog() async {
     return await showDialog<bool>(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Logout'),
-          content: const Text('Are you sure you want to logout?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              style: TextButton.styleFrom(
-                foregroundColor: Colors.red,
-              ),
-              child: const Text('Logout'),
-            ),
-          ],
-        );
-      },
-    ) ?? false;
+          context: context,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              title: const Text('Logout'),
+              content: const Text('Are you sure you want to logout?'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.red,
+                  ),
+                  child: const Text('Logout'),
+                ),
+              ],
+            );
+          },
+        ) ??
+        false;
   }
 
   Future<void> _logout() async {
@@ -300,7 +344,3 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 }
-  
-
-
-
