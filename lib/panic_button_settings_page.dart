@@ -525,27 +525,24 @@ class _PanicButtonSettingsPageState extends State<PanicButtonSettingsPage> {
               ),
             ),
             SizedBox(height: screenHeight * 0.01),
-            ...bleService.foundDevices
-                .map((device) => ListTile(
-                      leading:
-                          Icon(Icons.devices, color: const Color(0xFFF73D5C)),
-                      title: Text(
-                        device.platformName.isNotEmpty
-                            ? device.platformName
-                            : 'Unknown Device',
-                        style: TextStyle(fontSize: screenWidth * 0.032),
-                      ),
-                      subtitle: Text(
-                        device.remoteId.toString(),
-                        style: TextStyle(fontSize: screenWidth * 0.028),
-                      ),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.connect_without_contact),
-                        onPressed: () => bleService.connectToDevice(device),
-                      ),
-                      contentPadding: EdgeInsets.zero,
-                    ))
-                .toList(),
+            ...bleService.foundDevices.map((device) => ListTile(
+                  leading: Icon(Icons.devices, color: const Color(0xFFF73D5C)),
+                  title: Text(
+                    device.platformName.isNotEmpty
+                        ? device.platformName
+                        : 'Unknown Device',
+                    style: TextStyle(fontSize: screenWidth * 0.032),
+                  ),
+                  subtitle: Text(
+                    device.remoteId.toString(),
+                    style: TextStyle(fontSize: screenWidth * 0.028),
+                  ),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.connect_without_contact),
+                    onPressed: () => bleService.connectToDevice(device),
+                  ),
+                  contentPadding: EdgeInsets.zero,
+                )),
           ],
         ],
       ),
