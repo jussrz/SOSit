@@ -1,4 +1,4 @@
-// lib/services/ble_service.dart - Enhanced Version
+// lib/services/ble_service.dart - Debug Version for ESP32-S3
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -8,7 +8,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class BLEService extends ChangeNotifier {
-  // ESP32 Constants - Must match your ESP32 code
+  // ESP32 Constants - Made more flexible for detection
   static const String SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
   static const String CHARACTERISTIC_UUID =
       "beb5483e-36e1-4688-b7f5-ea07361b26a8";
@@ -39,6 +39,10 @@ class BLEService extends ChangeNotifier {
   String _deviceId = "";
   int _signalStrength = 0;
 
+  // Debug information
+  final List<String> _debugLog = [];
+  final List<Map<String, dynamic>> _scannedDevices = [];
+
   // Enhanced getters
   bool get isScanning => _isScanning;
   bool get isConnected => _isConnected;
@@ -55,13 +59,24 @@ class BLEService extends ChangeNotifier {
   String get deviceId => _deviceId;
   int get signalStrength => _signalStrength;
   bool get autoReconnect => _autoReconnect;
+  List<String> get debugLog => _debugLog;
+  List<Map<String, dynamic>> get scannedDevices => _scannedDevices;
 
   BLEService() {
     _initialize();
   }
 
+  void _addDebugLog(String message) {
+    _debugLog.add("${DateTime.now().toString().substring(11, 19)}: $message");
+    if (_debugLog.length > 50) {
+      _debugLog.removeAt(0);
+    }
+    debugPrint('BLE DEBUG: $message');
+    notifyListeners();
+  }
+
   Future<void> _initialize() async {
-    debugPrint('🔵 Initializing Enhanced BLE Service...');
+    _addDebugLog('Initializing Enhanced BLE Service...');
 
     // Check initial Bluetooth state
     await _checkBluetoothState();
@@ -82,7 +97,7 @@ class BLEService extends ChangeNotifier {
       _startAutoScanning();
     }
 
-    debugPrint('🔵 Enhanced BLE Service initialized');
+    _addDebugLog('Enhanced BLE Service initialized');
   }
 
   Future<void> _checkBluetoothState() async {
@@ -90,7 +105,7 @@ class BLEService extends ChangeNotifier {
       BluetoothAdapterState state = await FlutterBluePlus.adapterState.first;
       _updateBluetoothState(state);
     } catch (e) {
-      debugPrint('❌ Error checking Bluetooth state: $e');
+      _addDebugLog('Error checking Bluetooth state: $e');
       _isBluetoothOn = false;
       _updateConnectionStatus("Bluetooth Error");
     }
@@ -99,21 +114,25 @@ class BLEService extends ChangeNotifier {
   Future<void> _checkPairedDevices() async {
     try {
       if (Platform.isAndroid) {
-        // On Android, we can check bonded devices
         List<BluetoothDevice> bondedDevices =
             await FlutterBluePlus.bondedDevices;
+        _addDebugLog('Found ${bondedDevices.length} bonded devices');
 
         for (var device in bondedDevices) {
-          if (device.platformName == DEVICE_NAME) {
+          _addDebugLog(
+              'Bonded device: ${device.platformName} (${device.remoteId})');
+          if (device.platformName.contains("SOSit") ||
+              device.platformName.contains("ESP32") ||
+              device.platformName == DEVICE_NAME) {
             _isPaired = true;
             _deviceId = device.remoteId.toString();
-            debugPrint('📱 Found paired SOSit device: ${device.platformName}');
-            break;
+            _addDebugLog(
+                'Found potential panic button: ${device.platformName}');
           }
         }
       }
     } catch (e) {
-      debugPrint('❌ Error checking paired devices: $e');
+      _addDebugLog('Error checking paired devices: $e');
     }
     notifyListeners();
   }
@@ -122,7 +141,7 @@ class BLEService extends ChangeNotifier {
     bool wasOn = _isBluetoothOn;
     _isBluetoothOn = state == BluetoothAdapterState.on;
 
-    debugPrint('🔵 Bluetooth state: $state');
+    _addDebugLog('Bluetooth state: $state');
 
     if (!_isBluetoothOn) {
       _updateConnectionStatus("Bluetooth is OFF");
@@ -133,7 +152,6 @@ class BLEService extends ChangeNotifier {
       _characteristic = null;
       _stopTimers();
     } else if (!wasOn && _isBluetoothOn) {
-      // Bluetooth just turned on
       _updateConnectionStatus("Bluetooth ON - Initializing...");
       _checkPairedDevices().then((_) {
         if (_isPaired) {
@@ -150,14 +168,14 @@ class BLEService extends ChangeNotifier {
 
   void _updateConnectionStatus(String status) {
     _connectionStatus = status;
-    debugPrint('📱 Status: $status');
+    _addDebugLog('Status: $status');
     notifyListeners();
   }
 
   Future<void> _startAutoScanning() async {
     if (!_isBluetoothOn || _isConnected || _isScanning) return;
 
-    debugPrint('🔍 Starting auto-scan for panic button...');
+    _addDebugLog('Starting auto-scan for panic button...');
     _updateConnectionStatus("Searching for Panic Button...");
 
     await _requestPermissions();
@@ -173,6 +191,8 @@ class BLEService extends ChangeNotifier {
         Permission.locationWhenInUse,
       ].request();
 
+      _addDebugLog('Permission statuses: $statuses');
+
       bool allGranted = statuses.values.every((status) =>
           status == PermissionStatus.granted ||
           status == PermissionStatus.limited);
@@ -185,54 +205,61 @@ class BLEService extends ChangeNotifier {
     return true;
   }
 
-  Future<void> startScan({int timeoutSeconds = 15}) async {
+  Future<void> startScan({int timeoutSeconds = 20}) async {
     if (!_isBluetoothOn) {
-      debugPrint('❌ Cannot scan - Bluetooth is off');
+      _addDebugLog('Cannot scan - Bluetooth is off');
       _updateConnectionStatus("Bluetooth is OFF");
       return;
     }
 
     if (_isScanning) {
-      debugPrint('⚠️ Already scanning');
+      _addDebugLog('Already scanning');
       return;
     }
 
     try {
       _isScanning = true;
       _foundDevices.clear();
+      _scannedDevices.clear();
       _updateConnectionStatus("Scanning for devices...");
       notifyListeners();
 
-      debugPrint('🔍 Starting BLE scan...');
+      _addDebugLog('Starting BLE scan...');
 
-      // Start scanning with and without service filter
+      // Start broad scan to detect ANY ESP32 device
       await FlutterBluePlus.startScan(
         timeout: Duration(seconds: timeoutSeconds),
-        // Try without service filter first for broader detection
+        // No service filter to detect all devices
       );
+
+      // Also try to connect to bonded devices
+      await _checkBondedDevicesForConnection();
 
       // Listen for scan results
       FlutterBluePlus.scanResults.listen((results) {
         for (ScanResult result in results) {
-          debugPrint(
-              '📡 Found device: ${result.device.platformName} - ${result.device.remoteId}');
+          String deviceName = result.device.platformName.isNotEmpty
+              ? result.device.platformName
+              : result.advertisementData.localName;
 
-          // Check if it's our panic button by name or service
-          bool isTargetDevice = false;
+          _addDebugLog(
+              'Found device: $deviceName (${result.device.remoteId}) RSSI: ${result.rssi}');
 
-          if (result.device.platformName == DEVICE_NAME ||
-              result.advertisementData.localName == DEVICE_NAME) {
-            isTargetDevice = true;
-          }
+          // Store all scanned devices for debugging
+          _scannedDevices.add({
+            'name': deviceName,
+            'id': result.device.remoteId.toString(),
+            'rssi': result.rssi,
+            'services': result.advertisementData.serviceUuids
+                .map((e) => e.toString())
+                .toList(),
+          });
 
-          // Also check for our service UUID in advertised services
-          if (result.advertisementData.serviceUuids
-              .contains(Guid(SERVICE_UUID))) {
-            isTargetDevice = true;
-          }
+          // Check if it's our panic button by various criteria
+          bool isTargetDevice = _isTargetDevice(deviceName, result);
 
           if (isTargetDevice) {
-            debugPrint('🎯 Found panic button: ${result.device.platformName}');
+            _addDebugLog('Target device identified: $deviceName');
 
             if (!_foundDevices
                 .any((d) => d.remoteId == result.device.remoteId)) {
@@ -240,7 +267,7 @@ class BLEService extends ChangeNotifier {
               _signalStrength = result.rssi;
               _updateConnectionStatus("Panic Button Found - Connecting...");
 
-              // Auto-connect to the panic button
+              // Auto-connect to the first found device
               connectToDevice(result.device);
             }
           }
@@ -252,9 +279,11 @@ class BLEService extends ChangeNotifier {
       Timer(Duration(seconds: timeoutSeconds), () {
         if (_isScanning) {
           stopScan();
+          _addDebugLog(
+              'Scan completed. Found ${_foundDevices.length} target devices, ${_scannedDevices.length} total devices');
+
           if (!_isConnected && _foundDevices.isEmpty) {
             _updateConnectionStatus("Panic Button Not Found");
-            // Retry scanning after a delay if auto-reconnect is enabled
             if (_autoReconnect) {
               Timer(const Duration(seconds: 10), () => _startAutoScanning());
             }
@@ -262,11 +291,100 @@ class BLEService extends ChangeNotifier {
         }
       });
     } catch (e) {
-      debugPrint('❌ Scan error: $e');
+      _addDebugLog('Scan error: $e');
       _isScanning = false;
       _updateConnectionStatus("Scan Error: ${e.toString()}");
       notifyListeners();
     }
+  }
+
+  Future<void> _checkBondedDevicesForConnection() async {
+    if (Platform.isAndroid) {
+      try {
+        List<BluetoothDevice> bondedDevices =
+            await FlutterBluePlus.bondedDevices;
+        _addDebugLog(
+            'Checking ${bondedDevices.length} bonded devices for ESP32...');
+
+        for (var device in bondedDevices) {
+          String deviceName = device.platformName;
+          _addDebugLog('Bonded device: $deviceName (${device.remoteId})');
+
+          if (_isTargetDevice(deviceName, null)) {
+            _addDebugLog('Found bonded ESP32 device: $deviceName');
+
+            // Add to found devices and try to connect
+            if (!_foundDevices.any((d) => d.remoteId == device.remoteId)) {
+              _foundDevices.add(device);
+              _updateConnectionStatus(
+                  "Bonded Panic Button Found - Connecting...");
+
+              // Try to connect to bonded device
+              connectToDevice(device);
+              return; // Connect to first found bonded device
+            }
+          }
+        }
+      } catch (e) {
+        _addDebugLog('Error checking bonded devices: $e');
+      }
+    }
+  }
+
+  bool _isTargetDevice(String deviceName, ScanResult? result) {
+    // Check by exact name
+    if (deviceName == DEVICE_NAME) {
+      _addDebugLog('Found device by exact name match');
+      return true;
+    }
+
+    // Check if it's any ESP32 device
+    if (deviceName.toUpperCase().contains('ESP32')) {
+      _addDebugLog('Found ESP32 device: $deviceName');
+      return true;
+    }
+
+    // Check if it contains "SOSit"
+    if (deviceName.toUpperCase().contains('SOSIT')) {
+      _addDebugLog('Found SOSit device: $deviceName');
+      return true;
+    }
+
+    // Check for ESP32-S3 specific patterns
+    if (deviceName.toUpperCase().contains('ESP32-S3') ||
+        deviceName.toUpperCase().contains('ESP32S3')) {
+      _addDebugLog('Found ESP32-S3 device: $deviceName');
+      return true;
+    }
+
+    // Check if device name is empty but has our service UUID
+    if (result != null &&
+        result.advertisementData.serviceUuids.any((uuid) => uuid
+            .toString()
+            .toLowerCase()
+            .contains(SERVICE_UUID.toLowerCase()))) {
+      _addDebugLog('Found device with our service UUID');
+      return true;
+    }
+
+    // Check for common ESP32 default names
+    List<String> esp32Names = [
+      'ESP32',
+      'ESP_',
+      'ESPRESSIF',
+      'ESP32_',
+      'ESP32-',
+      'ARDUINO',
+    ];
+
+    for (String name in esp32Names) {
+      if (deviceName.toUpperCase().contains(name)) {
+        _addDebugLog('Found ESP32-like device: $deviceName');
+        return true;
+      }
+    }
+
+    return false;
   }
 
   Future<void> stopScan() async {
@@ -275,38 +393,39 @@ class BLEService extends ChangeNotifier {
     try {
       await FlutterBluePlus.stopScan();
       _isScanning = false;
-      debugPrint('🛑 Scan stopped');
+      _addDebugLog('Scan stopped');
       notifyListeners();
     } catch (e) {
-      debugPrint('❌ Error stopping scan: $e');
+      _addDebugLog('Error stopping scan: $e');
     }
   }
 
   Future<void> connectToDevice(BluetoothDevice device) async {
     if (_isConnected || _isConnecting) {
-      debugPrint('⚠️ Already connected or connecting to a device');
+      _addDebugLog('Already connected or connecting to a device');
       return;
     }
 
     try {
       _isConnecting = true;
-      debugPrint('🔗 Connecting to: ${device.platformName}');
-      _updateConnectionStatus("Connecting to Panic Button...");
+      _addDebugLog(
+          'Connecting to: ${device.platformName} (${device.remoteId})');
+      _updateConnectionStatus("Connecting to ${device.platformName}...");
 
-      // Stop scanning first
       await stopScan();
 
-      // Connect to the device with retries
+      // Connect with multiple attempts
       int maxRetries = 3;
       bool connected = false;
 
       for (int attempt = 1; attempt <= maxRetries && !connected; attempt++) {
         try {
-          debugPrint('🔗 Connection attempt $attempt/$maxRetries');
+          _addDebugLog('Connection attempt $attempt/$maxRetries');
           await device.connect(timeout: const Duration(seconds: 15));
           connected = true;
+          _addDebugLog('Connection successful!');
         } catch (e) {
-          debugPrint('❌ Connection attempt $attempt failed: $e');
+          _addDebugLog('Connection attempt $attempt failed: $e');
           if (attempt < maxRetries) {
             await Future.delayed(const Duration(seconds: 2));
           }
@@ -318,35 +437,63 @@ class BLEService extends ChangeNotifier {
       }
 
       // Discover services
+      _addDebugLog('Discovering services...');
       List<BluetoothService> services = await device.discoverServices();
-      debugPrint('🔍 Discovered ${services.length} services');
+      _addDebugLog('Discovered ${services.length} services');
 
-      // Find our service and characteristic
-      BluetoothService? targetService;
+      // Log all services for debugging
       for (var service in services) {
-        debugPrint('📋 Service: ${service.uuid}');
-        if (service.uuid == Guid(SERVICE_UUID)) {
-          targetService = service;
-          break;
+        _addDebugLog('Service: ${service.uuid}');
+        for (var char in service.characteristics) {
+          _addDebugLog('  Characteristic: ${char.uuid}');
         }
       }
 
-      if (targetService == null) {
-        throw Exception(
-            'ESP32 service not found. Make sure your ESP32 is running the correct firmware.');
-      }
-
+      // Try to find our service, but also look for any writable characteristic
+      BluetoothService? targetService;
       BluetoothCharacteristic? targetCharacteristic;
-      for (var characteristic in targetService.characteristics) {
-        debugPrint('📝 Characteristic: ${characteristic.uuid}');
-        if (characteristic.uuid == Guid(CHARACTERISTIC_UUID)) {
-          targetCharacteristic = characteristic;
+
+      // First, try to find our specific service
+      for (var service in services) {
+        if (service.uuid
+            .toString()
+            .toLowerCase()
+            .contains(SERVICE_UUID.toLowerCase())) {
+          targetService = service;
+          _addDebugLog('Found our target service');
           break;
         }
       }
 
-      if (targetCharacteristic == null) {
-        throw Exception('ESP32 characteristic not found');
+      // If we found our service, look for our characteristic
+      if (targetService != null) {
+        for (var characteristic in targetService.characteristics) {
+          if (characteristic.uuid
+              .toString()
+              .toLowerCase()
+              .contains(CHARACTERISTIC_UUID.toLowerCase())) {
+            targetCharacteristic = characteristic;
+            _addDebugLog('Found our target characteristic');
+            break;
+          }
+        }
+      } else {
+        // If we can't find our specific service, look for any service with writable characteristics
+        _addDebugLog(
+            'Target service not found, looking for any writable characteristic...');
+        for (var service in services) {
+          for (var char in service.characteristics) {
+            if (char.properties.write ||
+                char.properties.writeWithoutResponse ||
+                char.properties.notify) {
+              targetService = service;
+              targetCharacteristic = char;
+              _addDebugLog('Found writable characteristic: ${char.uuid}');
+              break;
+            }
+          }
+          if (targetCharacteristic != null) break;
+        }
       }
 
       // Set up the connection
@@ -356,9 +503,8 @@ class BLEService extends ChangeNotifier {
       _isConnecting = false;
       _isPaired = true;
       _deviceId = device.remoteId.toString();
-      _updateConnectionStatus("Panic Button Connected");
+      _updateConnectionStatus("Connected to ${device.platformName}");
 
-      // Save device for reconnection
       await _saveConnectedDevice(device);
 
       // Listen for connection state changes
@@ -366,34 +512,47 @@ class BLEService extends ChangeNotifier {
         _handleConnectionStateChange(state);
       });
 
-      // Enable notifications to receive data from ESP32
-      await _characteristic!.setNotifyValue(true);
+      // Try to enable notifications if possible
+      if (targetCharacteristic != null &&
+          targetCharacteristic.properties.notify) {
+        try {
+          await targetCharacteristic.setNotifyValue(true);
+          _addDebugLog('Notifications enabled');
 
-      // Listen for incoming data
-      _characteristicSubscription = _characteristic!.lastValueStream.listen(
-        _handleIncomingData,
-        onError: (error) {
-          debugPrint('❌ Characteristic error: $error');
-        },
-      );
+          _characteristicSubscription =
+              targetCharacteristic.lastValueStream.listen(
+            _handleIncomingData,
+            onError: (error) {
+              _addDebugLog('Characteristic error: $error');
+            },
+          );
+        } catch (e) {
+          _addDebugLog('Could not enable notifications: $e');
+        }
+      }
 
-      // Send initial status request
-      await sendMessage("STATUS");
+      // Try to send initial status request if we can write
+      if (targetCharacteristic != null &&
+          (targetCharacteristic.properties.write ||
+              targetCharacteristic.properties.writeWithoutResponse)) {
+        try {
+          await sendMessage("STATUS");
+        } catch (e) {
+          _addDebugLog('Could not send initial message: $e');
+        }
+      }
 
-      // Start heartbeat
       _startHeartbeat();
-
-      debugPrint('✅ Successfully connected to panic button');
+      _addDebugLog('Successfully connected to panic button');
       notifyListeners();
     } catch (e) {
-      debugPrint('❌ Connection failed: $e');
+      _addDebugLog('Connection failed: $e');
       _isConnected = false;
       _isConnecting = false;
       _connectedDevice = null;
       _characteristic = null;
       _updateConnectionStatus("Connection Failed: ${e.toString()}");
 
-      // Retry connection after a delay
       if (_autoReconnect) {
         Timer(const Duration(seconds: 5), () => _startAutoScanning());
       }
@@ -403,7 +562,7 @@ class BLEService extends ChangeNotifier {
   }
 
   void _handleConnectionStateChange(BluetoothConnectionState state) {
-    debugPrint('🔗 Connection state changed: $state');
+    _addDebugLog('Connection state changed: $state');
 
     if (state == BluetoothConnectionState.disconnected) {
       _isConnected = false;
@@ -413,7 +572,6 @@ class BLEService extends ChangeNotifier {
       _updateConnectionStatus("Panic Button Disconnected");
       _stopTimers();
 
-      // Auto-reconnect if enabled
       if (_autoReconnect && _isBluetoothOn) {
         Timer(const Duration(seconds: 3), () => _startAutoScanning());
       }
@@ -425,32 +583,42 @@ class BLEService extends ChangeNotifier {
   void _handleIncomingData(List<int> data) {
     try {
       String message = utf8.decode(data);
-      debugPrint('📨 Received: $message');
+      _addDebugLog('Received: $message');
       _lastHeartbeat = DateTime.now();
 
       // Parse different message types
       if (message.startsWith('STATE:')) {
         _deviceState = message.substring(6);
       } else if (message.startsWith('{') && message.contains('ALERT')) {
-        // JSON alert message
         Map<String, dynamic> alertData = json.decode(message);
         _handleAlert(alertData);
       } else if (message.startsWith('{') && message.contains('BATTERY')) {
-        // JSON battery message
         Map<String, dynamic> batteryData = json.decode(message);
         _batteryLevel = batteryData['value'] ?? _batteryLevel;
       } else if (message == 'BTN_PRESS') {
-        debugPrint('🚨 Button pressed!');
+        _addDebugLog('Button pressed detected!');
+        // Simulate an alert for testing
+        _simulateButtonAlert('REGULAR');
       } else if (message == 'BTN_RELEASE') {
-        debugPrint('✋ Button released');
+        _addDebugLog('Button released');
       } else if (message == 'PONG') {
-        debugPrint('🏓 Heartbeat response received');
+        _addDebugLog('Heartbeat response received');
       }
 
       notifyListeners();
     } catch (e) {
-      debugPrint('❌ Error handling incoming data: $e');
+      _addDebugLog('Error handling incoming data: $e');
     }
+  }
+
+  void _simulateButtonAlert(String alertType) {
+    Map<String, dynamic> alertData = {
+      'type': 'ALERT',
+      'level': alertType,
+      'timestamp': DateTime.now().millisecondsSinceEpoch,
+      'battery': _batteryLevel,
+    };
+    _handleAlert(alertData);
   }
 
   void _handleAlert(Map<String, dynamic> alertData) {
@@ -461,33 +629,30 @@ class BLEService extends ChangeNotifier {
     _lastAlert = '$alertType at ${DateTime.now().toString()}';
     _batteryLevel = battery;
 
-    debugPrint('🚨 ALERT: $alertType (Battery: $battery%)');
+    _addDebugLog('ALERT: $alertType (Battery: $battery%)');
 
-    // Send acknowledgment back to ESP32
+    // Send acknowledgment back if possible
     sendMessage("ACK");
 
-    // Trigger emergency response based on alert type
-    _triggerEmergencyResponse(alertType, alertData);
-  }
-
-  void _triggerEmergencyResponse(
-      String alertType, Map<String, dynamic> alertData) {
-    debugPrint('🚨 Emergency Response: $alertType');
-    // This will be handled by the emergency service through the main.dart handler
+    notifyListeners();
   }
 
   Future<void> sendMessage(String message) async {
     if (!_isConnected || _characteristic == null) {
-      debugPrint('❌ Cannot send message - not connected');
+      _addDebugLog('Cannot send message - not connected');
       return;
     }
 
     try {
       List<int> bytes = utf8.encode(message);
-      await _characteristic!.write(bytes);
-      debugPrint('📤 Sent: $message');
+      if (_characteristic!.properties.write) {
+        await _characteristic!.write(bytes);
+      } else if (_characteristic!.properties.writeWithoutResponse) {
+        await _characteristic!.write(bytes, withoutResponse: true);
+      }
+      _addDebugLog('Sent: $message');
     } catch (e) {
-      debugPrint('❌ Error sending message: $e');
+      _addDebugLog('Error sending message: $e');
     }
   }
 
@@ -512,9 +677,9 @@ class BLEService extends ChangeNotifier {
       SharedPreferences prefs = await SharedPreferences.getInstance();
       await prefs.setString('last_panic_button_id', device.remoteId.toString());
       await prefs.setString('last_panic_button_name', device.platformName);
-      debugPrint('💾 Saved device for reconnection');
+      _addDebugLog('Saved device for reconnection');
     } catch (e) {
-      debugPrint('❌ Error saving device: $e');
+      _addDebugLog('Error saving device: $e');
     }
   }
 
@@ -525,25 +690,23 @@ class BLEService extends ChangeNotifier {
 
       if (deviceId != null && _isBluetoothOn) {
         _deviceId = deviceId;
-        debugPrint('🔍 Looking for saved device: $deviceId');
-        // We'll try to reconnect during scanning
+        _addDebugLog('Looking for saved device: $deviceId');
       }
     } catch (e) {
-      debugPrint('❌ Error loading saved device: $e');
+      _addDebugLog('Error loading saved device: $e');
     }
   }
 
   Future<void> disconnect() async {
-    _autoReconnect = false; // Temporarily disable auto-reconnect
+    _autoReconnect = false;
     if (_connectedDevice != null) {
       try {
         await _connectedDevice!.disconnect();
-        debugPrint('🔌 Manually disconnected');
+        _addDebugLog('Manually disconnected');
       } catch (e) {
-        debugPrint('❌ Error disconnecting: $e');
+        _addDebugLog('Error disconnecting: $e');
       }
     }
-    // Re-enable auto-reconnect after a delay
     Timer(const Duration(seconds: 2), () {
       _autoReconnect = true;
     });
@@ -551,11 +714,16 @@ class BLEService extends ChangeNotifier {
 
   void setAutoReconnect(bool enabled) {
     _autoReconnect = enabled;
-    debugPrint('🔄 Auto-reconnect: $enabled');
+    _addDebugLog('Auto-reconnect: $enabled');
     notifyListeners();
   }
 
-  // Get detailed connection info
+  // Test method to simulate panic button press
+  Future<void> simulatePanicButton(String alertType) async {
+    _addDebugLog('Simulating panic button: $alertType');
+    _simulateButtonAlert(alertType);
+  }
+
   Map<String, dynamic> getConnectionInfo() {
     return {
       'isBluetoothOn': _isBluetoothOn,
@@ -570,6 +738,8 @@ class BLEService extends ChangeNotifier {
       'lastHeartbeat': _lastHeartbeat?.toString() ?? 'N/A',
       'deviceState': _deviceState,
       'autoReconnect': _autoReconnect,
+      'foundDevices': _foundDevices.length,
+      'scannedDevices': _scannedDevices.length,
     };
   }
 
@@ -580,23 +750,5 @@ class BLEService extends ChangeNotifier {
     _bluetoothStateSubscription?.cancel();
     _stopTimers();
     super.dispose();
-  }
-
-  // Method to trigger manual emergency (for testing or app-initiated alerts)
-  Future<void> triggerManualEmergency(String alertType) async {
-    if (!_isConnected) {
-      debugPrint('❌ Cannot trigger manual emergency - not connected');
-      return;
-    }
-
-    Map<String, dynamic> alertData = {
-      'type': 'ALERT',
-      'level': alertType,
-      'timestamp': DateTime.now().millisecondsSinceEpoch,
-      'battery': _batteryLevel,
-      'source': 'MANUAL'
-    };
-
-    _handleAlert(alertData);
   }
 }

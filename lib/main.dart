@@ -54,9 +54,15 @@ class MyApp extends StatelessWidget {
 class EmergencyAlertHandler extends ChangeNotifier {
   BLEService? _bleService;
   EmergencyService? _emergencyService;
+  String _lastProcessedAlert = "";
 
   void updateServices(
       BLEService bleService, EmergencyService emergencyService) {
+    // Remove old listener if exists
+    if (_bleService != null) {
+      _bleService!.removeListener(_handleBLEUpdate);
+    }
+
     _bleService = bleService;
     _emergencyService = emergencyService;
 
@@ -69,13 +75,19 @@ class EmergencyAlertHandler extends ChangeNotifier {
         _emergencyService != null) {
       // Parse the alert from BLE service
       String alert = _bleService!.lastAlert;
-      if (alert.contains('REGULAR')) {
+
+      // Avoid processing the same alert multiple times
+      if (alert == _lastProcessedAlert) return;
+      _lastProcessedAlert = alert;
+
+      // Extract alert type from the alert string
+      if (alert.toUpperCase().contains('REGULAR')) {
         _emergencyService!.handleEmergencyAlert('REGULAR', null);
-      } else if (alert.contains('CRITICAL')) {
+      } else if (alert.toUpperCase().contains('CRITICAL')) {
         _emergencyService!.handleEmergencyAlert('CRITICAL', null);
-      } else if (alert.contains('CHECKIN')) {
+      } else if (alert.toUpperCase().contains('CHECKIN')) {
         _emergencyService!.handleEmergencyAlert('CHECKIN', null);
-      } else if (alert.contains('CANCEL')) {
+      } else if (alert.toUpperCase().contains('CANCEL')) {
         _emergencyService!.handleEmergencyAlert('CANCEL', null);
       }
     }
@@ -83,7 +95,7 @@ class EmergencyAlertHandler extends ChangeNotifier {
 
   @override
   void dispose() {
-    _bleService?.removeListener(_handleBLEUpdate); // Fix: _ not *
+    _bleService?.removeListener(_handleBLEUpdate);
     super.dispose();
   }
 }

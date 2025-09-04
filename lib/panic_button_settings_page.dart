@@ -584,7 +584,7 @@ class _PanicButtonSettingsPageState extends State<PanicButtonSettingsPage> {
   Future<void> _testEmergencyAlert(
       BLEService bleService, EmergencyService emergencyService) async {
     try {
-      await bleService.triggerManualEmergency('REGULAR');
+      await bleService.simulatePanicButton('REGULAR');
       setState(() {
         _testResult = 'Success: Test emergency alert sent';
       });
