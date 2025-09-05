@@ -9,6 +9,7 @@ import 'services/ble_service.dart';
 import 'services/emergency_service.dart';
 import 'profile_page.dart';
 import 'settings_page.dart';
+import 'package:flutter/services.dart'; // <-- Add this import for rootBundle
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -458,6 +459,134 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  void _showSosPopup(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        bool isHolding = false;
+        late DateTime holdStart;
+
+        return Dialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          child: Stack(
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const SizedBox(height: 8),
+                    // SOS Button with concentric circles
+                    Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Container(
+                          width: 180,
+                          height: 180,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: const Color(0xFFF73D5C).withOpacity(0.2),
+                          ),
+                        ),
+                        Container(
+                          width: 130,
+                          height: 130,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: const Color(0xFFF73D5C).withOpacity(0.4),
+                          ),
+                        ),
+                        GestureDetector(
+                          onLongPressStart: (_) {
+                            isHolding = true;
+                            holdStart = DateTime.now();
+                          },
+                          onLongPressEnd: (_) {
+                            isHolding = false;
+                            if (DateTime.now().difference(holdStart).inSeconds >= 3) {
+                              if (Navigator.of(context).canPop()) {
+                                Navigator.of(context).pop();
+                              }
+                            }
+                          },
+                          child: Container(
+                            width: 90,
+                            height: 90,
+                            decoration: const BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Color(0xFFF73D5C),
+                            ),
+                            alignment: Alignment.center,
+                            child: const Text(
+                              'SOS',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 28,
+                                letterSpacing: 2,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 28),
+                    const Text(
+                      'You have pressed the panic button!',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 17,
+                        color: Colors.black,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 10),
+                    RichText(
+                      textAlign: TextAlign.center,
+                      text: const TextSpan(
+                        style: TextStyle(
+                          color: Colors.black87,
+                          fontSize: 15,
+                        ),
+                        children: [
+                          TextSpan(text: 'add text pa'),
+                          TextSpan(
+                            text: 'SOS',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFFF73D5C),
+                            ),
+                          ),
+                          TextSpan(text: ' for cancel'),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    // No countdown
+                    const SizedBox(height: 8),
+                  ],
+                ),
+              ),
+              // Close button
+              Positioned(
+                top: 8,
+                right: 8,
+                child: GestureDetector(
+                  onTap: () {
+                    Navigator.of(context).pop();
+                  },
+                  child: const Icon(Icons.close, color: Colors.grey, size: 26),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildCollapsedCard(double screenWidth, double screenHeight) {
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -873,11 +1002,19 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<bool> _checkAssetExists(String assetPath) async {
     try {
+      // Try DefaultAssetBundle first (works in widget tree)
       await DefaultAssetBundle.of(context).load(assetPath);
       return true;
     } catch (e) {
-      debugPrint('Asset not found: $assetPath');
-      return false;
+      try {
+        // Fallback to rootBundle (works outside widget tree)
+        await rootBundle.load(assetPath);
+        return true;
+      } catch (e) {
+        debugPrint('Asset not found: $assetPath');
+        return false;
+      }
     }
   }
-}
+    }
+  
