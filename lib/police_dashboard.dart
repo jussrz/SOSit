@@ -21,6 +21,8 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
   bool _isLoadingIncidents = false;
   String _profilePhotoUrl = '';
   Set<Marker> _markers = {};
+  List<Map<String, dynamic>> _incidentHistory = [];
+  bool _isLoadingHistory = false;
 
   @override
   void initState() {
@@ -28,6 +30,7 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
     _getCurrentLocation();
     _loadIncidents();
     _loadUserProfile();
+    _loadIncidentHistory();
   }
 
   Future<void> _getCurrentLocation() async {
@@ -121,6 +124,30 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
     }
   }
 
+  Future<void> _loadIncidentHistory() async {
+    setState(() => _isLoadingHistory = true);
+    try {
+      final userId = supabase.auth.currentUser?.id;
+      if (userId == null) return;
+
+      // Load incidents where this police responded
+      final history = await supabase
+          .from('incident_responses')
+          .select('*, incident:emergency_reports(*, user!inner(email))')
+          .eq('responder_id', userId)
+          .order('responded_at', ascending: false)
+          .limit(20);
+
+      setState(() {
+        _incidentHistory = history;
+        _isLoadingHistory = false;
+      });
+    } catch (e) {
+      setState(() => _isLoadingHistory = false);
+      debugPrint('Error loading incident history: $e');
+    }
+  }
+
   Future<void> _respondToIncident(String incidentId, String responseType) async {
     try {
       final userId = supabase.auth.currentUser?.id;
@@ -149,6 +176,143 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
         ),
       );
     }
+  }
+
+  void _showIncidentHistoryDialog() {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return Dialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: Container(
+            width: screenWidth * 0.85,
+            height: screenHeight * 0.65,
+            padding: EdgeInsets.all(screenWidth * 0.04),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.history, color: Colors.blue, size: screenWidth * 0.07),
+                    SizedBox(width: screenWidth * 0.02),
+                    Text(
+                      'Incident History',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: screenWidth * 0.045,
+                        color: Colors.black,
+                      ),
+                    ),
+                    Spacer(),
+                    IconButton(
+                      icon: Icon(Icons.close, color: Colors.grey),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ],
+                ),
+                SizedBox(height: screenHeight * 0.01),
+                Expanded(
+                  child: _isLoadingHistory
+                      ? Center(child: CircularProgressIndicator())
+                      : _incidentHistory.isEmpty
+                          ? Center(
+                              child: Text(
+                                'No incident history found.',
+                                style: TextStyle(
+                                  color: Colors.grey.shade600,
+                                  fontSize: screenWidth * 0.035,
+                                ),
+                              ),
+                            )
+                          : ListView.builder(
+                              itemCount: _incidentHistory.length,
+                              itemBuilder: (context, index) {
+                                final item = _incidentHistory[index];
+                                final incident = item['incident'] ?? {};
+                                final type = incident['emergency_type'] ?? 'Unknown';
+                                final location = incident['location'] ?? 'Location not available';
+                                final reporter = incident['user']?['email'] ?? 'Unknown';
+                                final responseType = item['response_type'] ?? '';
+                                final respondedAt = item['responded_at'] != null
+                                    ? DateTime.tryParse(item['responded_at'])
+                                    : null;
+                                final timeAgo = respondedAt != null ? _getTimeAgo(respondedAt) : '';
+
+                                return Container(
+                                  margin: EdgeInsets.only(bottom: screenHeight * 0.012),
+                                  padding: EdgeInsets.all(screenWidth * 0.03),
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey.shade50,
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(color: Colors.grey.shade200),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Icon(Icons.warning, color: Colors.red, size: screenWidth * 0.05),
+                                          SizedBox(width: screenWidth * 0.02),
+                                          Text(
+                                            type.toUpperCase(),
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.red.shade700,
+                                              fontSize: screenWidth * 0.037,
+                                            ),
+                                          ),
+                                          Spacer(),
+                                          Text(
+                                            responseType.toUpperCase(),
+                                            style: TextStyle(
+                                              color: Colors.blue,
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: screenWidth * 0.032,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      SizedBox(height: screenHeight * 0.004),
+                                      Text(
+                                        'Reporter: $reporter',
+                                        style: TextStyle(
+                                          fontSize: screenWidth * 0.033,
+                                          color: Colors.black87,
+                                        ),
+                                      ),
+                                      Text(
+                                        'Location: $location',
+                                        style: TextStyle(
+                                          fontSize: screenWidth * 0.033,
+                                          color: Colors.black87,
+                                        ),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      SizedBox(height: screenHeight * 0.004),
+                                      Text(
+                                        timeAgo,
+                                        style: TextStyle(
+                                          fontSize: screenWidth * 0.03,
+                                          color: Colors.grey.shade600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -234,26 +398,14 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
                       ),
                     ),
                     
-                    // Profile
+                    // History Icon (incident history) - bigger and same color as settings
                     GestureDetector(
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const ProfilePage()),
-                      ).then((_) => _loadUserProfile()),
-                      child: _profilePhotoUrl.isNotEmpty
-                          ? CircleAvatar(
-                              radius: screenWidth * 0.045,
-                              backgroundImage: NetworkImage(_profilePhotoUrl),
-                            )
-                          : CircleAvatar(
-                              radius: screenWidth * 0.045,
-                              backgroundColor: const Color(0xFF2196F3),
-                              child: Icon(
-                                Icons.person,
-                                color: Colors.white,
-                                size: screenWidth * 0.05,
-                              ),
-                            ),
+                      onTap: _showIncidentHistoryDialog,
+                      child: Icon(
+                        Icons.history,
+                        color: const Color(0xFF2196F3),
+                        size: screenWidth * 0.07, // same as settings icon
+                      ),
                     ),
                   ],
                 ),
@@ -676,3 +828,20 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
     }
   }
 }
+
+  String _getTimeAgo(DateTime dateTime) {
+    final now = DateTime.now();
+    final difference = now.difference(dateTime);
+
+    if (difference.inDays > 0) {
+      return '${difference.inDays}d ago';
+    } else if (difference.inHours > 0) {
+      return '${difference.inHours}h ago';
+    } else if (difference.inMinutes > 0) {
+      return '${difference.inMinutes}m ago';
+    } else {
+      return 'Just now';
+    }
+  }
+
+

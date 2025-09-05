@@ -5,6 +5,7 @@ import 'signup_page.dart';
 import 'admin_signup_page.dart';
 import 'home_screen.dart';
 import 'admin_home_screen.dart';
+import 'police_dashboard.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -122,10 +123,18 @@ class _LoginPageState extends State<LoginPage> {
 
       if (!mounted) return;
 
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
-      );
+      // Redirect based on role
+      if (role == 'police') {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const PoliceDashboard()),
+        );
+      } else {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
+        );
+      }
     } catch (e) {
       setState(() => _errorMsg = "Incorrect email or password");
     } finally {
