@@ -587,6 +587,116 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // Add this function to show the correct popup based on the button action
+  void showPanicPopup(BuildContext context, String type) {
+    String title = '';
+    String message = '';
+    Color color = const Color(0xFFF73D5C);
+
+    switch (type) {
+      case 'regular':
+        title = 'Regular Alert';
+        message = 'A regular emergency alert has been sent.\nHelp is on the way.';
+        color = const Color(0xFFF73D5C);
+        break;
+      case 'checkin':
+        title = 'Check In/Test';
+        message = 'This is a test/check-in alert.\nNo emergency response will be dispatched.';
+        color = Colors.blue;
+        break;
+      case 'critical':
+        title = 'Critical Emergency';
+        message = 'A critical emergency alert has been sent.\nImmediate response is being dispatched!';
+        color = Colors.red;
+        break;
+      case 'cancel':
+        title = 'Cancelled / False Alarm';
+        message = 'Your emergency alert has been cancelled.\nNo further action will be taken.';
+        color = Colors.green;
+        break;
+      default:
+        title = 'Alert';
+        message = '';
+        color = const Color(0xFFF73D5C);
+    }
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return Dialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          child: Stack(
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const SizedBox(height: 8),
+                    // Icon with colored circle
+                    Container(
+                      width: 90,
+                      height: 90,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: color.withOpacity(0.15),
+                      ),
+                      alignment: Alignment.center,
+                      child: Icon(
+                        type == 'cancel'
+                            ? Icons.check_circle
+                            : type == 'checkin'
+                                ? Icons.info
+                                : type == 'critical'
+                                    ? Icons.warning_amber_rounded
+                                    : Icons.warning,
+                        color: color,
+                        size: 54,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 22,
+                        color: color,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      message,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        color: Colors.black87,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+                ),
+              ),
+              // Close button
+              Positioned(
+                top: 8,
+                right: 8,
+                child: GestureDetector(
+                  onTap: () {
+                    Navigator.of(context).pop();
+                  },
+                  child: const Icon(Icons.close, color: Colors.grey, size: 26),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildCollapsedCard(double screenWidth, double screenHeight) {
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -1016,5 +1126,4 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     }
   }
-    }
-  
+}
