@@ -25,9 +25,10 @@ class _AdminManagementPageState extends State<AdminManagementPage> {
     try {
       final response = await supabase
           .from('admin')
-          .select('id, admin_firstname, admin_lastname, admin_email, created_at')
+          .select(
+              'id, admin_firstname, admin_lastname, admin_email, created_at')
           .order('created_at', ascending: false);
-      
+
       setState(() {
         admins = List<Map<String, dynamic>>.from(response);
         _isLoading = false;
@@ -58,10 +59,8 @@ class _AdminManagementPageState extends State<AdminManagementPage> {
           onPressed: () => Navigator.of(context).pop(),
         ),
         centerTitle: true,
-        title: Text('Admin Management', style: TextStyle(
-          color: Colors.black, 
-          fontWeight: FontWeight.w500
-        )),
+        title: Text('Admin Management',
+            style: TextStyle(color: Colors.black, fontWeight: FontWeight.w500)),
         actions: [
           IconButton(
             icon: Icon(Icons.add, color: const Color(0xFFF73D5C)),
@@ -89,7 +88,8 @@ class _AdminManagementPageState extends State<AdminManagementPage> {
                       child: ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFFF73D5C),
-                          padding: EdgeInsets.symmetric(vertical: screenHeight * 0.015),
+                          padding: EdgeInsets.symmetric(
+                              vertical: screenHeight * 0.015),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
@@ -97,7 +97,8 @@ class _AdminManagementPageState extends State<AdminManagementPage> {
                         onPressed: () {
                           Navigator.push(
                             context,
-                            MaterialPageRoute(builder: (_) => const AdminSignupPage()),
+                            MaterialPageRoute(
+                                builder: (_) => const AdminSignupPage()),
                           ).then((_) => _loadAdmins());
                         },
                         icon: Icon(Icons.add, color: Colors.white),
@@ -114,7 +115,8 @@ class _AdminManagementPageState extends State<AdminManagementPage> {
                   }
 
                   final admin = admins[index - 1];
-                  final isCurrentUser = admin['id'] == supabase.auth.currentUser?.id;
+                  final isCurrentUser =
+                      admin['id'] == supabase.auth.currentUser?.id;
 
                   return Container(
                     margin: EdgeInsets.only(bottom: screenHeight * 0.015),
@@ -132,7 +134,8 @@ class _AdminManagementPageState extends State<AdminManagementPage> {
                     child: ListTile(
                       leading: CircleAvatar(
                         backgroundColor: const Color(0xFFF73D5C),
-                        child: Icon(Icons.admin_panel_settings, color: Colors.white),
+                        child: Icon(Icons.admin_panel_settings,
+                            color: Colors.white),
                       ),
                       title: Text(
                         '${admin['admin_firstname']} ${admin['admin_lastname']}',

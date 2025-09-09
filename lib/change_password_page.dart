@@ -109,16 +109,18 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
       if (mounted) {
         setState(() {
           String errorString = e.toString().toLowerCase();
-          
-          if (errorString.contains('invalid login credentials') || 
+
+          if (errorString.contains('invalid login credentials') ||
               errorString.contains('invalid_credentials') ||
               errorString.contains('wrong password')) {
             _currentPasswordError = 'Current password is incorrect';
-          } else if (errorString.contains('weak password') || 
-                     errorString.contains('password too short')) {
-            _newPasswordError = 'Password is too weak. Use at least 6 characters';
+          } else if (errorString.contains('weak password') ||
+              errorString.contains('password too short')) {
+            _newPasswordError =
+                'Password is too weak. Use at least 6 characters';
           } else if (errorString.contains('same password')) {
-            _newPasswordError = 'New password must be different from current password';
+            _newPasswordError =
+                'New password must be different from current password';
           } else if (errorString.contains('no user logged in')) {
             _currentPasswordError = 'Please log in again to change password';
           } else {
@@ -147,7 +149,8 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: Colors.black, size: screenWidth * 0.06),
+          icon: Icon(Icons.arrow_back,
+              color: Colors.black, size: screenWidth * 0.06),
           onPressed: () => Navigator.of(context).pop(),
         ),
         centerTitle: true,
@@ -186,16 +189,21 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                 child: TextFormField(
                   controller: _currentPasswordController,
                   decoration: InputDecoration(
-                    prefixIcon: const Icon(Icons.lock_outline, color: Colors.grey),
+                    prefixIcon:
+                        const Icon(Icons.lock_outline, color: Colors.grey),
                     hintText: 'Enter current password',
                     border: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(vertical: screenHeight * 0.020),
+                    contentPadding:
+                        EdgeInsets.symmetric(vertical: screenHeight * 0.020),
                     suffixIcon: IconButton(
                       icon: Icon(
-                        _obscureCurrentPassword ? Icons.visibility_off : Icons.visibility,
+                        _obscureCurrentPassword
+                            ? Icons.visibility_off
+                            : Icons.visibility,
                         color: Colors.grey,
                       ),
-                      onPressed: () => setState(() => _obscureCurrentPassword = !_obscureCurrentPassword),
+                      onPressed: () => setState(() =>
+                          _obscureCurrentPassword = !_obscureCurrentPassword),
                     ),
                   ),
                   obscureText: _obscureCurrentPassword,
@@ -233,13 +241,17 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                     prefixIcon: const Icon(Icons.lock, color: Colors.grey),
                     hintText: 'Enter new password',
                     border: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(vertical: screenHeight * 0.020),
+                    contentPadding:
+                        EdgeInsets.symmetric(vertical: screenHeight * 0.020),
                     suffixIcon: IconButton(
                       icon: Icon(
-                        _obscureNewPassword ? Icons.visibility_off : Icons.visibility,
+                        _obscureNewPassword
+                            ? Icons.visibility_off
+                            : Icons.visibility,
                         color: Colors.grey,
                       ),
-                      onPressed: () => setState(() => _obscureNewPassword = !_obscureNewPassword),
+                      onPressed: () => setState(
+                          () => _obscureNewPassword = !_obscureNewPassword),
                     ),
                   ),
                   obscureText: _obscureNewPassword,
@@ -277,13 +289,17 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                     prefixIcon: const Icon(Icons.lock, color: Colors.grey),
                     hintText: 'Confirm new password',
                     border: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(vertical: screenHeight * 0.020),
+                    contentPadding:
+                        EdgeInsets.symmetric(vertical: screenHeight * 0.020),
                     suffixIcon: IconButton(
                       icon: Icon(
-                        _obscureConfirmPassword ? Icons.visibility_off : Icons.visibility,
+                        _obscureConfirmPassword
+                            ? Icons.visibility_off
+                            : Icons.visibility,
                         color: Colors.grey,
                       ),
-                      onPressed: () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
+                      onPressed: () => setState(() =>
+                          _obscureConfirmPassword = !_obscureConfirmPassword),
                     ),
                   ),
                   obscureText: _obscureConfirmPassword,
@@ -306,7 +322,8 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFF73D5C),
-                    padding: EdgeInsets.symmetric(vertical: screenHeight * 0.015),
+                    padding:
+                        EdgeInsets.symmetric(vertical: screenHeight * 0.015),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),

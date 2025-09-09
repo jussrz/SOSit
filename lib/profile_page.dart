@@ -637,7 +637,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 );
                 if (picked != null) {
                   _birthdateController.text =
-                      "${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}";
+                      '${picked?.year}-${picked?.month.toString().padLeft(2, '0')}-${picked?.day.toString().padLeft(2, '0')}';
                 }
               }),
               const SizedBox(height: 12),

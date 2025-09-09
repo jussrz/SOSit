@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:geolocator/geolocator.dart';
-import 'profile_page.dart';
 import 'settings_page.dart';
 
 class PoliceDashboard extends StatefulWidget {
@@ -71,7 +70,8 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
     try {
       final userId = supabase.auth.currentUser?.id;
       if (userId != null) {
-        final userData = await supabase.from('user').select().eq('id', userId).single();
+        final userData =
+            await supabase.from('user').select().eq('id', userId).single();
         setState(() {
           _profilePhotoUrl = userData['profile_photo_url'] ?? '';
         });
@@ -83,7 +83,7 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
 
   Future<void> _loadIncidents() async {
     setState(() => _isLoadingIncidents = true);
-    
+
     try {
       // Load recent incidents/emergency reports
       final incidents = await supabase
@@ -93,7 +93,7 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
           .limit(10);
 
       Set<Marker> markers = {};
-      
+
       for (var incident in incidents) {
         if (incident['latitude'] != null && incident['longitude'] != null) {
           markers.add(
@@ -107,7 +107,8 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
                 title: 'Emergency Report',
                 snippet: incident['emergency_type'] ?? 'Unknown',
               ),
-              icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+              icon: BitmapDescriptor.defaultMarkerWithHue(
+                  BitmapDescriptor.hueRed),
             ),
           );
         }
@@ -148,7 +149,8 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
     }
   }
 
-  Future<void> _respondToIncident(String incidentId, String responseType) async {
+  Future<void> _respondToIncident(
+      String incidentId, String responseType) async {
     try {
       final userId = supabase.auth.currentUser?.id;
       if (userId == null) return;
@@ -187,7 +189,8 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
       builder: (context) {
         return Dialog(
           backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           child: Container(
             width: screenWidth * 0.85,
             height: screenHeight * 0.65,
@@ -197,7 +200,8 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
               children: [
                 Row(
                   children: [
-                    Icon(Icons.history, color: Colors.blue, size: screenWidth * 0.07),
+                    Icon(Icons.history,
+                        color: Colors.blue, size: screenWidth * 0.07),
                     SizedBox(width: screenWidth * 0.02),
                     Text(
                       'Incident History',
@@ -233,29 +237,40 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
                               itemBuilder: (context, index) {
                                 final item = _incidentHistory[index];
                                 final incident = item['incident'] ?? {};
-                                final type = incident['emergency_type'] ?? 'Unknown';
-                                final location = incident['location'] ?? 'Location not available';
-                                final reporter = incident['user']?['email'] ?? 'Unknown';
-                                final responseType = item['response_type'] ?? '';
+                                final type =
+                                    incident['emergency_type'] ?? 'Unknown';
+                                final location = incident['location'] ??
+                                    'Location not available';
+                                final reporter =
+                                    incident['user']?['email'] ?? 'Unknown';
+                                final responseType =
+                                    item['response_type'] ?? '';
                                 final respondedAt = item['responded_at'] != null
                                     ? DateTime.tryParse(item['responded_at'])
                                     : null;
-                                final timeAgo = respondedAt != null ? _getTimeAgo(respondedAt) : '';
+                                final timeAgo = respondedAt != null
+                                    ? _getTimeAgo(respondedAt)
+                                    : '';
 
                                 return Container(
-                                  margin: EdgeInsets.only(bottom: screenHeight * 0.012),
+                                  margin: EdgeInsets.only(
+                                      bottom: screenHeight * 0.012),
                                   padding: EdgeInsets.all(screenWidth * 0.03),
                                   decoration: BoxDecoration(
                                     color: Colors.grey.shade50,
                                     borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(color: Colors.grey.shade200),
+                                    border:
+                                        Border.all(color: Colors.grey.shade200),
                                   ),
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Row(
                                         children: [
-                                          Icon(Icons.warning, color: Colors.red, size: screenWidth * 0.05),
+                                          Icon(Icons.warning,
+                                              color: Colors.red,
+                                              size: screenWidth * 0.05),
                                           SizedBox(width: screenWidth * 0.02),
                                           Text(
                                             type.toUpperCase(),
@@ -374,7 +389,7 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
                         size: screenWidth * 0.07,
                       ),
                     ),
-                    
+
                     // Police Badge and Title
                     Expanded(
                       child: Row(
@@ -397,7 +412,7 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
                         ],
                       ),
                     ),
-                    
+
                     // History Icon (incident history) - bigger and same color as settings
                     GestureDetector(
                       onTap: _showIncidentHistoryDialog,
@@ -456,7 +471,7 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
                     ),
                   ],
                 ),
-                child: _isCardExpanded 
+                child: _isCardExpanded
                     ? _buildExpandedPanel(screenWidth, screenHeight)
                     : _buildCollapsedPanel(screenWidth, screenHeight),
               ),
@@ -483,7 +498,7 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
               borderRadius: BorderRadius.circular(2),
             ),
           ),
-          
+
           // Title and status
           Row(
             children: [
@@ -533,9 +548,9 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
               ),
             ],
           ),
-          
+
           SizedBox(height: screenHeight * 0.015),
-          
+
           // Swipe up indicator
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -576,7 +591,7 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
               borderRadius: BorderRadius.circular(2),
             ),
           ),
-          
+
           // Header
           Row(
             children: [
@@ -602,9 +617,9 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
               ),
             ],
           ),
-          
+
           SizedBox(height: screenHeight * 0.015),
-          
+
           // Incidents list
           Expanded(
             child: _isLoadingIncidents
@@ -615,7 +630,8 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
                         itemCount: _incidents.length,
                         itemBuilder: (context, index) {
                           final incident = _incidents[index];
-                          return _buildIncidentCard(incident, screenWidth, screenHeight);
+                          return _buildIncidentCard(
+                              incident, screenWidth, screenHeight);
                         },
                       ),
           ),
@@ -656,7 +672,8 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
     );
   }
 
-  Widget _buildIncidentCard(Map<String, dynamic> incident, double screenWidth, double screenHeight) {
+  Widget _buildIncidentCard(
+      Map<String, dynamic> incident, double screenWidth, double screenHeight) {
     final user = incident['user'];
     final emergencyType = incident['emergency_type'] ?? 'Unknown';
     final location = incident['location'] ?? 'Location not available';
@@ -732,9 +749,9 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
               ),
             ],
           ),
-          
+
           SizedBox(height: screenHeight * 0.01),
-          
+
           // Details
           Text(
             'Reporter: ${user['email'] ?? 'Unknown'}',
@@ -753,9 +770,9 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
-          
+
           SizedBox(height: screenHeight * 0.015),
-          
+
           // Action buttons
           Row(
             children: [
@@ -763,7 +780,8 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.orange,
-                    padding: EdgeInsets.symmetric(vertical: screenHeight * 0.01),
+                    padding:
+                        EdgeInsets.symmetric(vertical: screenHeight * 0.01),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
@@ -787,7 +805,8 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.green,
-                    padding: EdgeInsets.symmetric(vertical: screenHeight * 0.01),
+                    padding:
+                        EdgeInsets.symmetric(vertical: screenHeight * 0.01),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
@@ -829,19 +848,17 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
   }
 }
 
-  String _getTimeAgo(DateTime dateTime) {
-    final now = DateTime.now();
-    final difference = now.difference(dateTime);
+String _getTimeAgo(DateTime dateTime) {
+  final now = DateTime.now();
+  final difference = now.difference(dateTime);
 
-    if (difference.inDays > 0) {
-      return '${difference.inDays}d ago';
-    } else if (difference.inHours > 0) {
-      return '${difference.inHours}h ago';
-    } else if (difference.inMinutes > 0) {
-      return '${difference.inMinutes}m ago';
-    } else {
-      return 'Just now';
-    }
+  if (difference.inDays > 0) {
+    return '${difference.inDays}d ago';
+  } else if (difference.inHours > 0) {
+    return '${difference.inHours}h ago';
+  } else if (difference.inMinutes > 0) {
+    return '${difference.inMinutes}m ago';
+  } else {
+    return 'Just now';
   }
-
-
+}

@@ -139,7 +139,7 @@ class DebugScreen extends StatelessWidget {
                             style: Theme.of(context).textTheme.headlineSmall,
                           ),
                           const SizedBox(height: 8),
-                          Container(
+                          SizedBox(
                             height: 200,
                             child: ListView.builder(
                               itemCount: bleService.scannedDevices.length,

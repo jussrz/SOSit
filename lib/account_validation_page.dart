@@ -66,8 +66,8 @@ class _AccountValidationPageState extends State<AccountValidationPage> {
       }
 
       // Sort by creation date (newest first)
-      allPending.sort((a, b) => 
-          DateTime.parse(b['created_at']).compareTo(DateTime.parse(a['created_at'])));
+      allPending.sort((a, b) => DateTime.parse(b['created_at'])
+          .compareTo(DateTime.parse(a['created_at'])));
 
       setState(() {
         pendingAccounts = allPending;
@@ -95,7 +95,8 @@ class _AccountValidationPageState extends State<AccountValidationPage> {
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: Colors.black, size: screenWidth * 0.06),
+          icon: Icon(Icons.arrow_back,
+              color: Colors.black, size: screenWidth * 0.06),
           onPressed: () => Navigator.of(context).pop(),
         ),
         centerTitle: true,
@@ -168,7 +169,8 @@ class _AccountValidationPageState extends State<AccountValidationPage> {
     );
   }
 
-  Widget _buildAccountCard(Map<String, dynamic> account, double screenWidth, double screenHeight) {
+  Widget _buildAccountCard(
+      Map<String, dynamic> account, double screenWidth, double screenHeight) {
     final user = account['user'];
     final accountType = account['type'];
     final createdAt = DateTime.parse(account['created_at']);
@@ -200,14 +202,17 @@ class _AccountValidationPageState extends State<AccountValidationPage> {
                   Container(
                     padding: EdgeInsets.all(screenWidth * 0.025),
                     decoration: BoxDecoration(
-                      color: accountType == 'tanod' 
+                      color: accountType == 'tanod'
                           ? Colors.blue.withOpacity(0.1)
                           : Colors.green.withOpacity(0.1),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
-                      accountType == 'tanod' ? Icons.security : Icons.local_police,
-                      color: accountType == 'tanod' ? Colors.blue : Colors.green,
+                      accountType == 'tanod'
+                          ? Icons.security
+                          : Icons.local_police,
+                      color:
+                          accountType == 'tanod' ? Colors.blue : Colors.green,
                       size: screenWidth * 0.05,
                     ),
                   ),
@@ -229,7 +234,9 @@ class _AccountValidationPageState extends State<AccountValidationPage> {
                           accountType.toUpperCase(),
                           style: TextStyle(
                             fontSize: screenWidth * 0.03,
-                            color: accountType == 'tanod' ? Colors.blue : Colors.green,
+                            color: accountType == 'tanod'
+                                ? Colors.blue
+                                : Colors.green,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -309,7 +316,8 @@ class _AccountValidationPageState extends State<AccountValidationPage> {
                   ],
                 ),
               ],
-              if (accountType == 'police' && account['station_name'] != null) ...[
+              if (accountType == 'police' &&
+                  account['station_name'] != null) ...[
                 SizedBox(height: screenHeight * 0.005),
                 Row(
                   children: [
@@ -429,7 +437,8 @@ class _AccountDetailsPageState extends State<AccountDetailsPage> {
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: Colors.black, size: screenWidth * 0.06),
+          icon: Icon(Icons.arrow_back,
+              color: Colors.black, size: screenWidth * 0.06),
           onPressed: () => Navigator.pop(context),
         ),
         centerTitle: true,
@@ -458,7 +467,9 @@ class _AccountDetailsPageState extends State<AccountDetailsPage> {
               child: Column(
                 children: [
                   Icon(
-                    accountType == 'tanod' ? Icons.security : Icons.local_police,
+                    accountType == 'tanod'
+                        ? Icons.security
+                        : Icons.local_police,
                     color: Colors.white,
                     size: screenWidth * 0.12,
                   ),
@@ -478,26 +489,42 @@ class _AccountDetailsPageState extends State<AccountDetailsPage> {
             SizedBox(height: screenHeight * 0.02),
 
             // User Information
-            _buildInfoSection('User Information', [
-              _buildInfoRow('Email', user['email'] ?? 'Not provided'),
-              _buildInfoRow('Phone', user['phone'] ?? 'Not provided'),
-              _buildInfoRow('Role', user['role'] ?? 'Not specified'),
-            ], screenWidth, screenHeight),
+            _buildInfoSection(
+                'User Information',
+                [
+                  _buildInfoRow('Email', user['email'] ?? 'Not provided'),
+                  _buildInfoRow('Phone', user['phone'] ?? 'Not provided'),
+                  _buildInfoRow('Role', user['role'] ?? 'Not specified'),
+                ],
+                screenWidth,
+                screenHeight),
 
             SizedBox(height: screenHeight * 0.02),
 
             // Role-specific Information
             if (accountType == 'tanod')
-              _buildInfoSection('Tanod Information', [
-                _buildInfoRow('ID Number', widget.account['id_number'] ?? 'Not provided'),
-                _buildInfoRow('Status', widget.account['status'] ?? 'Unknown'),
-              ], screenWidth, screenHeight),
+              _buildInfoSection(
+                  'Tanod Information',
+                  [
+                    _buildInfoRow('ID Number',
+                        widget.account['id_number'] ?? 'Not provided'),
+                    _buildInfoRow(
+                        'Status', widget.account['status'] ?? 'Unknown'),
+                  ],
+                  screenWidth,
+                  screenHeight),
 
             if (accountType == 'police')
-              _buildInfoSection('Police Information', [
-                _buildInfoRow('Station Name', widget.account['station_name'] ?? 'Not provided'),
-                _buildInfoRow('Status', widget.account['status'] ?? 'Unknown'),
-              ], screenWidth, screenHeight),
+              _buildInfoSection(
+                  'Police Information',
+                  [
+                    _buildInfoRow('Station Name',
+                        widget.account['station_name'] ?? 'Not provided'),
+                    _buildInfoRow(
+                        'Status', widget.account['status'] ?? 'Unknown'),
+                  ],
+                  screenWidth,
+                  screenHeight),
 
             SizedBox(height: screenHeight * 0.02),
 
@@ -515,12 +542,15 @@ class _AccountDetailsPageState extends State<AccountDetailsPage> {
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.red,
-                        padding: EdgeInsets.symmetric(vertical: screenHeight * 0.015),
+                        padding: EdgeInsets.symmetric(
+                            vertical: screenHeight * 0.015),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
                       ),
-                      onPressed: isProcessing ? null : () => _updateAccountStatus('declined'),
+                      onPressed: isProcessing
+                          ? null
+                          : () => _updateAccountStatus('declined'),
                       child: isProcessing
                           ? const SizedBox(
                               height: 20,
@@ -545,12 +575,15 @@ class _AccountDetailsPageState extends State<AccountDetailsPage> {
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.green,
-                        padding: EdgeInsets.symmetric(vertical: screenHeight * 0.015),
+                        padding: EdgeInsets.symmetric(
+                            vertical: screenHeight * 0.015),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
                       ),
-                      onPressed: isProcessing ? null : () => _updateAccountStatus('approved'),
+                      onPressed: isProcessing
+                          ? null
+                          : () => _updateAccountStatus('approved'),
                       child: isProcessing
                           ? const SizedBox(
                               height: 20,
@@ -579,7 +612,8 @@ class _AccountDetailsPageState extends State<AccountDetailsPage> {
     );
   }
 
-  Widget _buildInfoSection(String title, List<Widget> children, double screenWidth, double screenHeight) {
+  Widget _buildInfoSection(String title, List<Widget> children,
+      double screenWidth, double screenHeight) {
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
@@ -693,9 +727,11 @@ class _AccountDetailsPageState extends State<AccountDetailsPage> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.error_outline, size: screenWidth * 0.1, color: Colors.grey),
+                          Icon(Icons.error_outline,
+                              size: screenWidth * 0.1, color: Colors.grey),
                           SizedBox(height: screenHeight * 0.01),
-                          Text('Failed to load image', style: TextStyle(color: Colors.grey)),
+                          Text('Failed to load image',
+                              style: TextStyle(color: Colors.grey)),
                         ],
                       ),
                     );

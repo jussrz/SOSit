@@ -688,8 +688,8 @@ class BLEService extends ChangeNotifier {
       SharedPreferences prefs = await SharedPreferences.getInstance();
       String? deviceId = prefs.getString('last_panic_button_id');
 
-      if (deviceId != null && _isBluetoothOn) {
-        _deviceId = deviceId;
+      if (_isBluetoothOn) {
+        String? deviceId0;
         _addDebugLog('Looking for saved device: $deviceId');
       }
     } catch (e) {

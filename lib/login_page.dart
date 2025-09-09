@@ -157,7 +157,7 @@ class _LoginPageState extends State<LoginPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               SizedBox(height: screenHeight * 0.1),
-              
+
               // Title
               Text(
                 'Welcome\nBack!',
@@ -167,7 +167,7 @@ class _LoginPageState extends State<LoginPage> {
                   color: Colors.black,
                 ),
               ),
-              
+
               SizedBox(height: screenHeight * 0.06),
 
               // General error message
@@ -199,11 +199,13 @@ class _LoginPageState extends State<LoginPage> {
                     child: TextField(
                       controller: _emailController,
                       decoration: InputDecoration(
-                        prefixIcon: Icon(Icons.person, color: Colors.grey.shade600),
+                        prefixIcon:
+                            Icon(Icons.person, color: Colors.grey.shade600),
                         hintText: 'Email',
                         hintStyle: TextStyle(color: Colors.grey.shade600),
                         border: InputBorder.none,
-                        contentPadding: EdgeInsets.symmetric(vertical: screenHeight * 0.025),
+                        contentPadding: EdgeInsets.symmetric(
+                            vertical: screenHeight * 0.025),
                       ),
                       keyboardType: TextInputType.emailAddress,
                       style: TextStyle(fontSize: screenWidth * 0.04),
@@ -244,17 +246,22 @@ class _LoginPageState extends State<LoginPage> {
                       controller: _passwordController,
                       obscureText: _obscurePassword,
                       decoration: InputDecoration(
-                        prefixIcon: Icon(Icons.lock, color: Colors.grey.shade600),
+                        prefixIcon:
+                            Icon(Icons.lock, color: Colors.grey.shade600),
                         hintText: 'Password',
                         hintStyle: TextStyle(color: Colors.grey.shade600),
                         border: InputBorder.none,
-                        contentPadding: EdgeInsets.symmetric(vertical: screenHeight * 0.025),
+                        contentPadding: EdgeInsets.symmetric(
+                            vertical: screenHeight * 0.025),
                         suffixIcon: IconButton(
                           icon: Icon(
-                            _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                            _obscurePassword
+                                ? Icons.visibility_off
+                                : Icons.visibility,
                             color: Colors.grey.shade600,
                           ),
-                          onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                          onPressed: () => setState(
+                              () => _obscurePassword = !_obscurePassword),
                         ),
                       ),
                       style: TextStyle(fontSize: screenWidth * 0.04),
@@ -263,7 +270,8 @@ class _LoginPageState extends State<LoginPage> {
                   if (_submitted) ...[
                     Builder(
                       builder: (context) {
-                        final error = _validatePassword(_passwordController.text);
+                        final error =
+                            _validatePassword(_passwordController.text);
                         if (error != null) {
                           return Padding(
                             padding: EdgeInsets.only(left: 8, top: 4),
@@ -310,7 +318,8 @@ class _LoginPageState extends State<LoginPage> {
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFFF4081),
-                    padding: EdgeInsets.symmetric(vertical: screenHeight * 0.02),
+                    padding:
+                        EdgeInsets.symmetric(vertical: screenHeight * 0.02),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(30),
                     ),
@@ -318,7 +327,8 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                   onPressed: _isLoading ? null : _login,
                   child: _isLoading
-                      ? CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
+                      ? CircularProgressIndicator(
+                          color: Colors.white, strokeWidth: 2)
                       : Text(
                           'Login',
                           style: TextStyle(
@@ -335,7 +345,9 @@ class _LoginPageState extends State<LoginPage> {
               // OR Continue with
               Row(
                 children: [
-                  Expanded(child: Divider(thickness: 1, color: Colors.grey.shade300)),
+                  Expanded(
+                      child:
+                          Divider(thickness: 1, color: Colors.grey.shade300)),
                   Padding(
                     padding: EdgeInsets.symmetric(horizontal: 12),
                     child: Text(
@@ -346,7 +358,9 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                     ),
                   ),
-                  Expanded(child: Divider(thickness: 1, color: Colors.grey.shade300)),
+                  Expanded(
+                      child:
+                          Divider(thickness: 1, color: Colors.grey.shade300)),
                 ],
               ),
 
@@ -411,8 +425,10 @@ class _LoginPageState extends State<LoginPage> {
                       onTap: () {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (_) => const AdminSignupPage()),
-                        ).then((_) => _checkAdminExists()); // Refresh admin status after returning
+                          MaterialPageRoute(
+                              builder: (_) => const AdminSignupPage()),
+                        ).then((_) =>
+                            _checkAdminExists()); // Refresh admin status after returning
                       },
                       child: Text(
                         'Signup as Admin',
@@ -437,7 +453,7 @@ class _LoginPageState extends State<LoginPage> {
 
   Widget _buildSocialButton(IconData icon) {
     final screenWidth = MediaQuery.of(context).size.width;
-    
+
     return Container(
       width: screenWidth * 0.12,
       height: screenWidth * 0.12,
