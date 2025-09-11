@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'services/ble_service.dart';
 import 'services/emergency_service.dart';
 import 'signup_page.dart';
+import 'emergency_contact_dashboard.dart';
 
 // 🔹 Firebase imports
 import 'package:firebase_core/firebase_core.dart';
@@ -79,7 +80,7 @@ class MyApp extends StatelessWidget {
           primarySwatch: Colors.blue,
           fontFamily: 'Roboto',
         ),
-        home: const SignupPage(),
+        home: const EmergencyContactDashboard(),
       ),
     );
   }
