@@ -9,6 +9,7 @@ import 'services/ble_service.dart';
 import 'services/emergency_service.dart';
 import 'profile_page.dart';
 import 'settings_page.dart';
+import 'group_page.dart';
 import 'package:flutter/services.dart'; // <-- Add this import for rootBundle
 
 class HomeScreen extends StatefulWidget {
@@ -336,6 +337,24 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                 ),
               ),
+            ),
+          ),
+
+          // Group FAB above emergency alert button
+          Positioned(
+            right: screenWidth * 0.05,
+            bottom: screenHeight * 0.58, // adjust as needed
+            child: FloatingActionButton(
+              heroTag: 'group_fab',
+              backgroundColor: Colors.white,
+              elevation: 4,
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const GroupPage(),
+                ),
+              ),
+              child: Icon(Icons.groups, color: const Color(0xFFF73D5C), size: 32),
             ),
           ),
 
