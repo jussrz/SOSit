@@ -354,7 +354,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   builder: (_) => const GroupPage(),
                 ),
               ),
-              child: Icon(Icons.groups, color: const Color(0xFFF73D5C), size: 32),
+              child:
+                  Icon(Icons.groups, color: const Color(0xFFF73D5C), size: 32),
             ),
           ),
 
@@ -488,11 +489,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
         return Dialog(
           backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
           child: Stack(
             children: [
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -524,7 +527,10 @@ class _HomeScreenState extends State<HomeScreen> {
                           },
                           onLongPressEnd: (_) {
                             isHolding = false;
-                            if (DateTime.now().difference(holdStart).inSeconds >= 3) {
+                            if (DateTime.now()
+                                    .difference(holdStart)
+                                    .inSeconds >=
+                                3) {
                               if (Navigator.of(context).canPop()) {
                                 Navigator.of(context).pop();
                               }
@@ -615,22 +621,26 @@ class _HomeScreenState extends State<HomeScreen> {
     switch (type) {
       case 'regular':
         title = 'Regular Alert';
-        message = 'A regular emergency alert has been sent.\nHelp is on the way.';
+        message =
+            'A regular emergency alert has been sent.\nHelp is on the way.';
         color = const Color(0xFFF73D5C);
         break;
       case 'checkin':
         title = 'Check In/Test';
-        message = 'This is a test/check-in alert.\nNo emergency response will be dispatched.';
+        message =
+            'This is a test/check-in alert.\nNo emergency response will be dispatched.';
         color = Colors.blue;
         break;
       case 'critical':
         title = 'Critical Emergency';
-        message = 'A critical emergency alert has been sent.\nImmediate response is being dispatched!';
+        message =
+            'A critical emergency alert has been sent.\nImmediate response is being dispatched!';
         color = Colors.red;
         break;
       case 'cancel':
         title = 'Cancelled / False Alarm';
-        message = 'Your emergency alert has been cancelled.\nNo further action will be taken.';
+        message =
+            'Your emergency alert has been cancelled.\nNo further action will be taken.';
         color = Colors.green;
         break;
       default:
@@ -645,11 +655,13 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (context) {
         return Dialog(
           backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
           child: Stack(
             children: [
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
