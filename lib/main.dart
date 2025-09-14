@@ -5,6 +5,7 @@ import 'services/ble_service.dart';
 import 'services/emergency_service.dart';
 import 'signup_page.dart';
 import 'login_page.dart';
+import 'main_app_wrapper.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

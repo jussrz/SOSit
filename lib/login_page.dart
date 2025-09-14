@@ -3,9 +3,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'signup_page.dart';
 import 'admin_signup_page.dart';
-import 'home_screen.dart';
+import 'main_app_wrapper.dart'; // Import the MainAppWrapper
 import 'admin_home_screen.dart';
 import 'police_dashboard.dart';
+import 'dashboard_router.dart'; // Import the DashboardRouter
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -109,7 +110,7 @@ class _LoginPageState extends State<LoginPage> {
         return;
       }
 
-      // Not an admin, check regular user role
+      // Check if user is police
       final roleData = await Supabase.instance.client
           .from('user')
           .select('role')
@@ -123,18 +124,21 @@ class _LoginPageState extends State<LoginPage> {
 
       if (!mounted) return;
 
-      // Redirect based on role
+      // If user is police, redirect to police dashboard
       if (role == 'police') {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (_) => const PoliceDashboard()),
         );
-      } else {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
-        );
+        return;
       }
+
+      // For regular users (citizens), use the MainAppWrapper which will determine
+      // whether to show HomeScreen or EmergencyContactDashboard based on their status
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const MainAppWrapper()),
+      );
     } catch (e) {
       setState(() => _errorMsg = "Incorrect email or password");
     } finally {
