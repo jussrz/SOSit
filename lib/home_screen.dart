@@ -10,6 +10,7 @@ import 'services/emergency_service.dart';
 import 'profile_page.dart';
 import 'settings_page.dart';
 import 'group_page.dart';
+import 'emergency_contact_dashboard.dart'; // Import for switch view
 import 'package:flutter/services.dart'; // <-- Add this import for rootBundle
 
 class HomeScreen extends StatefulWidget {
@@ -34,6 +35,10 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isLoadingProfile = false;
   bool _isCardExpanded = false;
 
+  // Track if user has emergency contact status
+  bool _isEmergencyContactForOthers = false;
+  bool _checkingEmergencyContactStatus = true;
+
   // Controllers to display user info
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
@@ -45,6 +50,44 @@ class _HomeScreenState extends State<HomeScreen> {
     _isLoadingProfile = true;
     _loadUserProfile();
     _getCurrentLocation();
+    _checkEmergencyContactStatus();
+  }
+
+  Future<void> _checkEmergencyContactStatus() async {
+    setState(() => _checkingEmergencyContactStatus = true);
+
+    try {
+      final supabase = Supabase.instance.client;
+      final userId = supabase.auth.currentUser?.id;
+      if (userId == null) return;
+
+      // Check if this user is listed as an emergency contact for others
+      final emergencyContactCount = await supabase
+          .from('emergency_contacts')
+          .select('id')
+          .eq('emergency_contact_user_id', userId)
+          .count(CountOption.exact);
+
+      // Check if this user is in any emergency groups
+      final groupMembershipCount = await supabase
+          .from('group_memberships')
+          .select('id')
+          .eq('user_id', userId)
+          .count(CountOption.exact);
+
+      setState(() {
+        _isEmergencyContactForOthers =
+            (emergencyContactCount.data.length > 0) ||
+                (groupMembershipCount.data.length > 0);
+        _checkingEmergencyContactStatus = false;
+      });
+    } catch (e) {
+      debugPrint('Error checking emergency contact status: $e');
+      setState(() {
+        _isEmergencyContactForOthers = false;
+        _checkingEmergencyContactStatus = false;
+      });
+    }
   }
 
   Future<void> _getCurrentLocation() async {
@@ -254,6 +297,47 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  void _showSwitchViewDialog() {
+    if (!_isEmergencyContactForOthers) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content:
+              Text('You are not listed as an emergency contact for anyone.'),
+          backgroundColor: Color(0xFFF73D5C),
+        ),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Switch View'),
+        content: const Text(
+            'Do you want to switch to Emergency Contact Dashboard? This view shows alerts from people who have listed you as their emergency contact.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(
+                    builder: (_) => const EmergencyContactDashboard()),
+              );
+            },
+            child: const Text('Switch to Emergency Contact View'),
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xFFF73D5C),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final screenSize = MediaQuery.of(context).size;
@@ -275,7 +359,7 @@ class _HomeScreenState extends State<HomeScreen> {
             onMapCreated: (controller) => _mapController = controller,
           ),
 
-          // Top Card: Profile + Settings
+          // Top Card: Settings + Logo + Profile + Switch View
           Positioned(
             top: 0,
             left: 0,
@@ -310,11 +394,34 @@ class _HomeScreenState extends State<HomeScreen> {
                           color: const Color(0xFFF73D5C),
                           size: screenWidth * 0.07),
                     ),
+
                     // SOSit Logo in the center
                     Expanded(
                       child: Center(
                           child: _buildSositLogo(screenWidth, screenHeight)),
                     ),
+
+                    // Switch View button (only show if user is emergency contact for others)
+                    if (!_checkingEmergencyContactStatus &&
+                        _isEmergencyContactForOthers) ...[
+                      GestureDetector(
+                        onTap: _showSwitchViewDialog,
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF73D5C).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(
+                            Icons.swap_horiz,
+                            color: const Color(0xFFF73D5C),
+                            size: screenWidth * 0.06,
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: screenWidth * 0.02),
+                    ],
+
                     // Profile avatar
                     GestureDetector(
                       onTap: () => Navigator.push(

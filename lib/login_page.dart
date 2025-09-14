@@ -3,10 +3,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'signup_page.dart';
 import 'admin_signup_page.dart';
-import 'main_app_wrapper.dart'; // Import the MainAppWrapper
+import 'home_screen.dart'; // Import HomeScreen directly
 import 'admin_home_screen.dart';
 import 'police_dashboard.dart';
-import 'dashboard_router.dart'; // Import the DashboardRouter
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -133,11 +132,10 @@ class _LoginPageState extends State<LoginPage> {
         return;
       }
 
-      // For regular users (citizens), use the MainAppWrapper which will determine
-      // whether to show HomeScreen or EmergencyContactDashboard based on their status
+      // For all regular users (citizens), always go to HomeScreen
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const MainAppWrapper()),
+        MaterialPageRoute(builder: (_) => const HomeScreen()),
       );
     } catch (e) {
       setState(() => _errorMsg = "Incorrect email or password");

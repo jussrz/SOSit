@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'home_screen.dart';
-import 'dashboard_router.dart';
 
 class EmergencyContactDashboard extends StatefulWidget {
   const EmergencyContactDashboard({super.key});
@@ -30,8 +29,8 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
     setState(() => _isLoading = true);
 
     try {
-      // Load emergency contact data
-      _emergencyContactData = await DashboardRouter.getEmergencyContactData();
+      // Load emergency contact data directly
+      _emergencyContactData = await _getEmergencyContactData();
 
       // Load user profile
       await _loadUserProfile();
@@ -50,6 +49,106 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
     }
   }
 
+  Future<Map<String, dynamic>> _getEmergencyContactData() async {
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) {
+      return {
+        'emergency_contacts': [],
+        'group_memberships': [],
+      };
+    }
+
+    try {
+      // Get emergency contacts where this user is the emergency contact
+      // Check if emergency_contact_user_id column exists, otherwise use a different approach
+      List<dynamic> emergencyContacts = [];
+
+      try {
+        // Try the original approach first
+        emergencyContacts = await supabase.from('emergency_contacts').select('''
+              id,
+              user_id,
+              emergency_contact_name,
+              emergency_contact_phone,
+              emergency_contact_relationship
+            ''').eq('emergency_contact_user_id', userId);
+      } catch (e) {
+        // If emergency_contact_user_id doesn't exist, try alternative approach
+        debugPrint('emergency_contact_user_id column might not exist: $e');
+
+        // Alternative: Check if this user's phone/email matches emergency contact info
+        final currentUser = await supabase
+            .from('user')
+            .select('phone, email')
+            .eq('id', userId)
+            .single();
+
+        if (currentUser['phone'] != null) {
+          emergencyContacts =
+              await supabase.from('emergency_contacts').select('''
+                id,
+                user_id,
+                emergency_contact_name,
+                emergency_contact_phone,
+                emergency_contact_relationship
+              ''').eq('emergency_contact_phone', currentUser['phone']);
+        }
+      }
+
+      // Get group memberships where this user is a member
+      List<dynamic> groupMemberships = [];
+      try {
+        groupMemberships = await supabase.from('group_memberships').select('''
+              id,
+              user_id,
+              relationship
+            ''').eq('user_id', userId);
+
+        // Get group details separately to avoid complex joins
+        for (var i = 0; i < groupMemberships.length; i++) {
+          if (groupMemberships[i]['group_id'] != null) {
+            try {
+              final groupData = await supabase
+                  .from('groups')
+                  .select('id, name, created_by')
+                  .eq('id', groupMemberships[i]['group_id'])
+                  .single();
+
+              groupMemberships[i]['group'] = groupData;
+
+              // Get creator info
+              if (groupData['created_by'] != null) {
+                final creatorData = await supabase
+                    .from('user')
+                    .select('id, first_name, last_name')
+                    .eq('id', groupData['created_by'])
+                    .single();
+
+                groupMemberships[i]['group']['creator'] = creatorData;
+              }
+            } catch (e) {
+              debugPrint('Error loading group details: $e');
+              groupMemberships[i]['group'] = null;
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('Error loading group memberships: $e');
+      }
+
+      return {
+        'emergency_contacts': emergencyContacts,
+        'group_memberships': groupMemberships,
+      };
+    } catch (e) {
+      debugPrint('Error getting emergency contact data: $e');
+      return {
+        'emergency_contacts': [],
+        'group_memberships': [],
+      };
+    }
+  }
+
   Future<void> _loadUserProfile() async {
     try {
       final userId = supabase.auth.currentUser?.id;
@@ -63,7 +162,8 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
 
       setState(() {
         _profile = {
-          'name': '${userData['first_name']} ${userData['last_name']}',
+          'name':
+              '${userData['first_name'] ?? ''} ${userData['last_name'] ?? ''}',
           'role': 'Emergency Contact',
           'phone': userData['phone'] ?? '',
           'email': userData['email'] ?? '',
@@ -89,42 +189,75 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
       }
 
       // Get emergency logs where this user might be involved as an emergency contact
-      // This queries logs where the user_id matches someone who has this person as emergency contact
+      // Simplify the query to avoid complex joins that might fail
       final alerts = await supabase
           .from('logs')
           .select('''
-      id,
-      created_at,
-      description,
-      emergency_level,
-      location,
-      responded_at,
-      police_id,
-      tanod_id
-    ''')
-          .or('police_id.in.(${relatedUserIds.join(',')}),tanod_id.in.(${relatedUserIds.join(',')})')
+            id,
+            user_id,
+            created_at,
+            description,
+            emergency_level,
+            location,
+            responded_at
+          ''')
+          .inFilter('user_id', relatedUserIds)
           .order('created_at', ascending: false)
           .limit(10);
 
+      // Get user details separately for each alert
+      List<Map<String, dynamic>> processedAlerts = [];
+      for (var alert in alerts) {
+        try {
+          // Get user info for this alert
+          String userName = 'Unknown User';
+          if (alert['user_id'] != null) {
+            final userInfo = await supabase
+                .from('user')
+                .select('first_name, last_name')
+                .eq('id', alert['user_id'])
+                .single();
+
+            userName =
+                '${userInfo['first_name'] ?? ''} ${userInfo['last_name'] ?? ''}'
+                    .trim();
+            if (userName.isEmpty) userName = 'Unknown User';
+          }
+
+          processedAlerts.add({
+            'id': alert['id'],
+            'name': userName,
+            'time': DateTime.parse(alert['created_at']),
+            'location': alert['location'] ?? 'Location not available',
+            'status': alert['responded_at'] != null ? 'resolved' : 'active',
+            'emergency_level': alert['emergency_level'] ?? 'regular',
+            'description': alert['description'] ?? '',
+            'userId': alert['user_id'],
+          });
+        } catch (e) {
+          debugPrint('Error processing alert ${alert['id']}: $e');
+          // Still add the alert with basic info
+          processedAlerts.add({
+            'id': alert['id'],
+            'name': 'Unknown User',
+            'time': DateTime.parse(alert['created_at']),
+            'location': alert['location'] ?? 'Location not available',
+            'status': alert['responded_at'] != null ? 'resolved' : 'active',
+            'emergency_level': alert['emergency_level'] ?? 'regular',
+            'description': alert['description'] ?? '',
+            'userId': alert['user_id'],
+          });
+        }
+      }
+
       setState(() {
-        _sosAlerts = alerts
-            .map((alert) => {
-                  'id': alert['id'],
-                  'name': alert['user'] != null
-                      ? '${alert['user']['first_name']} ${alert['user']['last_name']}'
-                      : 'Unknown User',
-                  'time': DateTime.parse(alert['created_at']),
-                  'location': alert['location'] ?? 'Location not available',
-                  'status':
-                      alert['responded_at'] != null ? 'resolved' : 'active',
-                  'emergency_level': alert['emergency_level'] ?? 'regular',
-                  'description': alert['description'] ?? '',
-                  'userId': alert['user_id'],
-                })
-            .toList();
+        _sosAlerts = processedAlerts;
       });
     } catch (e) {
       debugPrint('Error loading SOS alerts: $e');
+      setState(() {
+        _sosAlerts = [];
+      });
     }
   }
 
@@ -252,6 +385,9 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
               );
             },
             child: const Text('Switch to User View'),
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xFFF73D5C),
+            ),
           ),
         ],
       ),
@@ -667,10 +803,13 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
                         fontWeight: FontWeight.w600, fontSize: 15),
                   ),
                   const SizedBox(height: 4),
-                  Text(
-                    'Added by: ${membership['group']?['creator']?['first_name']} ${membership['group']?['creator']?['last_name']}',
-                    style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
-                  ),
+                  if (membership['group']?['creator'] != null)
+                    Text(
+                      'Added by: ${membership['group']['creator']['first_name'] ?? ''} ${membership['group']['creator']['last_name'] ?? ''}'
+                          .trim(),
+                      style:
+                          TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                    ),
                   const SizedBox(height: 2),
                   Text(
                     'Relationship: ${membership['relationship'] ?? 'Not specified'}',
