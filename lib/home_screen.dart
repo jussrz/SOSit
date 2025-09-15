@@ -298,17 +298,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _showSwitchViewDialog() {
-    if (!_isEmergencyContactForOthers) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content:
-              Text('You are not listed as an emergency contact for anyone.'),
-          backgroundColor: Color(0xFFF73D5C),
-        ),
-      );
-      return;
-    }
-
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -328,7 +317,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     builder: (_) => const EmergencyContactDashboard()),
               );
             },
-            child: const Text('Switch to Emergency Contact View'),
+            child: const Text('Go to Emergency Contact Dashboard'),
             style: TextButton.styleFrom(
               foregroundColor: const Color(0xFFF73D5C),
             ),
@@ -401,26 +390,23 @@ class _HomeScreenState extends State<HomeScreen> {
                           child: _buildSositLogo(screenWidth, screenHeight)),
                     ),
 
-                    // Switch View button (only show if user is emergency contact for others)
-                    if (!_checkingEmergencyContactStatus &&
-                        _isEmergencyContactForOthers) ...[
-                      GestureDetector(
-                        onTap: _showSwitchViewDialog,
-                        child: Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF73D5C).withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Icon(
-                            Icons.swap_horiz,
-                            color: const Color(0xFFF73D5C),
-                            size: screenWidth * 0.06,
-                          ),
+                    // Switch View button (always visible)
+                    GestureDetector(
+                      onTap: _showSwitchViewDialog,
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF73D5C).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(
+                          Icons.swap_horiz,
+                          color: const Color(0xFFF73D5C),
+                          size: screenWidth * 0.06,
                         ),
                       ),
-                      SizedBox(width: screenWidth * 0.02),
-                    ],
+                    ),
+                    SizedBox(width: screenWidth * 0.02),
 
                     // Profile avatar
                     GestureDetector(
