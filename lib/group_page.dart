@@ -370,7 +370,7 @@ class _GroupPageState extends State<GroupPage> {
                           backgroundColor: const Color(0xFFF73D5C),
                           padding: const EdgeInsets.symmetric(vertical: 16),
                         ),
-                        child: const Text('Create Group'),
+                        child: const Text('Create'),
                       ),
                     ],
                   ),
