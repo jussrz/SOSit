@@ -3,7 +3,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'change_password_page.dart';
 import 'admin_management_page.dart';
 import 'login_page.dart';
-import 'panic_button_settings_page.dart'; // Add this import
+import 'panic_button_settings_page.dart';
+import 'profile_page.dart'; //
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -92,6 +93,19 @@ class _SettingsPageState extends State<SettingsPage> {
                     fontSize: screenWidth * 0.04,
                     color: Colors.black)),
             SizedBox(height: screenHeight * 0.015),
+
+            _buildSettingsItem(
+              icon: Icons.account_circle_outlined,
+              title: 'Profile',
+              subtitle: 'View and edit your profile',
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const UserProfilePage()),
+                );
+              },
+            ),
+
 
             _buildSettingsItem(
               icon: Icons.person_outline,

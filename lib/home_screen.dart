@@ -348,7 +348,7 @@ class _HomeScreenState extends State<HomeScreen> {
             onMapCreated: (controller) => _mapController = controller,
           ),
 
-          // Top Card: Settings + Logo + Profile + Switch View
+          // Top Card: Settings + Logo + Switch View (removed profile button)
           Positioned(
             top: 0,
             left: 0,
@@ -390,7 +390,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           child: _buildSositLogo(screenWidth, screenHeight)),
                     ),
 
-                    // Switch View button (always visible)
+                    // Switch View button (moved to the right where profile was)
                     GestureDetector(
                       onTap: _showSwitchViewDialog,
                       child: Container(
@@ -406,37 +406,16 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                     ),
-                    SizedBox(width: screenWidth * 0.02),
-
-                    // Profile avatar
-                    GestureDetector(
-                      onTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                  builder: (_) => const ProfilePage()))
-                          .then((_) => _loadUserProfile()),
-                      child: _profilePhotoUrl.isNotEmpty
-                          ? CircleAvatar(
-                              radius: screenWidth * 0.045,
-                              backgroundImage: NetworkImage(_profilePhotoUrl))
-                          : CircleAvatar(
-                              radius: screenWidth * 0.045,
-                              backgroundColor: const Color(0xFFF73D5C),
-                              child: Icon(Icons.person,
-                                  color: Colors.white,
-                                  size: screenWidth * 0.05),
-                            ),
-                    ),
                   ],
                 ),
               ),
             ),
           ),
 
-          // Group FAB above emergency alert button
+          // Group FAB and Emergency Alert buttons (moved closer together with small gap)
           Positioned(
             right: screenWidth * 0.05,
-            bottom: screenHeight * 0.58, // adjust as needed
+            bottom: screenHeight * 0.52, // adjusted to maintain small gap
             child: FloatingActionButton(
               heroTag: 'group_fab',
               backgroundColor: Colors.white,
@@ -452,7 +431,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          // Floating Emergency Button
+          // Floating Emergency Button (kept in same position)
           Positioned(
             right: screenWidth * 0.05,
             bottom: screenHeight * 0.45,
