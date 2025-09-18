@@ -357,20 +357,41 @@ class _GroupPageState extends State<GroupPage> {
                       Expanded(
                         child: TextField(
                           controller: _groupNameController,
-                          decoration: const InputDecoration(
+                          decoration: InputDecoration(
                             labelText: 'New Group Name',
-                            border: OutlineInputBorder(),
+                            border: OutlineInputBorder(
+                              borderSide: BorderSide(color: Color(0xFFF73D5C)),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderSide: BorderSide(color: Color(0xFFF73D5C), width: 2),
+                            ),
                           ),
                         ),
                       ),
                       const SizedBox(width: 16),
-                      ElevatedButton(
-                        onPressed: _createGroup,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFF73D5C),
-                          padding: const EdgeInsets.symmetric(vertical: 16),
+                      SizedBox(
+                        height: 48,
+                        child: ElevatedButton(
+                          onPressed: _createGroup,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFF73D5C),
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(24), // match Add Emergency Contact button
+                            ),
+                            elevation: 2,
+                            padding: const EdgeInsets.symmetric(horizontal: 24),
+                          ),
+                          child: const Text(
+                            'Create',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 16,
+                              letterSpacing: 0.5,
+                              color: Colors.white, // ensure white text
+                            ),
+                          ),
                         ),
-                        child: const Text('Create'),
                       ),
                     ],
                   ),
@@ -401,74 +422,100 @@ class _GroupPageState extends State<GroupPage> {
                       return Card(
                         margin: const EdgeInsets.symmetric(
                             horizontal: 16, vertical: 8),
-                        child: ExpansionTile(
-                          title: Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  group['name'],
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          side: BorderSide(color: Colors.grey.shade200),
+                        ),
+                        child: Theme(
+                          data: Theme.of(context).copyWith(
+                            dividerColor: Colors.transparent,
+                          ),
+                          child: ExpansionTile(
+                            tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            childrenPadding: const EdgeInsets.symmetric(horizontal: 0, vertical: 0),
+                            maintainState: true,
+                            collapsedBackgroundColor: Colors.white,
+                            backgroundColor: Colors.white,
+                            title: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    group['name'],
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
                                 ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete_outline,
+                                      color: Colors.red),
+                                  onPressed: () => _deleteGroup(group['id']),
+                                ),
+                              ],
+                            ),
+                            subtitle:
+                                Text('${members.length} emergency contacts'),
+                            children: [
+                              // Add Member Button
+                              Padding(
+                                padding: const EdgeInsets.all(16.0),
+                                child: ElevatedButton.icon(
+                                  icon: const Icon(Icons.person_add),
+                                  label: const Text('Add Emergency Contact',
+                                    style: TextStyle(
+                                      color: Colors.white, // ensure white text
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFFF73D5C),
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 12, horizontal: 16),
+                                  ),
+                                  onPressed: () =>
+                                      _showAddMemberDialog(group['id']),
+                                ),
                               ),
-                              IconButton(
-                                icon: const Icon(Icons.delete_outline,
-                                    color: Colors.red),
-                                onPressed: () => _deleteGroup(group['id']),
-                              ),
+
+                              // Members List
+                              ...members.map((member) {
+                                final user = member['user'];
+                                return ListTile(
+                                  leading: const Icon(Icons.contact_emergency,
+                                      color: Color(0xFFF73D5C)),
+                                  title: Text(
+                                      '${user['first_name']} ${user['last_name']}',
+                                    style: const TextStyle(
+                                      color: Color(0xFFF73D5C), // accent color for name
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  subtitle: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(user['email']),
+                                      Text(
+                                        'Relationship: ${member['relationship']}',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w500,
+                                          color: Color(0xFFF73D5C),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  trailing: IconButton(
+                                    icon: const Icon(Icons.remove_circle_outline,
+                                        color: Colors.red),
+                                    onPressed: () =>
+                                        _removeMember(group['id'], member['id']),
+                                  ),
+                                );
+                              }).toList(),
                             ],
                           ),
-                          subtitle:
-                              Text('${members.length} emergency contacts'),
-                          children: [
-                            // Add Member Button
-                            Padding(
-                              padding: const EdgeInsets.all(16.0),
-                              child: ElevatedButton.icon(
-                                icon: const Icon(Icons.person_add),
-                                label: const Text('Add Emergency Contact'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFFF73D5C),
-                                  foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(
-                                      vertical: 12, horizontal: 16),
-                                ),
-                                onPressed: () =>
-                                    _showAddMemberDialog(group['id']),
-                              ),
-                            ),
-
-                            // Members List
-                            ...members.map((member) {
-                              final user = member['user'];
-                              return ListTile(
-                                leading: const Icon(Icons.contact_emergency,
-                                    color: Color(0xFFF73D5C)),
-                                title: Text(
-                                    '${user['first_name']} ${user['last_name']}'),
-                                subtitle: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(user['email']),
-                                    Text(
-                                      'Relationship: ${member['relationship']}',
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w500,
-                                        color: Color(0xFFF73D5C),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                trailing: IconButton(
-                                  icon: const Icon(Icons.remove_circle_outline,
-                                      color: Colors.red),
-                                  onPressed: () =>
-                                      _removeMember(group['id'], member['id']),
-                                ),
-                              );
-                            }).toList(),
-                          ],
                         ),
                       );
                     },
@@ -497,13 +544,20 @@ class _GroupPageState extends State<GroupPage> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Email search field
+                // Search by email field
                 TextField(
                   controller: _emailSearchController,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Search by email',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.email),
+                    labelStyle: TextStyle(color: Colors.black),
+                    floatingLabelStyle: TextStyle(color: Color(0xFFF73D5C)),
+                    border: OutlineInputBorder(
+                      borderSide: BorderSide(color: Color(0xFFF73D5C)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: Color(0xFFF73D5C), width: 2),
+                    ),
+                    prefixIcon: Icon(Icons.email, color: Color(0xFFF73D5C)),
                   ),
                   onChanged: (value) {
                     dialogSetState(() {
@@ -518,10 +572,17 @@ class _GroupPageState extends State<GroupPage> {
                 // Relationship field
                 TextField(
                   controller: _relationshipController,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Relationship (e.g., Mother, Brother, Friend)',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.family_restroom),
+                    labelStyle: TextStyle(color: Colors.black),
+                    floatingLabelStyle: TextStyle(color: Color(0xFFF73D5C)),
+                    border: OutlineInputBorder(
+                      borderSide: BorderSide(color: Color(0xFFF73D5C)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: Color(0xFFF73D5C), width: 2),
+                    ),
+                    prefixIcon: Icon(Icons.family_restroom, color: Color(0xFFF73D5C)),
                     hintText: 'Enter relationship to this person',
                   ),
                 ),
@@ -546,7 +607,14 @@ class _GroupPageState extends State<GroupPage> {
                         backgroundColor: const Color(0xFFF73D5C),
                         padding: const EdgeInsets.symmetric(vertical: 16),
                       ),
-                      child: const Text('Add Emergency Contact'),
+                      child: const Text(
+                        'Add Emergency Contact',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                        ),
+                      ),
                     ),
                   ),
 
@@ -554,12 +622,16 @@ class _GroupPageState extends State<GroupPage> {
 
                 // Search results
                 if (_isSearching)
-                  const Center(child: CircularProgressIndicator())
+                  const Center(
+                    child: CircularProgressIndicator(
+                      color: Color(0xFFF73D5C),
+                    ),
+                  )
                 else if (_searchResults.isNotEmpty)
                   Flexible(
                     child: Container(
                       decoration: BoxDecoration(
-                        border: Border.all(color: Colors.grey.shade300),
+                        border: Border.all(color: Color(0xFFF73D5C)),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       margin: const EdgeInsets.only(top: 8),
@@ -587,6 +659,7 @@ class _GroupPageState extends State<GroupPage> {
                                 fontWeight: isSelected
                                     ? FontWeight.bold
                                     : FontWeight.normal,
+                                color: isSelected ? const Color(0xFFF73D5C) : Colors.black,
                               ),
                             ),
                             subtitle: Text(
@@ -622,7 +695,7 @@ class _GroupPageState extends State<GroupPage> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
+              child: const Text('Cancel', style: TextStyle(color: Color(0xFFF73D5C))),
             ),
           ],
         ),
