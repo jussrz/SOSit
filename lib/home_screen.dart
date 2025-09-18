@@ -20,7 +20,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   String _gpsSignal = 'Getting signal...';
   String _location = 'Getting location...';
   String _emergencyName = '';
@@ -47,13 +47,80 @@ class _HomeScreenState extends State<HomeScreen> {
   // List to store all emergency contacts
   List<Map<String, dynamic>> _emergencyContacts = [];
 
+  RealtimeChannel? _emergencyContactsChannel;
+  bool _isSubscriptionActive = false;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _isLoadingProfile = true;
     _loadUserProfile();
     _getCurrentLocation();
     _checkEmergencyContactStatus();
+    _setupRealtimeSubscription();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed && mounted) {
+      debugPrint('App resumed - refreshing data');
+      refreshData();
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _emergencyContactsChannel?.unsubscribe();
+    _emailController.dispose();
+    _phoneController.dispose();
+    _birthdateController.dispose();
+    super.dispose();
+  }
+
+  void _setupRealtimeSubscription() {
+    final supabase = Supabase.instance.client;
+    final userId = supabase.auth.currentUser?.id;
+    
+    if (userId != null && !_isSubscriptionActive) {
+      try {
+        final channelName = 'emergency_contacts_${userId}_${DateTime.now().millisecondsSinceEpoch}';
+        debugPrint('Setting up realtime subscription: $channelName');
+        
+        _emergencyContactsChannel = supabase.channel(channelName)
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'emergency_contacts',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'user_id',
+              value: userId,
+            ),
+            callback: (payload) {
+              debugPrint('Realtime update received: ${payload.eventType}');
+              if (mounted) {
+                _loadUserProfile();
+              }
+            },
+          )
+          .subscribe();
+          
+        _isSubscriptionActive = true;
+        debugPrint('Realtime subscription setup complete');
+      } catch (e) {
+        debugPrint('Error setting up realtime subscription: $e');
+      }
+    }
+  }
+
+  void refreshData() {
+    if (mounted) {
+      _loadUserProfile();
+      _checkEmergencyContactStatus();
+    }
   }
 
   Future<void> _checkEmergencyContactStatus() async {
@@ -230,6 +297,10 @@ class _HomeScreenState extends State<HomeScreen> {
           .eq('user_id', userId)
           .order('created_at');
 
+      // Debug prints
+      debugPrint('Current UserId: $userId');
+      debugPrint('Emergency Contacts Data: $emergencyData');
+
       setState(() {
         _isLoadingProfile = false;
         _profilePhotoUrl = userData['profile_photo_url'] ?? '';
@@ -290,12 +361,13 @@ class _HomeScreenState extends State<HomeScreen> {
             child: const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.of(context).pop();
-              Navigator.of(context).pushReplacement(
+              await Navigator.of(context).push(
                 MaterialPageRoute(
                     builder: (_) => const EmergencyContactDashboard()),
               );
+              refreshData();
             },
             child: const Text('Go to Emergency Contact Dashboard'),
             style: TextButton.styleFrom(
@@ -355,10 +427,13 @@ class _HomeScreenState extends State<HomeScreen> {
                   children: [
                     // Settings icon
                     GestureDetector(
-                      onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) => const SettingsPage())),
+                      onTap: () async {
+                        await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const SettingsPage()));
+                        refreshData();
+                      },
                       child: Icon(Icons.settings,
                           color: const Color(0xFFF73D5C),
                           size: screenWidth * 0.07),
@@ -373,17 +448,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     // Switch View button (moved to the right where profile was)
                     GestureDetector(
                       onTap: _showSwitchViewDialog,
-                      child: Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF73D5C).withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Icon(
-                          Icons.swap_horiz,
-                          color: const Color(0xFFF73D5C),
-                          size: screenWidth * 0.06,
-                        ),
+                      child: Icon(
+                        Icons.swap_horiz,
+                        color: const Color(0xFFF73D5C),
+                        size: screenWidth * 0.06,
                       ),
                     ),
                   ],
@@ -400,12 +468,15 @@ class _HomeScreenState extends State<HomeScreen> {
               heroTag: 'group_fab',
               backgroundColor: Colors.white,
               elevation: 4,
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const GroupPage(),
-                ),
-              ),
+              onPressed: () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const GroupPage(),
+                  ),
+                );
+                refreshData();
+              },
               child:
                   Icon(Icons.groups, color: const Color(0xFFF73D5C), size: 32),
             ),
@@ -505,6 +576,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 emergencyService.triggerManualEmergency('CHECKIN');
               },
               child: const Text('Check-in'),
+              style: TextButton.styleFrom(foregroundColor: Color(0x00FFF73D5C)),
             ),
             TextButton(
               onPressed: () {
@@ -512,6 +584,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 emergencyService.triggerManualEmergency('REGULAR');
               },
               child: const Text('Regular'),
+              style: TextButton.styleFrom(foregroundColor: Color(0x00FFF73D5C)),
             ),
             TextButton(
               onPressed: () {
@@ -524,6 +597,7 @@ class _HomeScreenState extends State<HomeScreen> {
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
               child: const Text('Cancel'),
+              style: TextButton.styleFrom(foregroundColor: Color(0x00FFF73D5C)),
             ),
           ],
         );

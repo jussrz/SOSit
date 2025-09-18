@@ -313,32 +313,32 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
         backgroundColor: Colors.white,
         elevation: 0,
         centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () {
-            Navigator.of(context).pushAndRemoveUntil(
-              MaterialPageRoute(builder: (_) => const HomeScreen()),
-              (route) => false,
-            );
-          },
-        ),
         title: const Text('Emergency Contact Dashboard',
             style: TextStyle(color: Colors.black, fontWeight: FontWeight.w600)),
-        actions: [
-          // Switch to regular user view if applicable
-          IconButton(
-            icon: const Icon(Icons.swap_horiz, color: Colors.black),
-            onPressed: () => _showRoleSwitchDialog(),
-            tooltip: 'Switch View',
-          ),
-        ],
       ),
-      body: IndexedStack(
-        index: _selectedIndex,
+      body: Stack(
         children: [
-          _buildDashboard(screenWidth, screenHeight),
-          _buildHistory(screenWidth, screenHeight),
-          _buildProfileSettings(screenWidth, screenHeight),
+          IndexedStack(
+            index: _selectedIndex,
+            children: [
+              _buildDashboard(screenWidth, screenHeight),
+              _buildHistory(screenWidth, screenHeight),
+              _buildProfileSettings(screenWidth, screenHeight),
+            ],
+          ),
+          // Add switch icon to lower right beside profile tab
+          Positioned(
+            right: screenWidth * 0.04,
+            bottom: screenHeight * 0.08,
+            child: FloatingActionButton(
+              heroTag: 'switch_view_fab',
+              backgroundColor: Colors.white,
+              elevation: 2,
+              onPressed: _showRoleSwitchDialog,
+              child: Icon(Icons.swap_horiz, color: Color(0xFFF73D5C), size: 28),
+              mini: true,
+            ),
+          ),
         ],
       ),
       bottomNavigationBar: BottomNavigationBar(

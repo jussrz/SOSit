@@ -176,15 +176,6 @@ class _SettingsPageState extends State<SettingsPage> {
             SizedBox(height: screenHeight * 0.015),
 
             _buildSettingsItem(
-              icon: Icons.help_outline,
-              title: 'Help & Support',
-              subtitle: 'Get help and contact support',
-              onTap: () {
-                // Navigate to help page
-              },
-            ),
-
-            _buildSettingsItem(
               icon: Icons.info_outline,
               title: 'About',
               subtitle: 'App version and information',

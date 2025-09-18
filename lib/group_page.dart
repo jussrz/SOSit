@@ -359,6 +359,8 @@ class _GroupPageState extends State<GroupPage> {
                           controller: _groupNameController,
                           decoration: InputDecoration(
                             labelText: 'New Group Name',
+                            labelStyle: TextStyle(color: Colors.black),
+                    floatingLabelStyle: TextStyle(color: Color(0xFFF73D5C)),
                             border: OutlineInputBorder(
                               borderSide: BorderSide(color: Color(0xFFF73D5C)),
                             ),
