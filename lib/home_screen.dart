@@ -44,6 +44,9 @@ class _HomeScreenState extends State<HomeScreen> {
   final _phoneController = TextEditingController();
   final _birthdateController = TextEditingController();
 
+  // List to store all emergency contacts
+  List<Map<String, dynamic>> _emergencyContacts = [];
+
   @override
   void initState() {
     super.initState();
@@ -220,48 +223,25 @@ class _HomeScreenState extends State<HomeScreen> {
       final userData =
           await supabase.from('user').select().eq('id', userId).single();
 
-      // Load emergency contacts (limit 2)
+      // Load all emergency contacts from correct table
       final emergencyData = await supabase
           .from('emergency_contacts')
           .select()
           .eq('user_id', userId)
-          .order('created_at')
-          .limit(2);
+          .order('created_at');
 
       setState(() {
         _isLoadingProfile = false;
-
-        // Basic profile info
         _profilePhotoUrl = userData['profile_photo_url'] ?? '';
         _emailController.text = userData['email'] ?? '';
         _phoneController.text = userData['phone'] ?? '';
         _birthdateController.text = userData['birthdate'] ?? '';
-
-        // Clear previous emergency contact data
-        _emergencyName = '';
-        _emergencyPhone = '';
-        _relationship = '';
-        _emergencyName2 = '';
-        _emergencyPhone2 = '';
-        _relationship2 = '';
-
-        // Emergency contacts
-        if (emergencyData.isNotEmpty) {
-          _emergencyName = emergencyData[0]['emergency_contact_name'] ?? '';
-          _emergencyPhone = emergencyData[0]['emergency_contact_phone'] ?? '';
-          _relationship =
-              emergencyData[0]['emergency_contact_relationship'] ?? '';
-        }
-        if (emergencyData.length > 1) {
-          _emergencyName2 = emergencyData[1]['emergency_contact_name'] ?? '';
-          _emergencyPhone2 = emergencyData[1]['emergency_contact_phone'] ?? '';
-          _relationship2 =
-              emergencyData[1]['emergency_contact_relationship'] ?? '';
-        }
+        _emergencyContacts = List<Map<String, dynamic>>.from(emergencyData);
       });
     } catch (e) {
       setState(() {
         _isLoadingProfile = false;
+        _emergencyContacts = [];
       });
       debugPrint('Error loading profile or emergency contacts: $e');
     }
@@ -974,7 +954,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     // Check if there are no emergency contacts
-    if (_emergencyName.isEmpty && _emergencyName2.isEmpty) {
+    if (_emergencyContacts.isEmpty) {
       return Padding(
         padding: EdgeInsets.all(screenWidth * 0.05),
         child: Center(
@@ -993,8 +973,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // First Emergency Contact
-        if (_emergencyName.isNotEmpty)
+        for (final contact in _emergencyContacts)
           Container(
             margin: EdgeInsets.only(bottom: screenHeight * 0.015),
             padding: EdgeInsets.all(screenWidth * 0.04),
@@ -1005,7 +984,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             child: Row(
               children: [
-                // Person Icon
                 Container(
                   padding: EdgeInsets.all(screenWidth * 0.025),
                   decoration: BoxDecoration(
@@ -1019,13 +997,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
                 SizedBox(width: screenWidth * 0.04),
-                // Contact Info
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        _emergencyName,
+                        contact['emergency_contact_name'] ?? '',
                         style: TextStyle(
                           fontSize: screenWidth * 0.04,
                           fontWeight: FontWeight.w600,
@@ -1034,7 +1011,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       SizedBox(height: screenHeight * 0.002),
                       Text(
-                        _relationship,
+                        contact['emergency_contact_relationship'] ?? '',
                         style: TextStyle(
                           fontSize: screenWidth * 0.035,
                           color: Colors.grey.shade600,
@@ -1042,70 +1019,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       SizedBox(height: screenHeight * 0.002),
                       Text(
-                        _emergencyPhone,
-                        style: TextStyle(
-                          fontSize: screenWidth * 0.035,
-                          color: const Color(0xFF2196F3),
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-        // Second Emergency Contact
-        if (_emergencyName2.isNotEmpty)
-          Container(
-            margin: EdgeInsets.only(bottom: screenHeight * 0.015),
-            padding: EdgeInsets.all(screenWidth * 0.04),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade50,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.grey.shade200),
-            ),
-            child: Row(
-              children: [
-                // Person Icon
-                Container(
-                  padding: EdgeInsets.all(screenWidth * 0.025),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF73D5C).withOpacity(0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    Icons.person,
-                    color: const Color(0xFFF73D5C),
-                    size: screenWidth * 0.06,
-                  ),
-                ),
-                SizedBox(width: screenWidth * 0.04),
-                // Contact Info
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _emergencyName2,
-                        style: TextStyle(
-                          fontSize: screenWidth * 0.04,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.black,
-                        ),
-                      ),
-                      SizedBox(height: screenHeight * 0.002),
-                      Text(
-                        _relationship2,
-                        style: TextStyle(
-                          fontSize: screenWidth * 0.035,
-                          color: Colors.grey.shade600,
-                        ),
-                      ),
-                      SizedBox(height: screenHeight * 0.002),
-                      Text(
-                        _emergencyPhone2,
+                        contact['emergency_contact_phone'] ?? '',
                         style: TextStyle(
                           fontSize: screenWidth * 0.035,
                           color: const Color(0xFF2196F3),
