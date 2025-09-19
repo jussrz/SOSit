@@ -344,14 +344,6 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
         automaticallyImplyLeading: false,
         title: const Text('Emergency Contact Dashboard',
             style: TextStyle(color: Colors.black, fontWeight: FontWeight.w600)),
-        actions: [
-          // Debug button to show current status
-          if (true) // Set to false in production
-            IconButton(
-              icon: Icon(Icons.info_outline, color: Colors.grey.shade600),
-              onPressed: _showDebugInfo,
-            ),
-        ],
       ),
       body: Stack(
         children: [
@@ -396,43 +388,6 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
           BottomNavigationBarItem(
             icon: Icon(Icons.person),
             label: 'Profile',
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Debug method to show current status - remove in production
-  void _showDebugInfo() {
-    final emergencyContacts = _emergencyContactData['emergency_contacts'] as List? ?? [];
-    final groupMemberships = _emergencyContactData['group_memberships'] as List? ?? [];
-    
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Debug Info'),
-        content: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('Current User ID: ${supabase.auth.currentUser?.id}'),
-              SizedBox(height: 10),
-              Text('Emergency Contacts Found: ${emergencyContacts.length}'),
-              ...emergencyContacts.map((c) => Text('  - ${c['emergency_contact_name']} (User: ${c['user_id']})')),
-              SizedBox(height: 10),
-              Text('Group Memberships: ${groupMemberships.length}'),
-              ...groupMemberships.map((g) => Text('  - ${g['group']?['name'] ?? 'Unknown'} (Creator: ${g['group']?['created_by']})')),
-              SizedBox(height: 10),
-              Text('SOS Alerts: ${_sosAlerts.length}'),
-              Text('Related User IDs: ${_getRelatedUserIds().join(', ')}'),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text('Close'),
           ),
         ],
       ),
