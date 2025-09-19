@@ -605,16 +605,26 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
         border: Border.all(color: Colors.grey.shade200),
       ),
       child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: alert['status'] == 'active'
-              ? const Color(0xFFF73D5C).withOpacity(0.15)
-              : Colors.green.withOpacity(0.15),
-          child: Icon(
-            alert['status'] == 'active' ? Icons.warning : Icons.check_circle,
-            color: alert['status'] == 'active'
-                ? const Color(0xFFF73D5C)
-                : Colors.green,
-          ),
+        leading: FutureBuilder<String?>(
+          future: _getUserProfilePhoto(alert['userId']),
+          builder: (context, snapshot) {
+            return CircleAvatar(
+              backgroundColor: alert['status'] == 'active'
+                  ? const Color(0xFFF73D5C).withOpacity(0.15)
+                  : Colors.green.withOpacity(0.15),
+              backgroundImage: snapshot.hasData && snapshot.data!.isNotEmpty
+                  ? NetworkImage(snapshot.data!)
+                  : null,
+              child: snapshot.hasData && snapshot.data!.isNotEmpty
+                  ? null
+                  : Icon(
+                      alert['status'] == 'active' ? Icons.warning : Icons.check_circle,
+                      color: alert['status'] == 'active'
+                          ? const Color(0xFFF73D5C)
+                          : Colors.green,
+                    ),
+            );
+          },
         ),
         title: Text(alert['name'],
             style: const TextStyle(fontWeight: FontWeight.w600)),
@@ -772,25 +782,35 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
                         // Header with name and emergency level
                         Row(
                           children: [
-                            CircleAvatar(
-                              backgroundColor: alert['status'] == 'active'
-                                  ? const Color(0xFFF73D5C).withOpacity(0.15)
-                                  : alert['status'] == 'resolved'
-                                      ? Colors.green.withOpacity(0.15)
-                                      : Colors.grey.withOpacity(0.15),
-                              child: Icon(
-                                alert['status'] == 'active' 
-                                    ? Icons.warning 
-                                    : alert['status'] == 'resolved'
-                                        ? Icons.check_circle
-                                        : Icons.history,
-                                color: alert['status'] == 'active'
-                                    ? const Color(0xFFF73D5C)
-                                    : alert['status'] == 'resolved'
-                                        ? Colors.green
-                                        : Colors.grey.shade700,
-                                size: 20,
-                              ),
+                            FutureBuilder<String?>(
+                              future: _getUserProfilePhoto(alert['userId']),
+                              builder: (context, snapshot) {
+                                return CircleAvatar(
+                                  backgroundColor: alert['status'] == 'active'
+                                      ? const Color(0xFFF73D5C).withOpacity(0.15)
+                                      : alert['status'] == 'resolved'
+                                          ? Colors.green.withOpacity(0.15)
+                                          : Colors.grey.withOpacity(0.15),
+                                  backgroundImage: snapshot.hasData && snapshot.data!.isNotEmpty
+                                      ? NetworkImage(snapshot.data!)
+                                      : null,
+                                  child: snapshot.hasData && snapshot.data!.isNotEmpty
+                                      ? null
+                                      : Icon(
+                                          alert['status'] == 'active' 
+                                              ? Icons.warning 
+                                              : alert['status'] == 'resolved'
+                                                  ? Icons.check_circle
+                                                  : Icons.history,
+                                          color: alert['status'] == 'active'
+                                              ? const Color(0xFFF73D5C)
+                                              : alert['status'] == 'resolved'
+                                                  ? Colors.green
+                                                  : Colors.grey.shade700,
+                                          size: 20,
+                                        ),
+                                );
+                              },
                             ),
                             SizedBox(width: screenWidth * 0.03),
                             Expanded(
@@ -1188,11 +1208,20 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
               children: [
                 Row(
                   children: [
-                    CircleAvatar(
-                      backgroundColor: const Color(0xFFF73D5C),
-                      radius: screenWidth * 0.07,
-                      child: const Icon(Icons.person,
-                          color: Colors.white, size: 32),
+                    FutureBuilder<String?>(
+                      future: _getUserProfilePhoto(alert['userId']),
+                      builder: (context, snapshot) {
+                        return CircleAvatar(
+                          backgroundColor: const Color(0xFFF73D5C),
+                          radius: screenWidth * 0.07,
+                          backgroundImage: snapshot.hasData && snapshot.data!.isNotEmpty
+                              ? NetworkImage(snapshot.data!)
+                              : null,
+                          child: snapshot.hasData && snapshot.data!.isNotEmpty
+                              ? null
+                              : const Icon(Icons.person, color: Colors.white, size: 32),
+                        );
+                      },
                     ),
                     const SizedBox(width: 16),
                     Expanded(
@@ -1335,9 +1364,19 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
           border: Border.all(color: Colors.grey.shade200),
         ),
         child: ListTile(
-          leading: CircleAvatar(
-            backgroundColor: const Color(0xFFF73D5C).withOpacity(0.15),
-            child: const Icon(Icons.person, color: Color(0xFFF73D5C)),
+          leading: FutureBuilder<String?>(
+            future: _getUserProfilePhoto(contact['user_id']),
+            builder: (context, snapshot) {
+              return CircleAvatar(
+                backgroundColor: const Color(0xFFF73D5C).withOpacity(0.15),
+                backgroundImage: snapshot.hasData && snapshot.data!.isNotEmpty
+                    ? NetworkImage(snapshot.data!)
+                    : null,
+                child: snapshot.hasData && snapshot.data!.isNotEmpty
+                    ? null
+                    : const Icon(Icons.person, color: Color(0xFFF73D5C)),
+              );
+            },
           ),
           title: FutureBuilder<String>(
             future: _getUserName(contact['user_id']),
@@ -1425,10 +1464,20 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
               children: [
                 Row(
                   children: [
-                    CircleAvatar(
-                      backgroundColor: const Color(0xFFF73D5C),
-                      radius: screenWidth * 0.07,
-                      child: const Icon(Icons.person, color: Colors.white, size: 32),
+                    FutureBuilder<String?>(
+                      future: _getUserProfilePhoto(contact['user_id']),
+                      builder: (context, snapshot) {
+                        return CircleAvatar(
+                          backgroundColor: const Color(0xFFF73D5C),
+                          radius: screenWidth * 0.07,
+                          backgroundImage: snapshot.hasData && snapshot.data!.isNotEmpty
+                              ? NetworkImage(snapshot.data!)
+                              : null,
+                          child: snapshot.hasData && snapshot.data!.isNotEmpty
+                              ? null
+                              : const Icon(Icons.person, color: Colors.white, size: 32),
+                        );
+                      },
                     ),
                     const SizedBox(width: 16),
                     Expanded(
@@ -1525,6 +1574,23 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
         );
       },
     );
+  }
+
+  Future<String?> _getUserProfilePhoto(String? userId) async {
+    if (userId == null) return null;
+    
+    try {
+      final userData = await supabase
+          .from('user')
+          .select('profile_photo_url')
+          .eq('id', userId)
+          .single();
+      
+      return userData['profile_photo_url'];
+    } catch (e) {
+      debugPrint('Error fetching profile photo for user $userId: $e');
+      return null;
+    }
   }
 
   String _formatDate(DateTime date) {

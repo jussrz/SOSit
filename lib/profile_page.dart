@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:io';
-
-// Only import image_picker if available, otherwise instruct user to add it to pubspec.yaml
-// import 'package:image_picker/image_picker.dart';
+import 'package:image_picker/image_picker.dart';
 
 class UserProfilePage extends StatefulWidget {
   const UserProfilePage({super.key});
@@ -89,24 +87,58 @@ class _UserProfilePageState extends State<UserProfilePage> {
   }
 
   Future<void> _pickProfilePhoto() async {
-    // You must add image_picker to your pubspec.yaml for this to work:
-    // dependencies:
-    //   image_picker: ^1.0.0
-    // Then run: flutter pub get
-    // Uncomment the import at the top after installing.
-    //
-    // final picker = ImagePicker();
-    // final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
-    // if (picked != null) {
-    //   setState(() {
-    //     _newProfilePhoto = File(picked.path);
-    //   });
-    // }
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-          content: Text(
-              'Please add image_picker to your pubspec.yaml to pick images.')),
-    );
+    try {
+      final picker = ImagePicker();
+      
+      // Show options to pick from gallery or camera
+      final ImageSource? source = await showDialog<ImageSource>(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: const Text('Select Photo Source'),
+            content: const Text('Choose where to get your profile photo from:'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(ImageSource.camera),
+                child: const Text('Camera'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(ImageSource.gallery),
+                child: const Text('Gallery'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Cancel'),
+              ),
+            ],
+          );
+        },
+      );
+
+      if (source != null) {
+        final picked = await picker.pickImage(
+          source: source, 
+          imageQuality: 80,
+          maxWidth: 800,
+          maxHeight: 800,
+        );
+        
+        if (picked != null) {
+          setState(() {
+            _newProfilePhoto = File(picked.path);
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error picking image: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Future<String?> _uploadProfilePhoto(File file) async {
@@ -114,13 +146,13 @@ class _UserProfilePageState extends State<UserProfilePage> {
     if (userId == null) return null;
     final fileExt = file.path.split('.').last;
     final filePath =
-        'profile_photos/$userId.${DateTime.now().millisecondsSinceEpoch}.$fileExt';
+        '$userId/profile_photo.${DateTime.now().millisecondsSinceEpoch}.$fileExt';
     final bytes = await file.readAsBytes();
-    final res = await supabase.storage.from('profile-photos').uploadBinary(
+    final res = await supabase.storage.from('profile-photo').uploadBinary(
         filePath, bytes,
         fileOptions: const FileOptions(upsert: true));
     if (res.isEmpty) return null;
-    final url = supabase.storage.from('profile-photos').getPublicUrl(filePath);
+    final url = supabase.storage.from('profile-photo').getPublicUrl(filePath);
     return url;
   }
 
@@ -185,141 +217,196 @@ class _UserProfilePageState extends State<UserProfilePage> {
 
   @override
   Widget build(BuildContext context) {
+    final screenSize = MediaQuery.of(context).size;
+    final screenWidth = screenSize.width;
+    final screenHeight = screenSize.height;
+
     return Scaffold(
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          icon: Icon(Icons.arrow_back,
+              color: Colors.black, size: screenWidth * 0.06),
           onPressed: () => Navigator.of(context).pop(),
         ),
         centerTitle: true,
-        title: const Text('User Profile',
-            style: TextStyle(color: Colors.black, fontWeight: FontWeight.w500)),
+        title: Text(
+          'User Profile',
+          style: TextStyle(
+            color: Colors.black,
+            fontWeight: FontWeight.w600,
+            fontSize: screenWidth * 0.045,
+          ),
+        ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Form(
-          key: _formKey,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: EdgeInsets.all(screenWidth * 0.04),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Profile Photo Section
-              Center(
-                child: Stack(
-                  alignment: Alignment.bottomRight,
-                  children: [
-                    Container(
-                      width: 80,
-                      height: 80,
-                      decoration: BoxDecoration(
-                        color: Colors.grey[300],
-                        shape: BoxShape.circle,
-                        image: _newProfilePhoto != null
-                            ? DecorationImage(
-                                image: FileImage(_newProfilePhoto!),
-                                fit: BoxFit.cover,
-                              )
-                            : (_profilePhotoUrl.isNotEmpty
-                                ? DecorationImage(
-                                    image: NetworkImage(_profilePhotoUrl),
-                                    fit: BoxFit.cover,
-                                  )
-                                : null),
-                      ),
-                      child:
-                          (_newProfilePhoto == null && _profilePhotoUrl.isEmpty)
-                              ? Icon(Icons.person,
-                                  size: 40, color: Colors.grey[600])
-                              : null,
-                    ),
-                    Positioned(
-                      bottom: 2,
-                      right: 2,
-                      child: GestureDetector(
-                        onTap: _pickProfilePhoto,
-                        child: Container(
-                          width: 28,
-                          height: 28,
-                          decoration: const BoxDecoration(
-                            color: Colors.blue,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.edit,
-                              color: Colors.white, size: 16),
-                        ),
-                      ),
+              SizedBox(height: screenHeight * 0.01),
+
+              // Main content card
+              Container(
+                padding: EdgeInsets.all(screenWidth * 0.06),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.04),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(height: 32),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Profile Photo Section
+                      Center(
+                        child: Stack(
+                          alignment: Alignment.bottomRight,
+                          children: [
+                            Container(
+                              width: screenWidth * 0.22,
+                              height: screenWidth * 0.22,
+                              decoration: BoxDecoration(
+                                color: Colors.grey[300],
+                                shape: BoxShape.circle,
+                                image: _newProfilePhoto != null
+                                    ? DecorationImage(
+                                        image: FileImage(_newProfilePhoto!),
+                                        fit: BoxFit.cover,
+                                      )
+                                    : (_profilePhotoUrl.isNotEmpty
+                                        ? DecorationImage(
+                                            image: NetworkImage(_profilePhotoUrl),
+                                            fit: BoxFit.cover,
+                                          )
+                                        : null),
+                              ),
+                              child: (_newProfilePhoto == null && _profilePhotoUrl.isEmpty)
+                                  ? Icon(Icons.person,
+                                      size: screenWidth * 0.1, color: Colors.grey[600])
+                                  : null,
+                            ),
+                            Positioned(
+                              bottom: 2,
+                              right: 2,
+                              child: GestureDetector(
+                                onTap: _pickProfilePhoto,
+                                child: Container(
+                                  width: screenWidth * 0.08,
+                                  height: screenWidth * 0.08,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF73D5C),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: Colors.white, width: 2),
+                                  ),
+                                  child: Icon(Icons.edit,
+                                      color: Colors.white, size: screenWidth * 0.04),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      SizedBox(height: screenHeight * 0.04),
 
-              // Personal Details Section
-              const Text('Personal Details',
-                  style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 16,
-                      color: Colors.black)),
-              const SizedBox(height: 16),
+                      // Personal Details Section
+                      Text(
+                        'Personal Details',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: screenWidth * 0.045,
+                          color: Colors.black,
+                        ),
+                      ),
+                      SizedBox(height: screenHeight * 0.025),
 
-              _buildTextField('First Name', _firstNameController),
-              const SizedBox(height: 12),
-              _buildTextField('Middle Name', _middleNameController),
-              const SizedBox(height: 12),
-              _buildTextField('Last Name', _lastNameController),
-              const SizedBox(height: 12),
-              _buildTextField('Date of Birth', _birthdateController,
-                  readOnly: true, onTap: () async {
-                DateTime? picked = await showDatePicker(
-                  context: context,
-                  initialDate: _birthdateController.text.isNotEmpty
-                      ? DateTime.tryParse(_birthdateController.text) ??
-                          DateTime(2000, 1, 1)
-                      : DateTime(2000, 1, 1),
-                  firstDate: DateTime(1900),
-                  lastDate: DateTime.now(),
-                );
-                if (picked != null) {
-                  _birthdateController.text =
-                      '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
-                }
-              }),
-              const SizedBox(height: 12),
-              _buildTextField('Phone Number', _userPhoneController,
-                  keyboardType: TextInputType.phone),
-              const SizedBox(height: 12),
-              _buildTextField('Email Address', _emailController,
-                  readOnly: true),
+                      _buildTextField('First Name', _firstNameController, screenWidth, screenHeight),
+                      SizedBox(height: screenHeight * 0.02),
+                      _buildTextField('Middle Name', _middleNameController, screenWidth, screenHeight),
+                      SizedBox(height: screenHeight * 0.02),
+                      _buildTextField('Last Name', _lastNameController, screenWidth, screenHeight),
+                      SizedBox(height: screenHeight * 0.02),
+                      _buildTextField('Date of Birth', _birthdateController, screenWidth, screenHeight,
+                          readOnly: true, 
+                          icon: Icons.calendar_today,
+                          onTap: () async {
+                        DateTime? picked = await showDatePicker(
+                          context: context,
+                          initialDate: _birthdateController.text.isNotEmpty
+                              ? DateTime.tryParse(_birthdateController.text) ??
+                                  DateTime(2000, 1, 1)
+                              : DateTime(2000, 1, 1),
+                          firstDate: DateTime(1900),
+                          lastDate: DateTime.now(),
+                          builder: (context, child) {
+                            return Theme(
+                              data: Theme.of(context).copyWith(
+                                colorScheme: ColorScheme.light(
+                                  primary: const Color(0xFFF73D5C),
+                                  onPrimary: Colors.white,
+                                  onSurface: Colors.black,
+                                ),
+                                textButtonTheme: TextButtonThemeData(
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: const Color(0xFFF73D5C),
+                                  ),
+                                ),
+                              ),
+                              child: child!,
+                            );
+                          },
+                        );
+                        if (picked != null) {
+                          _birthdateController.text =
+                              '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
+                        }
+                      }),
+                      SizedBox(height: screenHeight * 0.02),
+                      _buildTextField('Phone Number', _userPhoneController, screenWidth, screenHeight,
+                          keyboardType: TextInputType.phone, icon: Icons.phone),
+                      SizedBox(height: screenHeight * 0.02),
+                      _buildTextField('Email Address', _emailController, screenWidth, screenHeight,
+                          readOnly: true, icon: Icons.email),
 
-              const SizedBox(height: 32),
+                      SizedBox(height: screenHeight * 0.04),
 
-              // Save Button
-              Container(
-                width: double.infinity,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF73D5C),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: TextButton(
-                  onPressed: _isLoading ? null : _saveProfile,
-                  child: _isLoading
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor:
-                                AlwaysStoppedAnimation<Color>(Colors.white),
+                      // Save Button
+                      SizedBox(
+                        width: double.infinity,
+                        height: screenHeight * 0.06,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFF73D5C),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                            elevation: 2,
                           ),
-                        )
-                      : const Text('Save',
-                          style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600)),
+                          onPressed: _isLoading ? null : _saveProfile,
+                          child: _isLoading
+                              ? const CircularProgressIndicator(color: Colors.white)
+                              : Text(
+                                  'Save Profile',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: screenWidth * 0.045,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -331,41 +418,57 @@ class _UserProfilePageState extends State<UserProfilePage> {
 
   Widget _buildTextField(
     String label,
-    TextEditingController controller, {
+    TextEditingController controller,
+    double screenWidth,
+    double screenHeight, {
     bool readOnly = false,
     VoidCallback? onTap,
     TextInputType? keyboardType,
+    IconData? icon,
   }) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey.shade400),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: TextFormField(
-        controller: controller,
-        readOnly: readOnly,
-        onTap: onTap,
-        keyboardType: keyboardType,
-        cursorColor: const Color(0xFFF73D5C),
-        decoration: InputDecoration(
-          labelText: label,
-          labelStyle: const TextStyle(
-            color: Colors.grey,
-            fontSize: 16,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: screenWidth * 0.04,
+            fontWeight: FontWeight.w500,
+            color: Colors.black87,
           ),
-          border: InputBorder.none,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          floatingLabelBehavior: FloatingLabelBehavior.auto,
         ),
-        style: TextStyle(
-          fontSize: 16,
-          color: (readOnly && label == 'Email Address')
-              ? Colors.grey.shade500
-              : Colors.black,
+        SizedBox(height: screenHeight * 0.01),
+        Container(
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey.shade300),
+            borderRadius: BorderRadius.circular(12),
+            color: readOnly ? Colors.grey.shade100 : Colors.grey.shade50,
+          ),
+          child: TextFormField(
+            controller: controller,
+            readOnly: readOnly,
+            onTap: onTap,
+            keyboardType: keyboardType,
+            cursorColor: const Color(0xFFF73D5C),
+            decoration: InputDecoration(
+              prefixIcon: icon != null 
+                  ? Icon(icon, color: const Color(0xFFF73D5C).withOpacity(0.7))
+                  : null,
+              hintText: 'Enter $label',
+              hintStyle: TextStyle(color: Colors.grey.shade500),
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: icon != null ? screenWidth * 0.02 : screenWidth * 0.04,
+                vertical: screenHeight * 0.020,
+              ),
+            ),
+            style: TextStyle(
+              fontSize: screenWidth * 0.04,
+              color: readOnly ? Colors.grey.shade600 : Colors.black,
+            ),
+          ),
         ),
-      ),
+      ],
     );
   }
 

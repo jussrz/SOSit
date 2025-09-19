@@ -144,7 +144,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
     final screenHeight = screenSize.height;
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Colors.grey[100],
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
@@ -158,188 +158,249 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
           'Change Password',
           style: TextStyle(
             color: Colors.black,
-            fontWeight: FontWeight.w500,
+            fontWeight: FontWeight.w600,
             fontSize: screenWidth * 0.045,
           ),
         ),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: EdgeInsets.all(screenWidth * 0.06),
+          padding: EdgeInsets.all(screenWidth * 0.04),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SizedBox(height: screenHeight * 0.02),
-
-              // Current Password Field
-              Text(
-                'Current Password',
-                style: TextStyle(
-                  fontSize: screenWidth * 0.04,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.black87,
-                ),
-              ),
               SizedBox(height: screenHeight * 0.01),
+
+              // Main content card
               Container(
+                padding: EdgeInsets.all(screenWidth * 0.06),
                 decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade400),
-                  borderRadius: BorderRadius.circular(12),
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.04),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
                 ),
-                child: TextFormField(
-                  controller: _currentPasswordController,
-                  decoration: InputDecoration(
-                    prefixIcon:
-                        const Icon(Icons.lock_outline, color: Colors.grey),
-                    hintText: 'Enter current password',
-                    border: InputBorder.none,
-                    contentPadding:
-                        EdgeInsets.symmetric(vertical: screenHeight * 0.020),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscureCurrentPassword
-                            ? Icons.visibility_off
-                            : Icons.visibility,
-                        color: Colors.grey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Current Password Field
+                    Text(
+                      'Current Password',
+                      style: TextStyle(
+                        fontSize: screenWidth * 0.04,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.black87,
                       ),
-                      onPressed: () => setState(() =>
-                          _obscureCurrentPassword = !_obscureCurrentPassword),
                     ),
-                  ),
-                  obscureText: _obscureCurrentPassword,
-                ),
-              ),
-              if (_submitted && _currentPasswordError != null)
-                Padding(
-                  padding: const EdgeInsets.only(left: 8, top: 4),
-                  child: Text(
-                    _currentPasswordError!,
-                    style: const TextStyle(color: Colors.red, fontSize: 12),
-                  ),
-                ),
-
-              SizedBox(height: screenHeight * 0.020),
-
-              // New Password Field
-              Text(
-                'New Password',
-                style: TextStyle(
-                  fontSize: screenWidth * 0.04,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.black87,
-                ),
-              ),
-              SizedBox(height: screenHeight * 0.01),
-              Container(
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade400),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: TextFormField(
-                  controller: _newPasswordController,
-                  decoration: InputDecoration(
-                    prefixIcon: const Icon(Icons.lock, color: Colors.grey),
-                    hintText: 'Enter new password',
-                    border: InputBorder.none,
-                    contentPadding:
-                        EdgeInsets.symmetric(vertical: screenHeight * 0.020),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscureNewPassword
-                            ? Icons.visibility_off
-                            : Icons.visibility,
-                        color: Colors.grey,
+                    SizedBox(height: screenHeight * 0.01),
+                    Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.shade300),
+                        borderRadius: BorderRadius.circular(12),
+                        color: Colors.grey.shade50,
                       ),
-                      onPressed: () => setState(
-                          () => _obscureNewPassword = !_obscureNewPassword),
-                    ),
-                  ),
-                  obscureText: _obscureNewPassword,
-                ),
-              ),
-              if (_submitted && _newPasswordError != null)
-                Padding(
-                  padding: const EdgeInsets.only(left: 8, top: 4),
-                  child: Text(
-                    _newPasswordError!,
-                    style: const TextStyle(color: Colors.red, fontSize: 12),
-                  ),
-                ),
-
-              SizedBox(height: screenHeight * 0.020),
-
-              // Confirm Password Field
-              Text(
-                'Confirm New Password',
-                style: TextStyle(
-                  fontSize: screenWidth * 0.04,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.black87,
-                ),
-              ),
-              SizedBox(height: screenHeight * 0.01),
-              Container(
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade400),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: TextFormField(
-                  controller: _confirmPasswordController,
-                  decoration: InputDecoration(
-                    prefixIcon: const Icon(Icons.lock, color: Colors.grey),
-                    hintText: 'Confirm new password',
-                    border: InputBorder.none,
-                    contentPadding:
-                        EdgeInsets.symmetric(vertical: screenHeight * 0.020),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscureConfirmPassword
-                            ? Icons.visibility_off
-                            : Icons.visibility,
-                        color: Colors.grey,
-                      ),
-                      onPressed: () => setState(() =>
-                          _obscureConfirmPassword = !_obscureConfirmPassword),
-                    ),
-                  ),
-                  obscureText: _obscureConfirmPassword,
-                ),
-              ),
-              if (_submitted && _confirmPasswordError != null)
-                Padding(
-                  padding: const EdgeInsets.only(left: 8, top: 4),
-                  child: Text(
-                    _confirmPasswordError!,
-                    style: const TextStyle(color: Colors.red, fontSize: 12),
-                  ),
-                ),
-
-              SizedBox(height: screenHeight * 0.04),
-
-              // Update Button
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFF73D5C),
-                    padding:
-                        EdgeInsets.symmetric(vertical: screenHeight * 0.015),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    elevation: 0,
-                  ),
-                  onPressed: _isLoading ? null : _changePassword,
-                  child: _isLoading
-                      ? const CircularProgressIndicator(color: Colors.white)
-                      : Text(
-                          'Update Password',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: screenWidth * 0.045,
-                            fontWeight: FontWeight.w600,
+                      child: TextFormField(
+                        controller: _currentPasswordController,
+                        decoration: InputDecoration(
+                          prefixIcon: Icon(Icons.lock_outline, 
+                              color: const Color(0xFFF73D5C).withOpacity(0.7)),
+                          hintText: 'Enter current password',
+                          hintStyle: TextStyle(color: Colors.grey.shade500),
+                          border: InputBorder.none,
+                          contentPadding:
+                              EdgeInsets.symmetric(vertical: screenHeight * 0.020),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscureCurrentPassword
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
+                              color: Colors.grey,
+                            ),
+                            onPressed: () => setState(() =>
+                                _obscureCurrentPassword = !_obscureCurrentPassword),
                           ),
                         ),
+                        obscureText: _obscureCurrentPassword,
+                      ),
+                    ),
+                    if (_submitted && _currentPasswordError != null)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 8, top: 4),
+                        child: Text(
+                          _currentPasswordError!,
+                          style: const TextStyle(color: Colors.red, fontSize: 12),
+                        ),
+                      ),
+
+                    SizedBox(height: screenHeight * 0.025),
+
+                    // New Password Field
+                    Text(
+                      'New Password',
+                      style: TextStyle(
+                        fontSize: screenWidth * 0.04,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    SizedBox(height: screenHeight * 0.01),
+                    Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.shade300),
+                        borderRadius: BorderRadius.circular(12),
+                        color: Colors.grey.shade50,
+                      ),
+                      child: TextFormField(
+                        controller: _newPasswordController,
+                        decoration: InputDecoration(
+                          prefixIcon: Icon(Icons.lock, 
+                              color: const Color(0xFFF73D5C).withOpacity(0.7)),
+                          hintText: 'Enter new password',
+                          hintStyle: TextStyle(color: Colors.grey.shade500),
+                          border: InputBorder.none,
+                          contentPadding:
+                              EdgeInsets.symmetric(vertical: screenHeight * 0.020),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscureNewPassword
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
+                              color: Colors.grey,
+                            ),
+                            onPressed: () => setState(
+                                () => _obscureNewPassword = !_obscureNewPassword),
+                          ),
+                        ),
+                        obscureText: _obscureNewPassword,
+                      ),
+                    ),
+                    if (_submitted && _newPasswordError != null)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 8, top: 4),
+                        child: Text(
+                          _newPasswordError!,
+                          style: const TextStyle(color: Colors.red, fontSize: 12),
+                        ),
+                      ),
+
+                    SizedBox(height: screenHeight * 0.025),
+
+                    // Confirm Password Field
+                    Text(
+                      'Confirm New Password',
+                      style: TextStyle(
+                        fontSize: screenWidth * 0.04,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    SizedBox(height: screenHeight * 0.01),
+                    Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.shade300),
+                        borderRadius: BorderRadius.circular(12),
+                        color: Colors.grey.shade50,
+                      ),
+                      child: TextFormField(
+                        controller: _confirmPasswordController,
+                        decoration: InputDecoration(
+                          prefixIcon: Icon(Icons.lock, 
+                              color: const Color(0xFFF73D5C).withOpacity(0.7)),
+                          hintText: 'Confirm new password',
+                          hintStyle: TextStyle(color: Colors.grey.shade500),
+                          border: InputBorder.none,
+                          contentPadding:
+                              EdgeInsets.symmetric(vertical: screenHeight * 0.020),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscureConfirmPassword
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
+                              color: Colors.grey,
+                            ),
+                            onPressed: () => setState(() =>
+                                _obscureConfirmPassword = !_obscureConfirmPassword),
+                          ),
+                        ),
+                        obscureText: _obscureConfirmPassword,
+                      ),
+                    ),
+                    if (_submitted && _confirmPasswordError != null)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 8, top: 4),
+                        child: Text(
+                          _confirmPasswordError!,
+                          style: const TextStyle(color: Colors.red, fontSize: 12),
+                        ),
+                      ),
+
+                    SizedBox(height: screenHeight * 0.04),
+
+                    // Update Button
+                    SizedBox(
+                      width: double.infinity,
+                      height: screenHeight * 0.06,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFF73D5C),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(24),
+                          ),
+                          elevation: 2,
+                        ),
+                        onPressed: _isLoading ? null : _changePassword,
+                        child: _isLoading
+                            ? const CircularProgressIndicator(color: Colors.white)
+                            : Text(
+                                'Update Password',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: screenWidth * 0.045,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                      ),
+                    ),
+
+                    SizedBox(height: screenHeight * 0.02),
+
+                    // Security tip
+                    Container(
+                      padding: EdgeInsets.all(screenWidth * 0.04),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF73D5C).withOpacity(0.05),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: const Color(0xFFF73D5C).withOpacity(0.2),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.security,
+                            color: const Color(0xFFF73D5C),
+                            size: screenWidth * 0.05,
+                          ),
+                          SizedBox(width: screenWidth * 0.03),
+                          Expanded(
+                            child: Text(
+                              'Use a strong password with at least 6 characters for better security.',
+                              style: TextStyle(
+                                fontSize: screenWidth * 0.032,
+                                color: const Color(0xFFF73D5C),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],

@@ -189,15 +189,15 @@ class _SettingsPageState extends State<SettingsPage> {
             // Logout Button
             Container(
               width: double.infinity,
-              height: screenHeight * 0.05,
+              height: screenHeight * 0.06,
               margin: EdgeInsets.symmetric(vertical: screenHeight * 0.015),
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFF73D5C),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(24),
                   ),
-                  elevation: 0,
+                  elevation: 2,
                 ),
                 onPressed: () async {
                   final confirmed = await _showLogoutConfirmationDialog();

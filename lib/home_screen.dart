@@ -318,6 +318,24 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
+  // Add this method to fetch user profile photo
+  Future<String?> _getUserProfilePhoto(String? userId) async {
+    if (userId == null) return null;
+    
+    try {
+      final userData = await Supabase.instance.client
+          .from('user')
+          .select('profile_photo_url')
+          .eq('id', userId)
+          .single();
+      
+      return userData['profile_photo_url'];
+    } catch (e) {
+      debugPrint('Error fetching profile photo for user $userId: $e');
+      return null;
+    }
+  }
+
   Color _getDeviceStatusColor(String status) {
     if (status.toLowerCase().contains('connected') &&
         !status.toLowerCase().contains('not')) {
