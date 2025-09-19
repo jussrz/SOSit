@@ -59,87 +59,114 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
     }
 
     try {
-      // Get emergency contacts where this user is the emergency contact
-      // Check if emergency_contact_user_id column exists, otherwise use a different approach
+      debugPrint('Current user ID: $userId');
       List<dynamic> emergencyContacts = [];
 
+      // The key insight from debug output: emergency contacts are linked via group_member_id
+      // BUT we need to find the specific group_member record that the emergency contact references
       try {
-        // Try the original approach first
-        emergencyContacts = await supabase.from('emergency_contacts').select('''
-              id,
-              user_id,
-              emergency_contact_name,
-              emergency_contact_phone,
-              emergency_contact_relationship
-            ''').eq('emergency_contact_user_id', userId);
-      } catch (e) {
-        // If emergency_contact_user_id doesn't exist, try alternative approach
-        debugPrint('emergency_contact_user_id column might not exist: $e');
-
-        // Alternative: Check if this user's phone/email matches emergency contact info
-        final currentUser = await supabase
-            .from('user')
-            .select('phone, email')
-            .eq('id', userId)
-            .single();
-
-        if (currentUser['phone'] != null) {
-          emergencyContacts =
-              await supabase.from('emergency_contacts').select('''
-                id,
-                user_id,
-                emergency_contact_name,
-                emergency_contact_phone,
-                emergency_contact_relationship
-              ''').eq('emergency_contact_phone', currentUser['phone']);
+        // First, get ALL group_member records to understand the relationships
+        debugPrint('Analyzing group_member relationships...');
+        
+        // Find emergency contacts that have a group_member_id
+        final allEmergencyContacts = await supabase
+            .from('emergency_contacts')
+            .select('*')
+            .not('group_member_id', 'is', null); // Only get contacts with group_member_id
+        
+        debugPrint('Found ${allEmergencyContacts.length} emergency contacts with group_member_id');
+        
+        for (var contact in allEmergencyContacts) {
+          if (contact['group_member_id'] != null) {
+            try {
+              // Get the group_member record that this emergency contact references
+              final referencedGroupMember = await supabase
+                  .from('group_members')
+                  .select('*')
+                  .eq('id', contact['group_member_id'])
+                  .single();
+              
+              debugPrint('Emergency contact ${contact['id']} references group_member: ${referencedGroupMember['id']} with user_id: ${referencedGroupMember['user_id']}');
+              
+              // Check if this group_member belongs to the current user
+              if (referencedGroupMember['user_id'] == userId) {
+                // This emergency contact references the current user!
+                emergencyContacts.add(contact);
+                debugPrint('FOUND MATCH: Emergency contact from user ${contact['user_id']} references current user via group_member_id ${contact['group_member_id']}');
+              }
+            } catch (e) {
+              debugPrint('Error getting group_member ${contact['group_member_id']}: $e');
+            }
+          }
         }
+      } catch (e) {
+        debugPrint('Error finding group_members: $e');
       }
+
+      debugPrint('Total emergency contacts where current user is listed: ${emergencyContacts.length}');
 
       // Get group memberships where this user is a member
       List<dynamic> groupMemberships = [];
       try {
-        groupMemberships = await supabase.from('group_memberships').select('''
-              id,
-              user_id,
-              relationship
-            ''').eq('user_id', userId);
-
-        // Get group details separately to avoid complex joins
-        for (var i = 0; i < groupMemberships.length; i++) {
-          if (groupMemberships[i]['group_id'] != null) {
-            try {
-              final groupData = await supabase
-                  .from('groups')
-                  .select('id, name, created_by')
-                  .eq('id', groupMemberships[i]['group_id'])
-                  .single();
-
-              groupMemberships[i]['group'] = groupData;
-
-              // Get creator info
-              if (groupData['created_by'] != null) {
+        final groupMembers = await supabase
+            .from('group_members')
+            .select('*')
+            .eq('user_id', userId);
+        
+        debugPrint('Found ${groupMembers.length} group memberships in group_members table');
+        
+        // Load group details for each membership
+        for (var member in groupMembers) {
+          try {
+            // Use 'group' table as shown in debug output
+            final groupData = await supabase
+                .from('group')
+                .select('id, name, created_by')
+                .eq('id', member['group_id'])
+                .single();
+            
+            // Create membership object
+            final membership = {
+              'id': member['id'],
+              'group_id': member['group_id'],
+              'user_id': member['user_id'],
+              'relationship': member['relationship'],
+              'group': groupData,
+            };
+            
+            // Load creator details
+            if (groupData['created_by'] != null) {
+              try {
                 final creatorData = await supabase
                     .from('user')
-                    .select('id, first_name, last_name')
+                    .select('id, first_name, last_name, phone, email')
                     .eq('id', groupData['created_by'])
                     .single();
-
-                groupMemberships[i]['group']['creator'] = creatorData;
+                membership['group']['creator'] = creatorData;
+              } catch (e) {
+                debugPrint('Error loading creator for group ${groupData['id']}: $e');
               }
-            } catch (e) {
-              debugPrint('Error loading group details: $e');
-              groupMemberships[i]['group'] = null;
             }
+            
+            groupMemberships.add(membership);
+            debugPrint('Added group membership: ${groupData['name']}');
+            
+          } catch (e) {
+            debugPrint('Error loading group details for group ${member['group_id']}: $e');
           }
         }
       } catch (e) {
         debugPrint('Error loading group memberships: $e');
       }
 
-      return {
+      final result = {
         'emergency_contacts': emergencyContacts,
         'group_memberships': groupMemberships,
       };
+
+      debugPrint('Final result: Emergency contacts: ${emergencyContacts.length}, Group memberships: ${groupMemberships.length}');
+      
+      return result;
     } catch (e) {
       debugPrint('Error getting emergency contact data: $e');
       return {
@@ -181,7 +208,10 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
       if (userId == null) return;
 
       final relatedUserIds = _getRelatedUserIds();
+      debugPrint('Looking for SOS alerts from users: $relatedUserIds');
+      
       if (relatedUserIds.isEmpty) {
+        debugPrint('No related user IDs found, no alerts to load');
         setState(() {
           _sosAlerts = [];
         });
@@ -189,21 +219,14 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
       }
 
       // Get emergency logs where this user might be involved as an emergency contact
-      // Simplify the query to avoid complex joins that might fail
       final alerts = await supabase
           .from('logs')
-          .select('''
-            id,
-            user_id,
-            created_at,
-            description,
-            emergency_level,
-            location,
-            responded_at
-          ''')
+          .select('*')
           .inFilter('user_id', relatedUserIds)
           .order('created_at', ascending: false)
-          .limit(10);
+          .limit(20); // Increased limit to get more results
+
+      debugPrint('Found ${alerts.length} logs from related users');
 
       // Get user details separately for each alert
       List<Map<String, dynamic>> processedAlerts = [];
@@ -250,6 +273,7 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
         }
       }
 
+      debugPrint('Processed ${processedAlerts.length} alerts');
       setState(() {
         _sosAlerts = processedAlerts;
       });
@@ -264,26 +288,30 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
   List<String> _getRelatedUserIds() {
     List<String> userIds = [];
 
-    // Get user IDs from groups where this user is a member
+    // Get user IDs from groups where this user is a member (the group creators)
     final groupMemberships =
         _emergencyContactData['group_memberships'] as List? ?? [];
     for (var membership in groupMemberships) {
       if (membership['group'] != null &&
           membership['group']['created_by'] != null) {
         userIds.add(membership['group']['created_by']);
+        debugPrint('Added group creator user ID: ${membership['group']['created_by']}');
       }
     }
 
-    // Get user IDs from emergency contacts
+    // Get user IDs from emergency contacts (the users who have this person as emergency contact)
     final emergencyContacts =
         _emergencyContactData['emergency_contacts'] as List? ?? [];
     for (var contact in emergencyContacts) {
       if (contact['user_id'] != null) {
         userIds.add(contact['user_id']);
+        debugPrint('Added emergency contact user ID: ${contact['user_id']}');
       }
     }
 
-    return userIds.toSet().toList(); // Remove duplicates
+    final uniqueUserIds = userIds.toSet().toList();
+    debugPrint('Final unique user IDs: $uniqueUserIds');
+    return uniqueUserIds;
   }
 
   void _onTabTapped(int index) {
@@ -313,8 +341,17 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
         backgroundColor: Colors.white,
         elevation: 0,
         centerTitle: true,
+        automaticallyImplyLeading: false,
         title: const Text('Emergency Contact Dashboard',
             style: TextStyle(color: Colors.black, fontWeight: FontWeight.w600)),
+        actions: [
+          // Debug button to show current status
+          if (true) // Set to false in production
+            IconButton(
+              icon: Icon(Icons.info_outline, color: Colors.grey.shade600),
+              onPressed: _showDebugInfo,
+            ),
+        ],
       ),
       body: Stack(
         children: [
@@ -365,6 +402,43 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
     );
   }
 
+  // Debug method to show current status - remove in production
+  void _showDebugInfo() {
+    final emergencyContacts = _emergencyContactData['emergency_contacts'] as List? ?? [];
+    final groupMemberships = _emergencyContactData['group_memberships'] as List? ?? [];
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Debug Info'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Current User ID: ${supabase.auth.currentUser?.id}'),
+              SizedBox(height: 10),
+              Text('Emergency Contacts Found: ${emergencyContacts.length}'),
+              ...emergencyContacts.map((c) => Text('  - ${c['emergency_contact_name']} (User: ${c['user_id']})')),
+              SizedBox(height: 10),
+              Text('Group Memberships: ${groupMemberships.length}'),
+              ...groupMemberships.map((g) => Text('  - ${g['group']?['name'] ?? 'Unknown'} (Creator: ${g['group']?['created_by']})')),
+              SizedBox(height: 10),
+              Text('SOS Alerts: ${_sosAlerts.length}'),
+              Text('Related User IDs: ${_getRelatedUserIds().join(', ')}'),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showRoleSwitchDialog() {
     showDialog(
       context: context,
@@ -401,48 +475,91 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
       child: ListView(
         padding: EdgeInsets.all(screenWidth * 0.05),
         children: [
-          // Role indicator
-          Container(
-            padding: EdgeInsets.all(screenWidth * 0.04),
-            margin: EdgeInsets.only(bottom: screenHeight * 0.02),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF73D5C).withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-              border:
-                  Border.all(color: const Color(0xFFF73D5C).withOpacity(0.3)),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.contact_emergency,
-                  color: const Color(0xFFF73D5C),
-                  size: screenWidth * 0.06,
-                ),
-                SizedBox(width: screenWidth * 0.03),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Emergency Contact',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
-                      Text(
-                        'You are listed as an emergency contact for ${_getContactCount()} person(s)',
-                        style: TextStyle(
-                          color: Colors.grey.shade700,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ],
+          // Role indicator - only show when not listed as emergency contact yet
+          if (_getContactCount() == 0)
+            Container(
+              padding: EdgeInsets.all(screenWidth * 0.04),
+              margin: EdgeInsets.only(bottom: screenHeight * 0.02),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF73D5C).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+                border:
+                    Border.all(color: const Color(0xFFF73D5C).withOpacity(0.3)),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.contact_emergency,
+                    color: const Color(0xFFF73D5C),
+                    size: screenWidth * 0.06,
                   ),
-                ),
-              ],
+                  SizedBox(width: screenWidth * 0.03),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Emergency Contact',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                        Text(
+                          'You are not listed as an emergency contact yet',
+                          style: TextStyle(
+                            color: Colors.grey.shade700,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
+
+          const Text('People Who Listed You as Emergency Contact',
+              style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                  color: Colors.black)),
+          SizedBox(height: screenHeight * 0.015),
+
+          // Show emergency contacts who have listed this user
+          if (_emergencyContactData['emergency_contacts']?.isEmpty ?? true)
+            Container(
+              padding: EdgeInsets.all(screenWidth * 0.05),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: Center(
+                child: Column(
+                  children: [
+                    Icon(
+                      Icons.person_add_disabled,
+                      size: 48,
+                      color: Colors.grey.shade400,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'No one has listed you as emergency contact yet',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Colors.grey.shade600,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else
+            ..._buildEmergencyContactCards(screenWidth, screenHeight),
+
+          SizedBox(height: screenHeight * 0.03),
 
           const Text('Recent Emergency Alerts',
               style: TextStyle(
@@ -496,6 +613,8 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
       ),
     );
   }
+
+
 
   Widget _buildAlertCard(
       Map<String, dynamic> alert, double screenWidth, double screenHeight) {
@@ -982,6 +1101,217 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
                           color: Colors.white,
                           fontWeight: FontWeight.w600,
                           fontSize: 16),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  List<Widget> _buildEmergencyContactCards(double screenWidth, double screenHeight) {
+    final emergencyContacts = _emergencyContactData['emergency_contacts'] as List? ?? [];
+    
+    return emergencyContacts.map((contact) {
+      return Container(
+        margin: EdgeInsets.only(bottom: screenHeight * 0.015),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: ListTile(
+          leading: CircleAvatar(
+            backgroundColor: const Color(0xFFF73D5C).withOpacity(0.15),
+            child: const Icon(Icons.person, color: Color(0xFFF73D5C)),
+          ),
+          title: FutureBuilder<String>(
+            future: _getUserName(contact['user_id']),
+            builder: (context, snapshot) {
+              return Text(
+                snapshot.data ?? 'Loading...',
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+              );
+            },
+          ),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 4),
+              Text(
+                'Listed you as: ${contact['emergency_contact_relationship'] ?? 'Emergency Contact'}',
+                style: TextStyle(
+                  color: const Color(0xFFF73D5C),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 2),
+              if (contact['emergency_contact_phone'] != null)
+                Text(
+                  'Your contact info: ${contact['emergency_contact_phone']}',
+                  style: TextStyle(
+                    color: Colors.grey.shade600,
+                    fontSize: 13,
+                  ),
+                ),
+              const SizedBox(height: 2),
+              Text(
+                'Added: ${_formatDate(DateTime.parse(contact['created_at']))}',
+                style: TextStyle(
+                  color: Colors.grey.shade500,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+          trailing: Icon(
+            Icons.verified_user,
+            color: Colors.green,
+            size: 24,
+          ),
+          onTap: () => _showEmergencyContactDetails(contact, screenWidth, screenHeight),
+        ),
+      );
+    }).toList();
+  }
+
+  Future<String> _getUserName(String? userId) async {
+    if (userId == null) return 'Unknown User';
+    
+    try {
+      final userData = await supabase
+          .from('user')
+          .select('first_name, last_name')
+          .eq('id', userId)
+          .single();
+      
+      final firstName = userData['first_name'] ?? '';
+      final lastName = userData['last_name'] ?? '';
+      final fullName = '$firstName $lastName'.trim();
+      
+      return fullName.isEmpty ? 'Unknown User' : fullName;
+    } catch (e) {
+      debugPrint('Error loading user name for $userId: $e');
+      return 'Unknown User';
+    }
+  }
+
+  void _showEmergencyContactDetails(Map<String, dynamic> contact, double screenWidth, double screenHeight) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          child: Padding(
+            padding: EdgeInsets.all(screenWidth * 0.06),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    CircleAvatar(
+                      backgroundColor: const Color(0xFFF73D5C),
+                      radius: screenWidth * 0.07,
+                      child: const Icon(Icons.person, color: Colors.white, size: 32),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: FutureBuilder<String>(
+                        future: _getUserName(contact['user_id']),
+                        builder: (context, snapshot) {
+                          return Text(
+                            snapshot.data ?? 'Loading...',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: screenWidth * 0.05,
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    const Icon(Icons.contact_emergency, color: Colors.grey, size: 20),
+                    const SizedBox(width: 8),
+                    Text('Relationship: ', style: TextStyle(fontSize: 15, color: Colors.black)),
+                    Text(
+                      contact['emergency_contact_relationship'] ?? 'Not specified',
+                      style: TextStyle(fontSize: 15, color: const Color(0xFFF73D5C), fontWeight: FontWeight.w500),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                if (contact['emergency_contact_phone'] != null) ...[
+                  Row(
+                    children: [
+                      const Icon(Icons.phone, color: Colors.grey, size: 20),
+                      const SizedBox(width: 8),
+                      Text('Your contact info: ', style: TextStyle(fontSize: 15, color: Colors.black)),
+                      Text(
+                        contact['emergency_contact_phone'],
+                        style: TextStyle(fontSize: 15, color: Colors.grey.shade700),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                ],
+                Row(
+                  children: [
+                    const Icon(Icons.access_time, color: Colors.grey, size: 20),
+                    const SizedBox(width: 8),
+                    Text('Added on: ', style: TextStyle(fontSize: 15, color: Colors.black)),
+                    Text(
+                      _formatDate(DateTime.parse(contact['created_at'])),
+                      style: TextStyle(fontSize: 15, color: Colors.grey.shade700),
+                    ),
+                  ],
+                ),
+                if (contact['added_by'] != null) ...[
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      const Icon(Icons.person_add, color: Colors.grey, size: 20),
+                      const SizedBox(width: 8),
+                      Text('Added by: ', style: TextStyle(fontSize: 15, color: Colors.black)),
+                      Text(
+                        contact['added_by'],
+                        style: TextStyle(fontSize: 15, color: Colors.grey.shade700),
+                      ),
+                    ],
+                  ),
+                ],
+                const SizedBox(height: 22),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFF73D5C),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text(
+                      'Close',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 16,
+                      ),
                     ),
                   ),
                 ),
