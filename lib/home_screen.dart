@@ -451,7 +451,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       child: Icon(
                         Icons.swap_horiz,
                         color: const Color(0xFFF73D5C),
-                        size: screenWidth * 0.06,
+                        size: screenWidth * 0.09,
                       ),
                     ),
                   ],
@@ -576,7 +576,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 emergencyService.triggerManualEmergency('CHECKIN');
               },
               child: const Text('Check-in'),
-              style: TextButton.styleFrom(foregroundColor: Color(0x00FFF73D5C)),
+              style: TextButton.styleFrom(foregroundColor: Color.fromARGB(255, 247, 145, 61)),
             ),
             TextButton(
               onPressed: () {
@@ -584,7 +584,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 emergencyService.triggerManualEmergency('REGULAR');
               },
               child: const Text('Regular'),
-              style: TextButton.styleFrom(foregroundColor: Color(0x00FFF73D5C)),
+              style: TextButton.styleFrom(foregroundColor: Color.fromARGB(255, 247, 145, 61)),
             ),
             TextButton(
               onPressed: () {
@@ -597,7 +597,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
               child: const Text('Cancel'),
-              style: TextButton.styleFrom(foregroundColor: Color(0x00FFF73D5C)),
+              style: TextButton.styleFrom(foregroundColor: Color.fromARGB(255, 247, 145, 61)),
             ),
           ],
         );

@@ -218,15 +218,15 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
         return;
       }
 
-      // Get emergency logs where this user might be involved as an emergency contact
+      // Get all emergency logs where this user might be involved as an emergency contact
+      // Remove limit to get full history and order by most recent first
       final alerts = await supabase
           .from('logs')
           .select('*')
           .inFilter('user_id', relatedUserIds)
-          .order('created_at', ascending: false)
-          .limit(20); // Increased limit to get more results
+          .order('created_at', ascending: false);
 
-      debugPrint('Found ${alerts.length} logs from related users');
+      debugPrint('Found ${alerts.length} total logs from related users');
 
       // Get user details separately for each alert
       List<Map<String, dynamic>> processedAlerts = [];
@@ -247,15 +247,30 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
             if (userName.isEmpty) userName = 'Unknown User';
           }
 
+          // Determine status based on responded_at and emergency_level
+          String status = 'resolved';
+          if (alert['responded_at'] == null) {
+            // If no response time, check if it's recent (within last 24 hours)
+            final alertTime = DateTime.parse(alert['created_at']);
+            final now = DateTime.now();
+            final hoursDiff = now.difference(alertTime).inHours;
+            
+            if (hoursDiff < 24 && alert['emergency_level'] != 'checkin') {
+              status = 'active';
+            }
+          }
+
           processedAlerts.add({
             'id': alert['id'],
             'name': userName,
             'time': DateTime.parse(alert['created_at']),
             'location': alert['location'] ?? 'Location not available',
-            'status': alert['responded_at'] != null ? 'resolved' : 'active',
+            'status': status,
             'emergency_level': alert['emergency_level'] ?? 'regular',
             'description': alert['description'] ?? '',
             'userId': alert['user_id'],
+            'responded_at': alert['responded_at'],
+            'raw_data': alert, // Keep raw data for debugging
           });
         } catch (e) {
           debugPrint('Error processing alert ${alert['id']}: $e');
@@ -269,11 +284,13 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
             'emergency_level': alert['emergency_level'] ?? 'regular',
             'description': alert['description'] ?? '',
             'userId': alert['user_id'],
+            'responded_at': alert['responded_at'],
+            'raw_data': alert,
           });
         }
       }
 
-      debugPrint('Processed ${processedAlerts.length} alerts');
+      debugPrint('Processed ${processedAlerts.length} total alerts for history');
       setState(() {
         _sosAlerts = processedAlerts;
       });
@@ -673,6 +690,27 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
                   fontSize: 18,
                   color: Colors.black)),
           SizedBox(height: screenHeight * 0.015),
+          
+          // Show total count
+          if (_sosAlerts.isNotEmpty)
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: screenWidth * 0.04, vertical: screenHeight * 0.01),
+              margin: EdgeInsets.only(bottom: screenHeight * 0.02),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF73D5C).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFF73D5C).withOpacity(0.3)),
+              ),
+              child: Text(
+                'Total alerts: ${_sosAlerts.length}',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: const Color(0xFFF73D5C),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            
           if (_sosAlerts.isEmpty)
             Container(
               padding: EdgeInsets.all(screenWidth * 0.05),
@@ -682,12 +720,32 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
                 border: Border.all(color: Colors.grey.shade200),
               ),
               child: Center(
-                child: Text(
-                  'No emergency alerts in history',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.grey.shade600,
-                  ),
+                child: Column(
+                  children: [
+                    Icon(
+                      Icons.history,
+                      size: 48,
+                      color: Colors.grey.shade400,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'No emergency alerts in history',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Colors.grey.shade600,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Emergency alerts from people you\'re listed as an emergency contact for will appear here.',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey.shade500,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
                 ),
               ),
             )
@@ -706,46 +764,237 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
                     ],
                     border: Border.all(color: Colors.grey.shade200),
                   ),
-                  child: ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: Colors.grey.withOpacity(0.13),
-                      child: Icon(Icons.history, color: Colors.grey.shade700),
-                    ),
-                    title: Text(alert['name'],
-                        style: const TextStyle(fontWeight: FontWeight.w600)),
-                    subtitle: Column(
+                  child: Padding(
+                    padding: EdgeInsets.all(screenWidth * 0.04),
+                    child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const SizedBox(height: 2),
-                        Text(alert['location'],
-                            style: TextStyle(
-                                fontSize: screenWidth * 0.035,
-                                color: Colors.grey.shade700)),
-                        Text(_formatDate(alert['time']),
-                            style: TextStyle(
-                                fontSize: screenWidth * 0.032,
-                                color: Colors.grey.shade500)),
-                      ],
-                    ),
-                    trailing: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: alert['status'] == 'active'
-                            ? const Color(0xFFF73D5C).withOpacity(0.1)
-                            : Colors.green.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        alert['status'].toUpperCase(),
-                        style: TextStyle(
-                          color: alert['status'] == 'active'
-                              ? const Color(0xFFF73D5C)
-                              : Colors.green,
-                          fontWeight: FontWeight.w600,
-                          fontSize: screenWidth * 0.032,
+                        // Header with name and emergency level
+                        Row(
+                          children: [
+                            CircleAvatar(
+                              backgroundColor: alert['status'] == 'active'
+                                  ? const Color(0xFFF73D5C).withOpacity(0.15)
+                                  : alert['status'] == 'resolved'
+                                      ? Colors.green.withOpacity(0.15)
+                                      : Colors.grey.withOpacity(0.15),
+                              child: Icon(
+                                alert['status'] == 'active' 
+                                    ? Icons.warning 
+                                    : alert['status'] == 'resolved'
+                                        ? Icons.check_circle
+                                        : Icons.history,
+                                color: alert['status'] == 'active'
+                                    ? const Color(0xFFF73D5C)
+                                    : alert['status'] == 'resolved'
+                                        ? Colors.green
+                                        : Colors.grey.shade700,
+                                size: 20,
+                              ),
+                            ),
+                            SizedBox(width: screenWidth * 0.03),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    alert['name'],
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: screenWidth * 0.045,
+                                      color: Colors.black,
+                                    ),
+                                  ),
+                                  if (alert['emergency_level'] != 'regular')
+                                    Container(
+                                      margin: const EdgeInsets.only(top: 2),
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: alert['emergency_level'] == 'critical'
+                                            ? Colors.red.withOpacity(0.1)
+                                            : alert['emergency_level'] == 'checkin'
+                                                ? Colors.blue.withOpacity(0.1)
+                                                : Colors.orange.withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Text(
+                                        alert['emergency_level'].toUpperCase(),
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                          color: alert['emergency_level'] == 'critical'
+                                              ? Colors.red
+                                              : alert['emergency_level'] == 'checkin'
+                                                  ? Colors.blue
+                                                  : Colors.orange,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: alert['status'] == 'active'
+                                    ? const Color(0xFFF73D5C).withOpacity(0.1)
+                                    : alert['status'] == 'resolved'
+                                        ? Colors.green.withOpacity(0.1)
+                                        : Colors.grey.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                alert['status'].toUpperCase(),
+                                style: TextStyle(
+                                  color: alert['status'] == 'active'
+                                      ? const Color(0xFFF73D5C)
+                                      : alert['status'] == 'resolved'
+                                          ? Colors.green
+                                          : Colors.grey.shade700,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: screenWidth * 0.025,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
+                        
+                        SizedBox(height: screenHeight * 0.015),
+                        
+                        // Time & Date - More prominent
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.access_time,
+                              color: const Color(0xFFF73D5C),
+                              size: screenWidth * 0.045,
+                            ),
+                            SizedBox(width: screenWidth * 0.02),
+                            Text(
+                              _formatDetailedDate(alert['time']),
+                              style: TextStyle(
+                                fontSize: screenWidth * 0.038,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.black87,
+                              ),
+                            ),
+                          ],
+                        ),
+                        
+                        SizedBox(height: screenHeight * 0.01),
+                        
+                        // Location - More prominent
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(
+                              Icons.location_on,
+                              color: const Color(0xFFF73D5C),
+                              size: screenWidth * 0.045,
+                            ),
+                            SizedBox(width: screenWidth * 0.02),
+                            Expanded(
+                              child: Text(
+                                alert['location'],
+                                style: TextStyle(
+                                  fontSize: screenWidth * 0.036,
+                                  color: Colors.black87,
+                                  height: 1.3,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                        
+                        // Description if available
+                        if (alert['description']?.isNotEmpty == true) ...[
+                          SizedBox(height: screenHeight * 0.01),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(
+                                Icons.description,
+                                color: Colors.grey.shade600,
+                                size: screenWidth * 0.04,
+                              ),
+                              SizedBox(width: screenWidth * 0.02),
+                              Expanded(
+                                child: Text(
+                                  alert['description'],
+                                  style: TextStyle(
+                                    fontSize: screenWidth * 0.033,
+                                    color: Colors.grey.shade700,
+                                    fontStyle: FontStyle.italic,
+                                    height: 1.3,
+                                  ),
+                                  maxLines: 3,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                        
+                        // Responded info if available
+                        if (alert['responded_at'] != null) ...[
+                          SizedBox(height: screenHeight * 0.01),
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.check_circle,
+                                color: Colors.green,
+                                size: screenWidth * 0.04,
+                              ),
+                              SizedBox(width: screenWidth * 0.02),
+                              Text(
+                                'Responded: ${_formatDetailedDate(DateTime.parse(alert['responded_at']))}',
+                                style: TextStyle(
+                                  fontSize: screenWidth * 0.03,
+                                  color: Colors.green.shade700,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                        
+                        SizedBox(height: screenHeight * 0.015),
+                        
+                        // Tap for details
+                        GestureDetector(
+                          onTap: () => _showAlertDetails(alert, screenWidth, screenHeight),
+                          child: Container(
+                            width: double.infinity,
+                            padding: EdgeInsets.symmetric(vertical: screenHeight * 0.008),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade50,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: Colors.grey.shade300),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  'View Details',
+                                  style: TextStyle(
+                                    color: const Color(0xFFF73D5C),
+                                    fontSize: screenWidth * 0.032,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                SizedBox(width: screenWidth * 0.02),
+                                Icon(
+                                  Icons.arrow_forward_ios,
+                                  color: const Color(0xFFF73D5C),
+                                  size: screenWidth * 0.03,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 )),
@@ -1280,5 +1529,33 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
 
   String _formatDate(DateTime date) {
     return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')} ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+  }
+
+  String _formatDetailedDate(DateTime date) {
+    final now = DateTime.now();
+    final difference = now.difference(date);
+    
+    // Format: "Dec 15, 2023 at 2:30 PM (2 hours ago)"
+    String monthName = [
+      '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ][date.month];
+    
+    String period = date.hour >= 12 ? 'PM' : 'AM';
+    int hour = date.hour > 12 ? date.hour - 12 : (date.hour == 0 ? 12 : date.hour);
+    String minute = date.minute.toString().padLeft(2, '0');
+    
+    String timeAgo = '';
+    if (difference.inMinutes < 60) {
+      timeAgo = '${difference.inMinutes} minutes ago';
+    } else if (difference.inHours < 24) {
+      timeAgo = '${difference.inHours} hours ago';
+    } else if (difference.inDays < 7) {
+      timeAgo = '${difference.inDays} days ago';
+    } else {
+      timeAgo = '${(difference.inDays / 7).floor()} weeks ago';
+    }
+    
+    return '$monthName ${date.day}, ${date.year} at $hour:$minute $period ($timeAgo)';
   }
 }

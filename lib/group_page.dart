@@ -215,12 +215,18 @@ class _GroupPageState extends State<GroupPage> {
     }
 
     try {
-      // Check if user is already in the group
-      final existing = _groupMembers[groupId]?.any(
-        (member) => member['user_id'] == user['id'],
-      );
+      debugPrint('Attempting to add user ${user['id']} to group $groupId');
+      
+      // Check if user is already in the group by querying the database directly
+      final existingMembers = await supabase
+          .from('group_members')
+          .select('id')
+          .eq('group_id', groupId)
+          .eq('user_id', user['id']);
 
-      if (existing == true) {
+      debugPrint('Found ${existingMembers.length} existing members for this user in this group');
+
+      if (existingMembers.isNotEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('User is already in this group')),
@@ -229,6 +235,28 @@ class _GroupPageState extends State<GroupPage> {
         return;
       }
 
+      // Check if user already has 2 emergency contacts
+      final currentUserId = supabase.auth.currentUser?.id;
+      if (currentUserId != null) {
+        final existingContacts = await supabase
+            .from('emergency_contacts')
+            .select('id')
+            .eq('user_id', currentUserId);
+        
+        debugPrint('Current user has ${existingContacts.length} emergency contacts');
+        
+        if (existingContacts.length >= 2) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Maximum 2 emergency contacts allowed per person')),
+            );
+          }
+          return;
+        }
+      }
+
+      debugPrint('Adding user to group_members table...');
+      
       // Add user to group
       final result = await supabase
           .from('group_members')
@@ -240,7 +268,10 @@ class _GroupPageState extends State<GroupPage> {
           .select('*, user:user(*)')
           .single();
 
+      debugPrint('Successfully added to group_members: ${result['id']}');
+
       // Create corresponding emergency contact
+      debugPrint('Creating emergency contact...');
       await _createEmergencyContact(
         groupId: groupId,
         groupMemberId: result['id'],
@@ -248,8 +279,10 @@ class _GroupPageState extends State<GroupPage> {
         relationship: relationship.trim(),
       );
 
+      // Refresh the group members list from database to ensure consistency
+      await _refreshGroupMembers(groupId);
+
       setState(() {
-        _groupMembers[groupId]?.add(result);
         _searchResults = [];
         _emailSearchController.clear();
         _relationshipController.clear();
@@ -262,11 +295,46 @@ class _GroupPageState extends State<GroupPage> {
         );
       }
     } catch (e) {
+      debugPrint('Error adding member: $e');
+      String errorMessage = 'Error adding member';
+      
+      // Handle specific constraint violations
+      if (e.toString().contains('group_members_group_id_key')) {
+        errorMessage = 'Database constraint error: Only one member allowed per group. Please contact support to fix this database issue.';
+      } else if (e.toString().contains('group_members_user_group_unique')) {
+        errorMessage = 'This person is already in this group.';
+      } else if (e.toString().contains('duplicate key')) {
+        errorMessage = 'This person is already added to this group.';
+      } else if (e.toString().contains('violates check constraint')) {
+        errorMessage = 'Maximum 2 emergency contacts allowed per person.';
+      } else {
+        errorMessage = 'Error adding member: ${e.toString()}';
+      }
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error adding member: $e')),
+          SnackBar(
+            content: Text(errorMessage),
+            duration: Duration(seconds: 5),
+          ),
         );
       }
+    }
+  }
+
+  // NEW: Helper method to refresh group members from database
+  Future<void> _refreshGroupMembers(String groupId) async {
+    try {
+      final members = await supabase
+          .from('group_members')
+          .select('*, user:user(*)')
+          .eq('group_id', groupId);
+
+      setState(() {
+        _groupMembers[groupId] = List<Map<String, dynamic>>.from(members);
+      });
+    } catch (e) {
+      debugPrint('Error refreshing group members: $e');
     }
   }
 
