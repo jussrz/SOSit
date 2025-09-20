@@ -6,6 +6,7 @@ import 'admin_signup_page.dart';
 import 'home_screen.dart'; // Import HomeScreen directly
 import 'admin_home_screen.dart';
 import 'police_dashboard.dart';
+import 'tanod_dashboard.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -109,34 +110,38 @@ class _LoginPageState extends State<LoginPage> {
         return;
       }
 
-      // Check if user is police
-      final roleData = await Supabase.instance.client
+      // Check if user is police or tanod
+      final userData = await Supabase.instance.client
           .from('user')
           .select('role')
           .eq('id', user.id)
           .maybeSingle();
 
-      String role = 'citizen';
-      if (roleData != null && roleData['role'] != null) {
-        role = roleData['role'];
-      }
-
-      if (!mounted) return;
-
-      // If user is police, redirect to police dashboard
-      if (role == 'police') {
+      if (userData != null && userData['role'] != null) {
+        // Navigate based on user role
+        if (userData['role'] == 'police') {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const PoliceDashboard()),
+          );
+        } else if (userData['role'] == 'tanod') {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const TanodDashboard()),
+          );
+        } else {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const HomeScreen()),
+          );
+        }
+      } else {
+        // Default fallback
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const PoliceDashboard()),
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
         );
-        return;
       }
-
-      // For all regular users (citizens), always go to HomeScreen
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
-      );
     } catch (e) {
       setState(() => _errorMsg = "Incorrect email or password");
     } finally {

@@ -2,18 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'login_page.dart';
 
-class PoliceSettingsPage extends StatefulWidget {
-  const PoliceSettingsPage({super.key});
+class TanodSettingsPage extends StatefulWidget {
+  const TanodSettingsPage({super.key});
 
   @override
-  State<PoliceSettingsPage> createState() => _PoliceSettingsPageState();
+  State<TanodSettingsPage> createState() => _TanodSettingsPageState();
 }
 
-class _PoliceSettingsPageState extends State<PoliceSettingsPage> {
+class _TanodSettingsPageState extends State<TanodSettingsPage> {
   final supabase = Supabase.instance.client;
   bool _isLoading = false;
   Map<String, dynamic>? _userData;
-  Map<String, dynamic>? _policeData;
+  Map<String, dynamic>? _tanodData;
 
   @override
   void initState() {
@@ -33,16 +33,16 @@ class _PoliceSettingsPageState extends State<PoliceSettingsPage> {
             .eq('id', userId)
             .single();
 
-        // Load police-specific data
-        final policeData = await supabase
-            .from('police')
+        // Load tanod-specific data
+        final tanodData = await supabase
+            .from('tanod')
             .select()
             .eq('user_id', userId)
             .maybeSingle();
 
         setState(() {
           _userData = userData;
-          _policeData = policeData;
+          _tanodData = tanodData;
         });
       }
     } catch (e) {
@@ -105,7 +105,7 @@ class _PoliceSettingsPageState extends State<PoliceSettingsPage> {
               _signOut();
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF2196F3),
+              backgroundColor: Colors.orange,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(30),
@@ -151,7 +151,7 @@ class _PoliceSettingsPageState extends State<PoliceSettingsPage> {
         ),
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF2196F3)))
+          ? const Center(child: CircularProgressIndicator(color: Colors.orange))
           : Center(
               child: SingleChildScrollView(
                 padding: EdgeInsets.symmetric(horizontal: screenWidth * 0.06),
@@ -176,13 +176,13 @@ class _PoliceSettingsPageState extends State<PoliceSettingsPage> {
                             width: screenWidth * 0.25,
                             height: screenWidth * 0.25,
                             decoration: BoxDecoration(
-                              color: const Color(0xFF2196F3).withOpacity(0.1),
+                              color: Colors.orange.withOpacity(0.1),
                               shape: BoxShape.circle,
                             ),
                             child: Icon(
-                              Icons.local_police,
+                              Icons.security,
                               size: screenWidth * 0.12,
-                              color: const Color(0xFF2196F3),
+                              color: Colors.orange,
                             ),
                           ),
 
@@ -191,7 +191,7 @@ class _PoliceSettingsPageState extends State<PoliceSettingsPage> {
                           // Name
                           Text(
                             '${_userData?['first_name'] ?? ''} ${_userData?['last_name'] ?? ''}'.trim().isEmpty 
-                                ? 'Police Officer' 
+                                ? 'Barangay Tanod' 
                                 : '${_userData?['first_name'] ?? ''} ${_userData?['last_name'] ?? ''}',
                             textAlign: TextAlign.center,
                             style: TextStyle(
@@ -210,11 +210,11 @@ class _PoliceSettingsPageState extends State<PoliceSettingsPage> {
                               vertical: screenHeight * 0.008,
                             ),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF2196F3),
+                              color: Colors.orange,
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: Text(
-                              'POLICE OFFICER',
+                              'BARANGAY TANOD',
                               style: TextStyle(
                                 color: Colors.white,
                                 fontSize: screenWidth * 0.035,
@@ -224,10 +224,10 @@ class _PoliceSettingsPageState extends State<PoliceSettingsPage> {
                             ),
                           ),
 
-                          if (_policeData?['station_name'] != null) ...[
+                          if (_tanodData?['id_number'] != null) ...[
                             SizedBox(height: screenHeight * 0.015),
                             Text(
-                              _policeData!['station_name'],
+                              'ID: ${_tanodData!['id_number']}',
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 fontSize: screenWidth * 0.04,
@@ -291,7 +291,7 @@ class _PoliceSettingsPageState extends State<PoliceSettingsPage> {
 
                     SizedBox(height: screenHeight * 0.03),
 
-                    // Police Information Section
+                    // Tanod Information Section
                     Container(
                       width: double.infinity,
                       decoration: BoxDecoration(
@@ -316,18 +316,18 @@ class _PoliceSettingsPageState extends State<PoliceSettingsPage> {
                           _buildInfoTile(
                             Icons.verified_user,
                             'Status',
-                            (_policeData?['status'] ?? 'Unknown').toUpperCase(),
+                            (_tanodData?['status'] ?? 'Unknown').toUpperCase(),
                             screenWidth,
-                            valueColor: _policeData?['status'] == 'verified' 
+                            valueColor: _tanodData?['status'] == 'verified' 
                                 ? Colors.green 
                                 : Colors.orange,
                           ),
-                          if (_policeData?['station_name'] != null) ...[
+                          if (_tanodData?['id_number'] != null) ...[
                             _buildDivider(),
                             _buildInfoTile(
-                              Icons.location_city,
-                              'Station',
-                              _policeData!['station_name'],
+                              Icons.badge,
+                              'ID Number',
+                              _tanodData!['id_number'],
                               screenWidth,
                             ),
                           ],
@@ -342,7 +342,7 @@ class _PoliceSettingsPageState extends State<PoliceSettingsPage> {
                       width: double.infinity,
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF2196F3),
+                          backgroundColor: Colors.orange,
                           foregroundColor: Colors.white,
                           padding: EdgeInsets.symmetric(vertical: screenHeight * 0.02),
                           shape: RoundedRectangleBorder(
@@ -383,12 +383,12 @@ class _PoliceSettingsPageState extends State<PoliceSettingsPage> {
           Container(
             padding: EdgeInsets.all(screenWidth * 0.025),
             decoration: BoxDecoration(
-              color: const Color(0xFF2196F3).withOpacity(0.1),
+              color: Colors.orange.withOpacity(0.1),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(
               icon,
-              color: const Color(0xFF2196F3),
+              color: Colors.orange,
               size: screenWidth * 0.05,
             ),
           ),
