@@ -22,6 +22,12 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
   Set<Marker> _markers = {};
   List<Map<String, dynamic>> _incidentHistory = [];
   bool _isLoadingHistory = false;
+  
+  // Tracking state
+  Map<String, dynamic>? _trackedUser;
+  bool _isTracking = false;
+  Marker? _userLocationMarker;
+  Polyline? _routeToUser;
 
   @override
   void initState() {
@@ -30,6 +36,33 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
     _loadIncidents();
     _loadUserProfile();
     _loadIncidentHistory();
+    _listenForPanicButtonAlerts();
+  }
+  
+  Future<void> _listenForPanicButtonAlerts() async {
+    supabase
+      .channel('public:panic_alerts')
+      .onPostgresChanges(
+        event: PostgresChangeEvent.insert, 
+        schema: 'public',
+        table: 'panic_alerts', 
+        callback: (payload) {
+          _handleNewPanicAlert(payload.newRecord);
+        })
+      .subscribe();
+  }
+
+  void _handleNewPanicAlert(Map<String, dynamic> alert) {
+    if (!mounted) return;
+    
+    // Play alert sound or vibration here
+    
+    // Show alert dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => _buildPanicAlertDialog(alert),
+    );
   }
 
   Future<void> _getCurrentLocation() async {
@@ -64,6 +97,213 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
     } catch (e) {
       debugPrint('Error getting location: $e');
     }
+  }
+  
+  Widget _buildPanicAlertDialog(Map<String, dynamic> alert) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    
+    // Extract user information from the alert
+    final userName = alert['user_name'] ?? 'Unknown User';
+    final location = alert['location'] ?? 'Location unavailable';
+    final timestamp = DateTime.tryParse(alert['created_at'] ?? '') ?? DateTime.now();
+    final formattedTime = '${timestamp.day}/${timestamp.month}/${timestamp.year} - ${timestamp.hour}:${timestamp.minute.toString().padLeft(2, '0')} ${timestamp.hour >= 12 ? 'PM' : 'AM'}';
+    final contactInfo = alert['emergency_contact'] ?? 'Not provided';
+    final contactNumber = alert['contact_number'] ?? 'Not provided';
+    final latitude = alert['latitude'] as double?;
+    final longitude = alert['longitude'] as double?;
+    final userId = alert['user_id'];
+    
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      contentPadding: EdgeInsets.zero,
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: const BoxDecoration(
+              color: Color(0xFFF73D5C),
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(20),
+                topRight: Radius.circular(20),
+              ),
+            ),
+            width: double.infinity,
+            child: Column(
+              children: [
+                const Text(
+                  'Emergency Alert Received',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Panic Button Pressed',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // SOS Button visual
+                Center(
+                  child: Container(
+                    width: screenWidth * 0.3,
+                    height: screenWidth * 0.3,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: const Color(0xFFF73D5C),
+                      border: Border.all(
+                        color: const Color(0xFFFFCDD2),
+                        width: 8,
+                      ),
+                    ),
+                    child: const Center(
+                      child: Text(
+                        'SOS',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 24,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Center(
+                  child: Text(
+                    'A user has activated the panic button.',
+                    style: TextStyle(fontSize: 14),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _buildInfoRow('Name:', userName),
+                _buildInfoRow('Location:', location),
+                _buildInfoRow('Timestamp:', formattedTime),
+                _buildInfoRow('Emergency Contact:', contactInfo),
+                _buildInfoRow('Contact:', contactNumber),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFF73D5C),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  _trackUser(userId, latitude, longitude, userName, contactNumber);
+                },
+                child: const Text(
+                  'Track User',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildInfoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 120,
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(fontSize: 14),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _trackUser(String? userId, double? latitude, double? longitude, String userName, String contactNumber) {
+    if (userId == null || latitude == null || longitude == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cannot track user: location data unavailable'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // Update state to track this user
+    setState(() {
+      _isTracking = true;
+      _trackedUser = {
+        'id': userId,
+        'name': userName,
+        'contact': contactNumber,
+        'latitude': latitude,
+        'longitude': longitude,
+      };
+      
+      // Add marker for user's location
+      _userLocationMarker = Marker(
+        markerId: MarkerId('user_$userId'),
+        position: LatLng(latitude, longitude),
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+        infoWindow: InfoWindow(
+          title: 'Emergency: $userName',
+          snippet: 'Panic button pressed',
+        ),
+      );
+      
+      // Add the marker to the map
+      _markers = {..._markers, _userLocationMarker!};
+    });
+
+    // Animate camera to user's location
+    if (_mapController != null) {
+      _mapController!.animateCamera(
+        CameraUpdate.newLatLngZoom(
+          LatLng(latitude, longitude),
+          16.0,
+        ),
+      );
+    }
+    
+    // Show bottom sheet with tracking info
+    _showTrackingBottomSheet(userName, contactNumber);
   }
 
   Future<void> _loadUserProfile() async {
@@ -324,6 +564,168 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
                 ),
               ],
             ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showTrackingBottomSheet(String userName, String contactNumber) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
+    
+    if (!mounted) return;
+    
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return Container(
+          height: screenHeight * 0.25,
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(20),
+              topRight: Radius.circular(20),
+            ),
+          ),
+          child: Column(
+            children: [
+              Container(
+                width: screenWidth * 0.1,
+                height: 4,
+                margin: EdgeInsets.symmetric(vertical: screenHeight * 0.015),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: screenWidth * 0.05),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: EdgeInsets.all(screenWidth * 0.02),
+                          decoration: BoxDecoration(
+                            color: Colors.red.shade100,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.location_on,
+                            color: Colors.red,
+                            size: screenWidth * 0.05,
+                          ),
+                        ),
+                        SizedBox(width: screenWidth * 0.03),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '$userName',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: screenWidth * 0.045,
+                              ),
+                            ),
+                            Row(
+                              children: [
+                                Container(
+                                  width: 8,
+                                  height: 8,
+                                  margin: const EdgeInsets.only(right: 5),
+                                  decoration: const BoxDecoration(
+                                    color: Colors.green,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                                Text(
+                                  '3 min away',
+                                  style: TextStyle(
+                                    color: Colors.grey.shade600,
+                                    fontSize: screenWidth * 0.035,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        Spacer(),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                          ),
+                          onPressed: () {
+                            Navigator.pop(context);
+                            setState(() {
+                              _isTracking = false;
+                              if (_userLocationMarker != null) {
+                                _markers = Set.from(_markers)
+                                  ..removeWhere((m) => m.markerId == _userLocationMarker!.markerId);
+                              }
+                              _trackedUser = null;
+                            });
+                          },
+                          child: const Text('Exit', style: TextStyle(color: Colors.white)),
+                        )
+                      ],
+                    ),
+                    Divider(height: screenHeight * 0.03),
+                    Row(
+                      children: [
+                        Icon(Icons.phone, color: Colors.blue, size: screenWidth * 0.05),
+                        SizedBox(width: screenWidth * 0.02),
+                        Text(
+                          'Contact: $contactNumber',
+                          style: TextStyle(
+                            fontSize: screenWidth * 0.04,
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: screenHeight * 0.015),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        ElevatedButton.icon(
+                          icon: const Icon(Icons.phone, color: Colors.white),
+                          label: const Text('Call', style: TextStyle(color: Colors.white)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green,
+                            padding: EdgeInsets.symmetric(
+                              horizontal: screenWidth * 0.08,
+                              vertical: screenHeight * 0.01,
+                            ),
+                          ),
+                          onPressed: () {
+                            // Call emergency services
+                          },
+                        ),
+                        ElevatedButton.icon(
+                          icon: const Icon(Icons.message, color: Colors.white),
+                          label: const Text('Message', style: TextStyle(color: Colors.white)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue,
+                            padding: EdgeInsets.symmetric(
+                              horizontal: screenWidth * 0.08,
+                              vertical: screenHeight * 0.01,
+                            ),
+                          ),
+                          onPressed: () {
+                            // Send message
+                          },
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         );
       },
@@ -848,17 +1250,4 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
   }
 }
 
-String _getTimeAgo(DateTime dateTime) {
-  final now = DateTime.now();
-  final difference = now.difference(dateTime);
 
-  if (difference.inDays > 0) {
-    return '${difference.inDays}d ago';
-  } else if (difference.inHours > 0) {
-    return '${difference.inHours}h ago';
-  } else if (difference.inMinutes > 0) {
-    return '${difference.inMinutes}m ago';
-  } else {
-    return 'Just now';
-  }
-}
