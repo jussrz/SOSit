@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // Add this import
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import 'package:image_picker/image_picker.dart';
-import 'dart:io';
 import 'login_page.dart';
 
 class SignupPage extends StatefulWidget {
@@ -19,8 +17,6 @@ class _SignupPageState extends State<SignupPage> {
   bool _isLoading = false;
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
-  String? _selectedRole; // Change to nullable
-  File? _proofFile;
 
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -28,18 +24,10 @@ class _SignupPageState extends State<SignupPage> {
   final _phoneController = TextEditingController();
   final _birthdateController = TextEditingController();
 
-  // Citizen fields
+  // Citizen fields (always used since all signups are citizens)
   final _firstNameController = TextEditingController();
   final _middleNameController = TextEditingController();
   final _lastNameController = TextEditingController();
-
-  // Tanod fields
-  final _idNumberController = TextEditingController();
-  final _tanodCredentialsController = TextEditingController();
-
-  // Police fields
-  final _stationNameController = TextEditingController();
-  final _policeCredentialsController = TextEditingController();
 
   @override
   void dispose() {
@@ -51,21 +39,7 @@ class _SignupPageState extends State<SignupPage> {
     _firstNameController.dispose();
     _middleNameController.dispose();
     _lastNameController.dispose();
-    _idNumberController.dispose();
-    _tanodCredentialsController.dispose();
-    _stationNameController.dispose();
-    _policeCredentialsController.dispose();
     super.dispose();
-  }
-
-  Future<void> _pickProofFile() async {
-    final picker = ImagePicker();
-    final image = await picker.pickImage(source: ImageSource.gallery);
-    if (image != null && mounted) {
-      setState(() {
-        _proofFile = File(image.path);
-      });
-    }
   }
 
   Future<void> _selectDate() async {
@@ -121,88 +95,33 @@ class _SignupPageState extends State<SignupPage> {
 
       final userId = res.user!.id;
 
-      // 2. Always insert into user table
+      // 2. Insert into user table as citizen
       final userData = {
         'id': userId,
         'email': _emailController.text.trim(),
         'phone': _phoneController.text.trim(),
-        'role': _selectedRole,
+        'role': 'citizen',
+        'first_name': _firstNameController.text.trim().isNotEmpty
+            ? _firstNameController.text.trim()
+            : null,
+        'middle_name': _middleNameController.text.trim().isNotEmpty
+            ? _middleNameController.text.trim()
+            : null,
+        'last_name': _lastNameController.text.trim().isNotEmpty
+            ? _lastNameController.text.trim()
+            : null,
+        'birthdate': _birthdateController.text.trim().isNotEmpty
+            ? _birthdateController.text.trim()
+            : null,
       };
 
-      if (_selectedRole == 'citizen') {
-        userData['first_name'] = _firstNameController.text.trim().isNotEmpty
-            ? _firstNameController.text.trim()
-            : null;
-        userData['middle_name'] = _middleNameController.text.trim().isNotEmpty
-            ? _middleNameController.text.trim()
-            : null;
-        userData['last_name'] = _lastNameController.text.trim().isNotEmpty
-            ? _lastNameController.text.trim()
-            : null;
-        userData['birthdate'] = _birthdateController.text.trim().isNotEmpty
-            ? _birthdateController.text.trim()
-            : null;
-      }
-
       await Supabase.instance.client.from('user').insert(userData);
-
-      // 3. Insert into tanod/police if applicable
-      if (_selectedRole == 'tanod') {
-        String? proofUrl;
-        if (_proofFile != null) {
-          final fileBytes = await _proofFile!.readAsBytes();
-          final filePath = 'tanod_${DateTime.now().millisecondsSinceEpoch}.jpg';
-          await Supabase.instance.client.storage
-              .from('credentials_proof')
-              .uploadBinary(filePath, fileBytes);
-          proofUrl = Supabase.instance.client.storage
-              .from('credentials_proof')
-              .getPublicUrl(filePath);
-        }
-
-        await Supabase.instance.client.from('tanod').insert({
-          'user_id': userId,
-          'id_number': _idNumberController.text.trim().isNotEmpty
-              ? _idNumberController.text.trim()
-              : null,
-          'credentials_url':
-              proofUrl ?? _tanodCredentialsController.text.trim(),
-          'status': 'pending',
-        });
-      } else if (_selectedRole == 'police') {
-        String? proofUrl;
-        if (_proofFile != null) {
-          final fileBytes = await _proofFile!.readAsBytes();
-          final filePath =
-              'police_${DateTime.now().millisecondsSinceEpoch}.jpg';
-          await Supabase.instance.client.storage
-              .from('credentials_proof')
-              .uploadBinary(filePath, fileBytes);
-          proofUrl = Supabase.instance.client.storage
-              .from('credentials_proof')
-              .getPublicUrl(filePath);
-        }
-
-        await Supabase.instance.client.from('police').insert({
-          'user_id': userId,
-          'station_name': _stationNameController.text.trim().isNotEmpty
-              ? _stationNameController.text.trim()
-              : null,
-          'credentials_url':
-              proofUrl ?? _policeCredentialsController.text.trim(),
-          'status': 'pending',
-        });
-      }
 
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            _selectedRole == 'citizen'
-                ? 'Account created successfully!'
-                : 'Account created. Please wait for verification of your credentials.',
-          ),
+        const SnackBar(
+          content: Text('Account created successfully!'),
         ),
       );
 
@@ -284,7 +203,22 @@ class _SignupPageState extends State<SignupPage> {
 
                 SizedBox(height: screenHeight * 0.04),
 
-                // Email Field - show for all roles at the top
+                // First Name Field
+                _buildTextField(_firstNameController, 'First Name',
+                    Icons.person_outline, _validateRequired),
+                SizedBox(height: screenHeight * 0.02),
+
+                // Middle Name Field (optional)
+                _buildTextField(_middleNameController, 'Middle Name',
+                    Icons.person_outline, null),
+                SizedBox(height: screenHeight * 0.02),
+
+                // Last Name Field
+                _buildTextField(_lastNameController, 'Last Name',
+                    Icons.person_outline, _validateRequired),
+                SizedBox(height: screenHeight * 0.02),
+
+                // Birthdate Field - always show for citizens
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -294,35 +228,34 @@ class _SignupPageState extends State<SignupPage> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: TextFormField(
-                        controller: _emailController,
+                        controller: _birthdateController,
+                        readOnly: true,
+                        onTap: _selectDate,
                         decoration: InputDecoration(
-                          prefixIcon:
-                              Icon(Icons.person, color: Colors.grey.shade600),
-                          hintText: 'Email',
+                          prefixIcon: Icon(Icons.calendar_today,
+                              color: Colors.grey.shade600),
+                          hintText: 'Date of Birth',
                           hintStyle: TextStyle(color: Colors.grey.shade600),
                           border: InputBorder.none,
                           contentPadding: EdgeInsets.symmetric(
                               vertical: screenHeight * 0.025),
-                          errorStyle:
-                              TextStyle(height: 0), // Hide default error text
+                          errorStyle: TextStyle(height: 0),
                         ),
-                        keyboardType: TextInputType.emailAddress,
                         style: TextStyle(fontSize: screenWidth * 0.04),
-                        // Remove validator completely
                       ),
                     ),
-                    // Custom error display
                     if (_submitted) ...[
                       Builder(
                         builder: (context) {
-                          final error = _validateEmail(_emailController.text);
+                          final error =
+                              _validateRequired(_birthdateController.text);
                           if (error != null) {
                             return Padding(
                               padding: EdgeInsets.only(left: 8, top: 4),
                               child: Text(
                                 error,
-                                style:
-                                    TextStyle(color: Colors.red, fontSize: 12),
+                                style: TextStyle(
+                                    color: Colors.red, fontSize: 12),
                               ),
                             );
                           }
@@ -334,58 +267,6 @@ class _SignupPageState extends State<SignupPage> {
                 ),
 
                 SizedBox(height: screenHeight * 0.02),
-
-                // Birthdate Field - only show for citizen
-                if (_selectedRole == 'citizen') ...[
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        decoration: BoxDecoration(
-                          border: Border.all(color: Colors.grey.shade300),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: TextFormField(
-                          controller: _birthdateController,
-                          readOnly: true,
-                          onTap: _selectDate,
-                          decoration: InputDecoration(
-                            prefixIcon: Icon(Icons.calendar_today,
-                                color: Colors.grey.shade600),
-                            hintText: 'Date of Birth',
-                            hintStyle: TextStyle(color: Colors.grey.shade600),
-                            border: InputBorder.none,
-                            contentPadding: EdgeInsets.symmetric(
-                                vertical: screenHeight * 0.025),
-                            errorStyle: TextStyle(height: 0),
-                          ),
-                          style: TextStyle(fontSize: screenWidth * 0.04),
-                          // Remove validator completely
-                        ),
-                      ),
-                      if (_submitted) ...[
-                        Builder(
-                          builder: (context) {
-                            final error =
-                                _validateRequired(_birthdateController.text);
-                            if (error != null) {
-                              return Padding(
-                                padding: EdgeInsets.only(left: 8, top: 4),
-                                child: Text(
-                                  error,
-                                  style: TextStyle(
-                                      color: Colors.red, fontSize: 12),
-                                ),
-                              );
-                            }
-                            return SizedBox.shrink();
-                          },
-                        ),
-                      ],
-                    ],
-                  ),
-                  SizedBox(height: screenHeight * 0.02),
-                ],
 
                 // Phone Field
                 Column(
@@ -410,7 +291,6 @@ class _SignupPageState extends State<SignupPage> {
                         ),
                         keyboardType: TextInputType.phone,
                         style: TextStyle(fontSize: screenWidth * 0.04),
-                        // Remove validator completely
                         inputFormatters: [
                           FilteringTextInputFormatter.digitsOnly,
                           LengthLimitingTextInputFormatter(11),
@@ -421,6 +301,56 @@ class _SignupPageState extends State<SignupPage> {
                       Builder(
                         builder: (context) {
                           final error = _validatePhone(_phoneController.text);
+                          if (error != null) {
+                            return Padding(
+                              padding: EdgeInsets.only(left: 8, top: 4),
+                              child: Text(
+                                error,
+                                style:
+                                    TextStyle(color: Colors.red, fontSize: 12),
+                              ),
+                            );
+                          }
+                          return SizedBox.shrink();
+                        },
+                      ),
+                    ],
+                  ],
+                ),
+
+                SizedBox(height: screenHeight * 0.02),
+
+                // Email Field
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.shade300),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: TextFormField(
+                        controller: _emailController,
+                        decoration: InputDecoration(
+                          prefixIcon:
+                              Icon(Icons.email, color: Colors.grey.shade600),
+                          hintText: 'Email',
+                          hintStyle: TextStyle(color: Colors.grey.shade600),
+                          border: InputBorder.none,
+                          contentPadding: EdgeInsets.symmetric(
+                              vertical: screenHeight * 0.025),
+                          errorStyle:
+                              TextStyle(height: 0), // Hide default error text
+                        ),
+                        keyboardType: TextInputType.emailAddress,
+                        style: TextStyle(fontSize: screenWidth * 0.04),
+                      ),
+                    ),
+                    // Custom error display
+                    if (_submitted) ...[
+                      Builder(
+                        builder: (context) {
+                          final error = _validateEmail(_emailController.text);
                           if (error != null) {
                             return Padding(
                               padding: EdgeInsets.only(left: 8, top: 4),
@@ -560,73 +490,6 @@ class _SignupPageState extends State<SignupPage> {
                 ),
 
                 SizedBox(height: screenHeight * 0.02),
-
-                // Role Selector
-                Container(
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey.shade300),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: DropdownButtonFormField<String>(
-                    value: _selectedRole,
-                    decoration: InputDecoration(
-                      prefixIcon:
-                          Icon(Icons.badge, color: Colors.grey.shade600),
-                      border: InputBorder.none,
-                      contentPadding: EdgeInsets.symmetric(
-                        vertical: screenHeight * 0.025,
-                        horizontal: 12,
-                      ),
-                    ),
-                    hint: Text(
-                      'Select a role',
-                      style: TextStyle(
-                        color: Colors.grey.shade600,
-                        fontSize: screenWidth * 0.04,
-                      ),
-                    ),
-                    items: const [
-                      DropdownMenuItem(
-                          value: 'citizen', child: Text('Citizen')),
-                      DropdownMenuItem(value: 'tanod', child: Text('Tanod')),
-                      DropdownMenuItem(value: 'police', child: Text('Police')),
-                    ],
-                    onChanged: (val) => setState(() => _selectedRole = val),
-                    style: TextStyle(
-                        fontSize: screenWidth * 0.04, color: Colors.black),
-                  ),
-                ),
-
-                SizedBox(height: screenHeight * 0.02),
-
-                // Role-specific fields
-                if (_selectedRole == 'citizen') ...[
-                  _buildTextField(_firstNameController, 'First Name',
-                      Icons.person_outline, _validateRequired),
-                  SizedBox(height: screenHeight * 0.02),
-                  _buildTextField(_middleNameController, 'Middle Name',
-                      Icons.person_outline, null),
-                  SizedBox(height: screenHeight * 0.02),
-                  _buildTextField(_lastNameController, 'Last Name',
-                      Icons.person_outline, _validateRequired),
-                  SizedBox(height: screenHeight * 0.02),
-                ],
-
-                if (_selectedRole == 'tanod') ...[
-                  _buildTextField(_idNumberController, 'ID Number', Icons.badge,
-                      _validateRequired),
-                  SizedBox(height: screenHeight * 0.02),
-                  _buildUploadButton('Upload Credentials Proof'),
-                  SizedBox(height: screenHeight * 0.02),
-                ],
-
-                if (_selectedRole == 'police') ...[
-                  _buildTextField(_stationNameController, 'Station Name',
-                      Icons.location_city, _validateRequired),
-                  SizedBox(height: screenHeight * 0.02),
-                  _buildUploadButton('Upload Credentials Proof'),
-                  SizedBox(height: screenHeight * 0.02),
-                ],
 
                 // Terms text
                 Padding(
@@ -809,39 +672,6 @@ class _SignupPageState extends State<SignupPage> {
           ),
         ],
       ],
-    );
-  }
-
-  Widget _buildUploadButton(String text) {
-    final screenWidth = MediaQuery.of(context).size.width;
-
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey.shade300),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: InkWell(
-        onTap: _pickProofFile,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: EdgeInsets.symmetric(vertical: 16, horizontal: 12),
-          child: Row(
-            children: [
-              Icon(Icons.upload_file, color: Colors.grey.shade600),
-              SizedBox(width: 12),
-              Text(
-                _proofFile == null ? text : 'Document Selected',
-                style: TextStyle(
-                  color:
-                      _proofFile == null ? Colors.grey.shade600 : Colors.black,
-                  fontSize: screenWidth * 0.04,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 
