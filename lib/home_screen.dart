@@ -146,14 +146,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             .or('emergency_contact_phone.eq.${currentUserData['phone'] ?? ''},emergency_contact_phone.eq.${currentUserData['email'] ?? ''}')
             .count(CountOption.exact);
 
-        // Check if this user is in any emergency groups
-        final groupMembershipCount = await supabase
-            .from('group_memberships')
-            .select('id')
-            .eq('user_id', userId)
-            .count(CountOption.exact);
-
-        setState(() {
+      // Check if this user is in any emergency groups
+      final groupMembershipCount = await supabase
+          .from('group_members')
+          .select('id')
+          .eq('user_id', userId)
+          .count(CountOption.exact);        setState(() {
           _isEmergencyContactForOthers =
               (emergencyContactCount.data.length > 0) ||
                   (groupMembershipCount.data.length > 0);
