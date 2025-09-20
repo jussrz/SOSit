@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:geolocator/geolocator.dart';
-import 'settings_page.dart';
+import 'police_settings_page.dart';
 
 class PoliceDashboard extends StatefulWidget {
   const PoliceDashboard({super.key});
@@ -381,7 +381,7 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
                     GestureDetector(
                       onTap: () => Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const SettingsPage()),
+                        MaterialPageRoute(builder: (_) => const PoliceSettingsPage()),
                       ),
                       child: Icon(
                         Icons.settings,
