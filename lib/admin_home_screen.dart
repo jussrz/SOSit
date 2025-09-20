@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
-import 'settings_page.dart' hide MaterialPageRoute;
+import 'admin_settings_page.dart';
 
 class AdminHomeScreen extends StatefulWidget {
   const AdminHomeScreen({super.key});
@@ -345,7 +345,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
                   color: const Color(0xFFF73D5C), size: screenWidth * 0.06),
               onPressed: () => Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const SettingsPage()),
+                MaterialPageRoute(builder: (_) => const AdminSettingsPage()),
               ),
             ),
           ],
@@ -585,7 +585,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
                   backgroundColor: const Color(0xFFF73D5C),
                   padding: EdgeInsets.symmetric(vertical: screenHeight * 0.02),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(30),
                   ),
                   elevation: 0,
                 ),
@@ -619,7 +619,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
                   side: const BorderSide(color: Color(0xFFF73D5C)),
                   padding: EdgeInsets.symmetric(vertical: screenHeight * 0.02),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(30),
                   ),
                 ),
                 onPressed: _clearForm,
@@ -707,42 +707,55 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
           child: Row(
             children: [
               // Role filter
-              DropdownButton<String>(
-                value: _userRoleFilter,
-                items: const [
-                  DropdownMenuItem(value: 'all', child: Text('All Roles')),
-                  DropdownMenuItem(value: 'citizen', child: Text('Citizen')),
-                  DropdownMenuItem(value: 'tanod', child: Text('Tanod')),
-                  DropdownMenuItem(value: 'police', child: Text('Police')),
-                  DropdownMenuItem(value: 'admin', child: Text('Admin')),
-                ],
-                onChanged: (val) {
-                  setState(() {
-                    _userRoleFilter = val ?? 'all';
-                    _applyUserFilters();
-                    _selectedUser = null; // Clear selection on filter change
-                  });
-                },
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey.shade300),
+                  borderRadius: BorderRadius.circular(12),
+                  color: Colors.white,
+                ),
+                child: DropdownButton<String>(
+                  value: _userRoleFilter,
+                  underline: SizedBox(),
+                  items: const [
+                    DropdownMenuItem(value: 'all', child: Text('All Roles')),
+                    DropdownMenuItem(value: 'citizen', child: Text('Citizen')),
+                    DropdownMenuItem(value: 'tanod', child: Text('Tanod')),
+                    DropdownMenuItem(value: 'police', child: Text('Police')),
+                    DropdownMenuItem(value: 'admin', child: Text('Admin')),
+                  ],
+                  onChanged: (val) {
+                    setState(() {
+                      _userRoleFilter = val ?? 'all';
+                      _applyUserFilters();
+                      _selectedUser = null; // Clear selection on filter change
+                    });
+                  },
+                ),
               ),
               SizedBox(width: screenWidth * 0.04),
               // Name filter
               Expanded(
-                child: TextField(
-                  decoration: InputDecoration(
-                    hintText: 'Search by name',
-                    prefixIcon: Icon(Icons.search, color: Colors.grey.shade600),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: Colors.grey.shade300),
-                    ),
-                    contentPadding:
-                        EdgeInsets.symmetric(vertical: 0, horizontal: 12),
+                child: Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey.shade300),
+                    borderRadius: BorderRadius.circular(12),
+                    color: Colors.white,
                   ),
-                  onChanged: (val) {
-                    _userNameFilter = val;
-                    _applyUserFilters();
-                    _selectedUser = null; // Clear selection on search
-                  },
+                  child: TextField(
+                    decoration: InputDecoration(
+                      hintText: 'Search by name',
+                      prefixIcon: Icon(Icons.search, color: Colors.grey.shade600),
+                      border: InputBorder.none,
+                      contentPadding:
+                          EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+                    ),
+                    onChanged: (val) {
+                      _userNameFilter = val;
+                      _applyUserFilters();
+                      _selectedUser = null; // Clear selection on search
+                    },
+                  ),
                 ),
               ),
             ],
