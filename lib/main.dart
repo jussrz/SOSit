@@ -6,6 +6,7 @@ import 'services/emergency_service.dart';
 import 'signup_page.dart';
 import 'login_page.dart';
 import 'home_screen.dart';
+import 'splash_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -48,7 +49,7 @@ class MyApp extends StatelessWidget {
           primarySwatch: Colors.blue,
           fontFamily: 'Roboto',
         ),
-        home: const LoginPage(),
+        home: const SplashScreen(),
       ),
     );
   }

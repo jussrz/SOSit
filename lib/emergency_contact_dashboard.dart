@@ -17,7 +17,6 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
 
   List<Map<String, dynamic>> _sosAlerts = [];
   Map<String, dynamic> _emergencyContactData = {};
-  Map<String, dynamic> _profile = {};
 
   @override
   void initState() {
@@ -31,9 +30,6 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
     try {
       // Load emergency contact data directly
       _emergencyContactData = await _getEmergencyContactData();
-
-      // Load user profile
-      await _loadUserProfile();
 
       // Load SOS alerts (emergency logs where this user is the emergency contact)
       await _loadSosAlerts();
@@ -173,32 +169,6 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
         'emergency_contacts': [],
         'group_memberships': [],
       };
-    }
-  }
-
-  Future<void> _loadUserProfile() async {
-    try {
-      final userId = supabase.auth.currentUser?.id;
-      if (userId == null) return;
-
-      final userData = await supabase
-          .from('user')
-          .select('first_name, last_name, email, phone')
-          .eq('id', userId)
-          .single();
-
-      setState(() {
-        _profile = {
-          'name':
-              '${userData['first_name'] ?? ''} ${userData['last_name'] ?? ''}',
-          'role': 'Emergency Contact',
-          'phone': userData['phone'] ?? '',
-          'email': userData['email'] ?? '',
-          'notifPref': 'Push + SMS', // Default notification preference
-        };
-      });
-    } catch (e) {
-      debugPrint('Error loading user profile: $e');
     }
   }
 
@@ -369,21 +339,7 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
             children: [
               _buildDashboard(screenWidth, screenHeight),
               _buildHistory(screenWidth, screenHeight),
-              _buildProfileSettings(screenWidth, screenHeight),
             ],
-          ),
-          // Add switch icon to lower right beside profile tab
-          Positioned(
-            right: screenWidth * 0.04,
-            bottom: screenHeight * 0.08,
-            child: FloatingActionButton(
-              heroTag: 'switch_view_fab',
-              backgroundColor: Colors.white,
-              elevation: 2,
-              onPressed: _showRoleSwitchDialog,
-              child: Icon(Icons.swap_horiz, color: Color(0xFFF73D5C), size: 28),
-              mini: true,
-            ),
           ),
         ],
       ),
@@ -392,7 +348,14 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
         selectedItemColor: const Color(0xFFF73D5C),
         unselectedItemColor: Colors.grey.shade600,
         backgroundColor: Colors.white,
-        onTap: _onTabTapped,
+        onTap: (index) {
+          if (index == 2) {
+            // Switch view action
+            _showRoleSwitchDialog();
+          } else {
+            _onTabTapped(index);
+          }
+        },
         items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.home),
@@ -403,8 +366,8 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
             label: 'History',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.person),
-            label: 'Profile',
+            icon: Icon(Icons.swap_horiz),
+            label: 'Switch View',
           ),
         ],
       ),
@@ -1020,151 +983,6 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
                 )),
         ],
       ),
-    );
-  }
-
-  Widget _buildProfileSettings(double screenWidth, double screenHeight) {
-    return ListView(
-      padding: EdgeInsets.all(screenWidth * 0.05),
-      children: [
-        const Text('Emergency Contact Profile',
-            style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
-                color: Colors.black)),
-        SizedBox(height: screenHeight * 0.02),
-
-        Container(
-          padding: EdgeInsets.all(screenWidth * 0.04),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.04),
-                blurRadius: 6,
-                offset: const Offset(0, 2),
-              ),
-            ],
-            border: Border.all(color: Colors.grey.shade200),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  CircleAvatar(
-                    backgroundColor: const Color(0xFFF73D5C).withOpacity(0.13),
-                    child: const Icon(Icons.contact_emergency,
-                        color: Color(0xFFF73D5C)),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(_profile['name'] ?? 'Unknown',
-                            style: const TextStyle(
-                                fontWeight: FontWeight.bold, fontSize: 16)),
-                        Text('Role: ${_profile['role'] ?? 'Emergency Contact'}',
-                            style: TextStyle(
-                                color: Colors.grey.shade700, fontSize: 14)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 18),
-              Row(
-                children: [
-                  const Icon(Icons.phone, color: Colors.grey, size: 20),
-                  const SizedBox(width: 8),
-                  Text(_profile['phone'] ?? 'No phone number',
-                      style: const TextStyle(fontSize: 15)),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  const Icon(Icons.email, color: Colors.grey, size: 20),
-                  const SizedBox(width: 8),
-                  Text(_profile['email'] ?? 'No email',
-                      style: const TextStyle(fontSize: 15)),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  const Icon(Icons.notifications, color: Colors.grey, size: 20),
-                  const SizedBox(width: 8),
-                  const Text('Notifications: ',
-                      style: TextStyle(fontSize: 15, color: Colors.black)),
-                  const SizedBox(width: 6),
-                  Text(_profile['notifPref'] ?? 'Push + SMS',
-                      style:
-                          TextStyle(fontSize: 15, color: Colors.grey.shade700)),
-                ],
-              ),
-            ],
-          ),
-        ),
-
-        SizedBox(height: screenHeight * 0.02),
-
-        // Groups where user is a member
-        if (_emergencyContactData['group_memberships']?.isNotEmpty == true)
-          _buildGroupMemberships(screenWidth, screenHeight),
-      ],
-    );
-  }
-
-  Widget _buildGroupMemberships(double screenWidth, double screenHeight) {
-    final groupMemberships = _emergencyContactData['group_memberships'] as List;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Emergency Groups',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-        ),
-        SizedBox(height: screenHeight * 0.01),
-        ...groupMemberships.map((membership) => Container(
-              margin: EdgeInsets.only(bottom: screenHeight * 0.01),
-              padding: EdgeInsets.all(screenWidth * 0.04),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey.shade200),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    membership['group']?['name'] ?? 'Unknown Group',
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w600, fontSize: 15),
-                  ),
-                  const SizedBox(height: 4),
-                  if (membership['group']?['creator'] != null)
-                    Text(
-                      'Added by: ${membership['group']['creator']['first_name'] ?? ''} ${membership['group']['creator']['last_name'] ?? ''}'
-                          .trim(),
-                      style:
-                          TextStyle(color: Colors.grey.shade600, fontSize: 13),
-                    ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Relationship: ${membership['relationship'] ?? 'Not specified'}',
-                    style: TextStyle(
-                        color: const Color(0xFFF73D5C),
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500),
-                  ),
-                ],
-              ),
-            )),
-      ],
     );
   }
 

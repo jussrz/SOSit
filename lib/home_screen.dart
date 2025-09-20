@@ -132,25 +132,40 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       if (userId == null) return;
 
       // Check if this user is listed as an emergency contact for others
-      final emergencyContactCount = await supabase
-          .from('emergency_contacts')
-          .select('id')
-          .eq('emergency_contact_user_id', userId)
-          .count(CountOption.exact);
+      // Note: Since there's no emergency_contact_user_id column, check by phone/email
+      try {
+        final currentUserData = await supabase
+            .from('user')
+            .select('phone, email')
+            .eq('id', userId)
+            .single();
+            
+        final emergencyContactCount = await supabase
+            .from('emergency_contacts')
+            .select('id')
+            .or('emergency_contact_phone.eq.${currentUserData['phone'] ?? ''},emergency_contact_phone.eq.${currentUserData['email'] ?? ''}')
+            .count(CountOption.exact);
 
-      // Check if this user is in any emergency groups
-      final groupMembershipCount = await supabase
-          .from('group_memberships')
-          .select('id')
-          .eq('user_id', userId)
-          .count(CountOption.exact);
+        // Check if this user is in any emergency groups
+        final groupMembershipCount = await supabase
+            .from('group_memberships')
+            .select('id')
+            .eq('user_id', userId)
+            .count(CountOption.exact);
 
-      setState(() {
-        _isEmergencyContactForOthers =
-            (emergencyContactCount.data.length > 0) ||
-                (groupMembershipCount.data.length > 0);
-        _checkingEmergencyContactStatus = false;
-      });
+        setState(() {
+          _isEmergencyContactForOthers =
+              (emergencyContactCount.data.length > 0) ||
+                  (groupMembershipCount.data.length > 0);
+          _checkingEmergencyContactStatus = false;
+        });
+      } catch (e) {
+        debugPrint('Error checking emergency contact status by phone/email: $e');
+        setState(() {
+          _isEmergencyContactForOthers = false;
+          _checkingEmergencyContactStatus = false;
+        });
+      }
     } catch (e) {
       debugPrint('Error checking emergency contact status: $e');
       setState(() {
@@ -293,13 +308,21 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       // Load all emergency contacts from correct table
       final emergencyData = await supabase
           .from('emergency_contacts')
-          .select()
+          .select('*')
           .eq('user_id', userId)
           .order('created_at');
 
       // Debug prints
       debugPrint('Current UserId: $userId');
       debugPrint('Emergency Contacts Data: $emergencyData');
+      
+      // Log each contact's structure to see what columns exist
+      for (var contact in emergencyData) {
+        debugPrint('Contact structure: ${contact.keys.toList()}');
+        debugPrint('Available columns in emergency_contacts table: ${contact.keys.join(', ')}');
+        debugPrint('emergency_contact_name: ${contact['emergency_contact_name']}');
+        debugPrint('emergency_contact_phone: ${contact['emergency_contact_phone']}');
+      }
 
       setState(() {
         _isLoadingProfile = false;
@@ -309,6 +332,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         _birthdateController.text = userData['birthdate'] ?? '';
         _emergencyContacts = List<Map<String, dynamic>>.from(emergencyData);
       });
+
+      // Automatically update emergency contacts to link to existing users
+      _updateEmergencyContactsWithUserLinks();
     } catch (e) {
       setState(() {
         _isLoadingProfile = false;
@@ -333,6 +359,90 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     } catch (e) {
       debugPrint('Error fetching profile photo for user $userId: $e');
       return null;
+    }
+  }
+
+  // Method to find and link existing users by phone number
+  Future<String?> _findUserByPhone(String phone) async {
+    if (phone.isEmpty) return null;
+    
+    try {
+      // Try multiple phone number formats
+      List<String> phoneVariants = [
+        phone, // Original
+        phone.replaceAll(RegExp(r'[^\d+]'), ''), // Only digits and +
+        phone.replaceAll(RegExp(r'[^\d]'), ''), // Only digits
+      ];
+      
+      // Add formatted variants
+      String digitsOnly = phone.replaceAll(RegExp(r'[^\d]'), '');
+      if (digitsOnly.length >= 10) {
+        phoneVariants.add('+63${digitsOnly.substring(digitsOnly.length - 10)}'); // +63 format
+        phoneVariants.add('0${digitsOnly.substring(digitsOnly.length - 10)}'); // 0 prefix
+      }
+      
+      debugPrint('Searching for phone variants: $phoneVariants');
+      
+      for (String variant in phoneVariants) {
+        final userData = await Supabase.instance.client
+            .from('user')
+            .select('id, phone')
+            .eq('phone', variant)
+            .maybeSingle();
+        
+        if (userData != null) {
+          debugPrint('Found user by phone $variant: ${userData['id']}');
+          return userData['id'];
+        }
+      }
+      
+      debugPrint('No user found for phone: $phone');
+      return null;
+    } catch (e) {
+      debugPrint('Error finding user by phone $phone: $e');
+      return null;
+    }
+  }
+
+  // Method to update emergency contacts to link to existing users
+  Future<void> _updateEmergencyContactsWithUserLinks() async {
+    final supabase = Supabase.instance.client;
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) return;
+
+    try {
+      // First, let's see what columns exist in the emergency_contacts table
+      final emergencyData = await supabase
+          .from('emergency_contacts')
+          .select('*')
+          .eq('user_id', userId)
+          .limit(1);
+
+      if (emergencyData.isNotEmpty) {
+        debugPrint('Emergency contacts table columns: ${emergencyData.first.keys.join(', ')}');
+        
+        // Check if we have a user linking column
+        bool hasUserIdColumn = emergencyData.first.containsKey('emergency_contact_user_id');
+        bool hasContactIdColumn = emergencyData.first.containsKey('contact_user_id');
+        bool hasLinkedUserIdColumn = emergencyData.first.containsKey('linked_user_id');
+        
+        debugPrint('Has emergency_contact_user_id: $hasUserIdColumn');
+        debugPrint('Has contact_user_id: $hasContactIdColumn');
+        debugPrint('Has linked_user_id: $hasLinkedUserIdColumn');
+        
+        if (!hasUserIdColumn && !hasContactIdColumn && !hasLinkedUserIdColumn) {
+          debugPrint('❌ No user linking column found. Emergency contacts can only show initials.');
+          debugPrint('💡 To show profile photos, you need to add a user linking column to the emergency_contacts table.');
+          return;
+        }
+      }
+
+      // Since the column doesn't exist, we can't do automatic linking
+      debugPrint('❌ Cannot perform automatic user linking - database schema needs to be updated');
+      debugPrint('💡 Your emergency contacts table needs an emergency_contact_user_id column to link to users');
+      
+    } catch (e) {
+      debugPrint('Error checking emergency contact schema: $e');
     }
   }
 
@@ -1077,15 +1187,21 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             child: Row(
               children: [
                 Container(
-                  padding: EdgeInsets.all(screenWidth * 0.025),
+                  width: screenWidth * 0.12,
+                  height: screenWidth * 0.12,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF73D5C).withOpacity(0.1),
+                    color: const Color(0xFFF73D5C).withOpacity(0.15),
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(
-                    Icons.person,
-                    color: const Color(0xFFF73D5C),
-                    size: screenWidth * 0.06,
+                  child: Center(
+                    child: Text(
+                      _getInitials(contact['emergency_contact_name'] ?? ''),
+                      style: TextStyle(
+                        color: const Color(0xFFF73D5C),
+                        fontSize: screenWidth * 0.035,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
                 ),
                 SizedBox(width: screenWidth * 0.04),
@@ -1217,6 +1333,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         letterSpacing: 0.5,
       ),
     );
+  }
+
+  // Helper method to get initials from a name
+  String _getInitials(String name) {
+    if (name.isEmpty) return '?';
+    
+    List<String> nameParts = name.trim().split(' ');
+    if (nameParts.length == 1) {
+      return nameParts[0].substring(0, 1).toUpperCase();
+    } else {
+      return (nameParts[0].substring(0, 1) + nameParts[nameParts.length - 1].substring(0, 1)).toUpperCase();
+    }
   }
 
   Future<bool> _checkAssetExists(String assetPath) async {
