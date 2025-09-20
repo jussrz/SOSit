@@ -50,9 +50,18 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
           };
         }
 
-        // Check if this is the first admin
-        final isFirst = adminData?['admin_firstname'] == 'Admin' || 
-                       adminData?['is_primary'] == true;
+        // Check if this is the first admin based on your database structure
+        // You can adjust this logic based on how you identify the primary admin
+        final isFirst = adminData?['is_primary'] == true || 
+                       adminData?['admin_firstname']?.toLowerCase() == 'admin' ||
+                       adminData?['admin_email']?.toLowerCase().contains('admin') ||
+                       adminData?['admin_email'] == 'admin@sosit.com'; // Add your admin email here
+
+        debugPrint('Admin data: $adminData');
+        debugPrint('Is first admin: $isFirst');
+        debugPrint('Admin firstname: ${adminData?['admin_firstname']}');
+        debugPrint('Admin email: ${adminData?['admin_email']}');
+        debugPrint('Is primary field: ${adminData?['is_primary']}');
 
         setState(() {
           _userData = userData;
@@ -331,56 +340,6 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
                         ],
                       ),
                     ),
-
-                    // Admin Management Section (only for first admin)
-                    if (_isFirstAdmin) ...[
-                      SizedBox(height: screenHeight * 0.03),
-                      Container(
-                        width: double.infinity,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: Colors.grey.shade200),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Padding(
-                              padding: EdgeInsets.all(screenWidth * 0.04),
-                              child: Text(
-                                'System Management',
-                                style: TextStyle(
-                                  fontSize: screenWidth * 0.045,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.black,
-                                ),
-                              ),
-                            ),
-                            _buildInfoTile(
-                              Icons.security,
-                              'Privileges',
-                              'Full System Access',
-                              screenWidth,
-                              valueColor: Colors.red,
-                            ),
-                            _buildDivider(),
-                            _buildInfoTile(
-                              Icons.people,
-                              'User Management',
-                              'Create/Manage All Accounts',
-                              screenWidth,
-                            ),
-                            _buildDivider(),
-                            _buildInfoTile(
-                              Icons.settings,
-                              'System Configuration',
-                              'Full Administrative Control',
-                              screenWidth,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
 
                     SizedBox(height: screenHeight * 0.04),
 
