@@ -22,7 +22,7 @@ class _TanodDashboardState extends State<TanodDashboard> {
   Set<Marker> _markers = {};
   List<Map<String, dynamic>> _incidentHistory = [];
   bool _isLoadingHistory = false;
-  
+
   // Tracking state
   Map<String, dynamic>? _trackedUser;
   bool _isTracking = false;
@@ -38,25 +38,25 @@ class _TanodDashboardState extends State<TanodDashboard> {
     _loadIncidentHistory();
     _listenForPanicButtonAlerts();
   }
-  
+
   Future<void> _listenForPanicButtonAlerts() async {
     supabase
-      .channel('public:panic_alerts')
-      .onPostgresChanges(
-        event: PostgresChangeEvent.insert, 
-        schema: 'public',
-        table: 'panic_alerts', 
-        callback: (payload) {
-          _handleNewPanicAlert(payload.newRecord);
-        })
-      .subscribe();
+        .channel('public:panic_alerts')
+        .onPostgresChanges(
+            event: PostgresChangeEvent.insert,
+            schema: 'public',
+            table: 'panic_alerts',
+            callback: (payload) {
+              _handleNewPanicAlert(payload.newRecord);
+            })
+        .subscribe();
   }
 
   void _handleNewPanicAlert(Map<String, dynamic> alert) {
     if (!mounted) return;
-    
+
     // Play alert sound or vibration here
-    
+
     // Show alert dialog
     showDialog(
       context: context,
@@ -98,21 +98,23 @@ class _TanodDashboardState extends State<TanodDashboard> {
       debugPrint('Error getting location: $e');
     }
   }
-  
+
   Widget _buildPanicAlertDialog(Map<String, dynamic> alert) {
     final screenWidth = MediaQuery.of(context).size.width;
-    
+
     // Extract user information from the alert
     final userName = alert['user_name'] ?? 'Unknown User';
     final location = alert['location'] ?? 'Location unavailable';
-    final timestamp = DateTime.tryParse(alert['created_at'] ?? '') ?? DateTime.now();
-    final formattedTime = '${timestamp.day}/${timestamp.month}/${timestamp.year} - ${timestamp.hour}:${timestamp.minute.toString().padLeft(2, '0')} ${timestamp.hour >= 12 ? 'PM' : 'AM'}';
+    final timestamp =
+        DateTime.tryParse(alert['created_at'] ?? '') ?? DateTime.now();
+    final formattedTime =
+        '${timestamp.day}/${timestamp.month}/${timestamp.year} - ${timestamp.hour}:${timestamp.minute.toString().padLeft(2, '0')} ${timestamp.hour >= 12 ? 'PM' : 'AM'}';
     final contactInfo = alert['emergency_contact'] ?? 'Not provided';
     final contactNumber = alert['contact_number'] ?? 'Not provided';
     final latitude = alert['latitude'] as double?;
     final longitude = alert['longitude'] as double?;
     final userId = alert['user_id'];
-    
+
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       contentPadding: EdgeInsets.zero,
@@ -210,7 +212,8 @@ class _TanodDashboardState extends State<TanodDashboard> {
                 ),
                 onPressed: () {
                   Navigator.of(context).pop();
-                  _trackUser(userId, latitude, longitude, userName, contactNumber);
+                  _trackUser(
+                      userId, latitude, longitude, userName, contactNumber);
                 },
                 child: const Text(
                   'Track User',
@@ -227,7 +230,7 @@ class _TanodDashboardState extends State<TanodDashboard> {
       ),
     );
   }
-  
+
   Widget _buildInfoRow(String label, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -255,7 +258,8 @@ class _TanodDashboardState extends State<TanodDashboard> {
     );
   }
 
-  void _trackUser(String? userId, double? latitude, double? longitude, String userName, String contactNumber) {
+  void _trackUser(String? userId, double? latitude, double? longitude,
+      String userName, String contactNumber) {
     if (userId == null || latitude == null || longitude == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -276,7 +280,7 @@ class _TanodDashboardState extends State<TanodDashboard> {
         'latitude': latitude,
         'longitude': longitude,
       };
-      
+
       // Add marker for user's location
       _userLocationMarker = Marker(
         markerId: MarkerId('user_$userId'),
@@ -287,7 +291,7 @@ class _TanodDashboardState extends State<TanodDashboard> {
           snippet: 'Panic button pressed',
         ),
       );
-      
+
       // Add the marker to the map
       _markers = {..._markers, _userLocationMarker!};
     });
@@ -301,7 +305,7 @@ class _TanodDashboardState extends State<TanodDashboard> {
         ),
       );
     }
-    
+
     // Show bottom sheet with tracking info
     _showTrackingBottomSheet(userName, contactNumber);
   }
@@ -573,9 +577,9 @@ class _TanodDashboardState extends State<TanodDashboard> {
   void _showTrackingBottomSheet(String userName, String contactNumber) {
     final screenWidth = MediaQuery.of(context).size.width;
     final screenHeight = MediaQuery.of(context).size.height;
-    
+
     if (!mounted) return;
-    
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -624,7 +628,7 @@ class _TanodDashboardState extends State<TanodDashboard> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              '$userName',
+                              userName,
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: screenWidth * 0.045,
@@ -666,19 +670,23 @@ class _TanodDashboardState extends State<TanodDashboard> {
                               _isTracking = false;
                               if (_userLocationMarker != null) {
                                 _markers = Set.from(_markers)
-                                  ..removeWhere((m) => m.markerId == _userLocationMarker!.markerId);
+                                  ..removeWhere((m) =>
+                                      m.markerId ==
+                                      _userLocationMarker!.markerId);
                               }
                               _trackedUser = null;
                             });
                           },
-                          child: const Text('Exit', style: TextStyle(color: Colors.white)),
+                          child: const Text('Exit',
+                              style: TextStyle(color: Colors.white)),
                         )
                       ],
                     ),
                     Divider(height: screenHeight * 0.03),
                     Row(
                       children: [
-                        Icon(Icons.phone, color: Colors.blue, size: screenWidth * 0.05),
+                        Icon(Icons.phone,
+                            color: Colors.blue, size: screenWidth * 0.05),
                         SizedBox(width: screenWidth * 0.02),
                         Text(
                           'Contact: $contactNumber',
@@ -694,7 +702,8 @@ class _TanodDashboardState extends State<TanodDashboard> {
                       children: [
                         ElevatedButton.icon(
                           icon: const Icon(Icons.phone, color: Colors.white),
-                          label: const Text('Call', style: TextStyle(color: Colors.white)),
+                          label: const Text('Call',
+                              style: TextStyle(color: Colors.white)),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.green,
                             padding: EdgeInsets.symmetric(
@@ -708,7 +717,8 @@ class _TanodDashboardState extends State<TanodDashboard> {
                         ),
                         ElevatedButton.icon(
                           icon: const Icon(Icons.message, color: Colors.white),
-                          label: const Text('Message', style: TextStyle(color: Colors.white)),
+                          label: const Text('Message',
+                              style: TextStyle(color: Colors.white)),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.blue,
                             padding: EdgeInsets.symmetric(
@@ -783,7 +793,8 @@ class _TanodDashboardState extends State<TanodDashboard> {
                     GestureDetector(
                       onTap: () => Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const TanodSettingsPage()),
+                        MaterialPageRoute(
+                            builder: (_) => const TanodSettingsPage()),
                       ),
                       child: Icon(
                         Icons.settings,

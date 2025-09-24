@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'login_page.dart';
 import 'admin_home_screen.dart';
+import 'ble_test_page.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -26,11 +27,8 @@ class _SettingsPageState extends State<SettingsPage> {
     try {
       final userId = supabase.auth.currentUser?.id;
       if (userId != null) {
-        final data = await supabase
-            .from('user')
-            .select()
-            .eq('id', userId)
-            .single();
+        final data =
+            await supabase.from('user').select().eq('id', userId).single();
         setState(() => _userData = data);
       }
     } catch (e) {
@@ -113,6 +111,17 @@ class _SettingsPageState extends State<SettingsPage> {
                   onTap: () {
                     Navigator.of(context).push(MaterialPageRoute(
                         builder: (_) => const AdminHomeScreen()));
+                  },
+                ),
+                const Divider(),
+                ListTile(
+                  leading: const Icon(Icons.bluetooth, color: Colors.blue),
+                  title: const Text('Panic Button Test'),
+                  subtitle: const Text('Test panic button connection'),
+                  trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                  onTap: () {
+                    Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const BLETestPage()));
                   },
                 ),
                 const Divider(),

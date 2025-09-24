@@ -8,17 +8,23 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class BLEService extends ChangeNotifier {
-  // ESP32 Constants - Made more flexible for detection
-  static const String SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
-  static const String CHARACTERISTIC_UUID =
-      "beb5483e-36e1-4688-b7f5-ea07361b26a8";
+  // ESP32 Constants - Matching your ESP32 code exactly
+  static const String SERVICE_UUID = "12345678-1234-5678-9abc-123456789abc";
+  static const String STATUS_CHAR_UUID = "12345678-1234-5678-9abc-123456789abd";
+  static const String ALERT_CHAR_UUID = "12345678-1234-5678-9abc-123456789abe";
+  static const String BATTERY_CHAR_UUID =
+      "12345678-1234-5678-9abc-123456789abf";
   static const String DEVICE_NAME = "SOSit!Button";
 
   // Private variables
   BluetoothDevice? _connectedDevice;
-  BluetoothCharacteristic? _characteristic;
+  BluetoothCharacteristic? _statusCharacteristic;
+  BluetoothCharacteristic? _alertCharacteristic;
+  BluetoothCharacteristic? _batteryCharacteristic;
   StreamSubscription<BluetoothConnectionState>? _connectionSubscription;
-  StreamSubscription<List<int>>? _characteristicSubscription;
+  StreamSubscription<List<int>>? _statusSubscription;
+  StreamSubscription<List<int>>? _alertSubscription;
+  StreamSubscription<List<int>>? _batterySubscription;
   StreamSubscription<BluetoothAdapterState>? _bluetoothStateSubscription;
   Timer? _reconnectTimer;
   Timer? _heartbeatTimer;
@@ -38,6 +44,9 @@ class BLEService extends ChangeNotifier {
   DateTime? _lastHeartbeat;
   String _deviceId = "";
   int _signalStrength = 0;
+
+  // Alert callback
+  Function(String, Map<String, dynamic>)? _onAlertReceived;
 
   // Debug information
   final List<String> _debugLog = [];
@@ -149,7 +158,9 @@ class BLEService extends ChangeNotifier {
       _isConnecting = false;
       _isScanning = false;
       _connectedDevice = null;
-      _characteristic = null;
+      _statusCharacteristic = null;
+      _alertCharacteristic = null;
+      _batteryCharacteristic = null;
       _stopTimers();
     } else if (!wasOn && _isBluetoothOn) {
       _updateConnectionStatus("Bluetooth ON - Initializing...");
@@ -449,56 +460,63 @@ class BLEService extends ChangeNotifier {
         }
       }
 
-      // Try to find our service, but also look for any writable characteristic
-      BluetoothService? targetService;
-      BluetoothCharacteristic? targetCharacteristic;
+      // Look for our panic button service
+      BluetoothService? panicService;
+      BluetoothCharacteristic? statusChar;
+      BluetoothCharacteristic? alertChar;
+      BluetoothCharacteristic? batteryChar;
 
-      // First, try to find our specific service
+      // Find the panic button service
       for (var service in services) {
-        if (service.uuid
-            .toString()
-            .toLowerCase()
-            .contains(SERVICE_UUID.toLowerCase())) {
-          targetService = service;
-          _addDebugLog('Found our target service');
+        if (service.uuid.toString().toLowerCase() ==
+            SERVICE_UUID.toLowerCase()) {
+          panicService = service;
+          _addDebugLog('Found panic button service: ${service.uuid}');
           break;
         }
       }
 
-      // If we found our service, look for our characteristic
-      if (targetService != null) {
-        for (var characteristic in targetService.characteristics) {
-          if (characteristic.uuid
-              .toString()
-              .toLowerCase()
-              .contains(CHARACTERISTIC_UUID.toLowerCase())) {
-            targetCharacteristic = characteristic;
-            _addDebugLog('Found our target characteristic');
-            break;
+      if (panicService != null) {
+        // Find all characteristics
+        for (var characteristic in panicService.characteristics) {
+          String charUUID = characteristic.uuid.toString().toLowerCase();
+
+          if (charUUID == STATUS_CHAR_UUID.toLowerCase()) {
+            statusChar = characteristic;
+            _addDebugLog('Found status characteristic: ${characteristic.uuid}');
+          } else if (charUUID == ALERT_CHAR_UUID.toLowerCase()) {
+            alertChar = characteristic;
+            _addDebugLog('Found alert characteristic: ${characteristic.uuid}');
+          } else if (charUUID == BATTERY_CHAR_UUID.toLowerCase()) {
+            batteryChar = characteristic;
+            _addDebugLog(
+                'Found battery characteristic: ${characteristic.uuid}');
           }
         }
       } else {
-        // If we can't find our specific service, look for any service with writable characteristics
+        // Fallback to any writable characteristic for basic connectivity
         _addDebugLog(
-            'Target service not found, looking for any writable characteristic...');
+            'Panic button service not found, looking for any writable characteristic...');
         for (var service in services) {
           for (var char in service.characteristics) {
             if (char.properties.write ||
                 char.properties.writeWithoutResponse ||
                 char.properties.notify) {
-              targetService = service;
-              targetCharacteristic = char;
-              _addDebugLog('Found writable characteristic: ${char.uuid}');
+              statusChar = char;
+              _addDebugLog(
+                  'Found fallback writable characteristic: ${char.uuid}');
               break;
             }
           }
-          if (targetCharacteristic != null) break;
+          if (statusChar != null) break;
         }
       }
 
       // Set up the connection
       _connectedDevice = device;
-      _characteristic = targetCharacteristic;
+      _statusCharacteristic = statusChar;
+      _alertCharacteristic = alertChar;
+      _batteryCharacteristic = batteryChar;
       _isConnected = true;
       _isConnecting = false;
       _isPaired = true;
@@ -512,45 +530,34 @@ class BLEService extends ChangeNotifier {
         _handleConnectionStateChange(state);
       });
 
-      // Try to enable notifications if possible
-      if (targetCharacteristic != null &&
-          targetCharacteristic.properties.notify) {
-        try {
-          await targetCharacteristic.setNotifyValue(true);
-          _addDebugLog('Notifications enabled');
-
-          _characteristicSubscription =
-              targetCharacteristic.lastValueStream.listen(
-            _handleIncomingData,
-            onError: (error) {
-              _addDebugLog('Characteristic error: $error');
-            },
-          );
-        } catch (e) {
-          _addDebugLog('Could not enable notifications: $e');
-        }
-      }
-
-      // Try to send initial status request if we can write
-      if (targetCharacteristic != null &&
-          (targetCharacteristic.properties.write ||
-              targetCharacteristic.properties.writeWithoutResponse)) {
-        try {
-          await sendMessage("STATUS");
-        } catch (e) {
-          _addDebugLog('Could not send initial message: $e');
-        }
-      }
+      // Set up characteristic notifications
+      await _setupCharacteristicNotifications();
 
       _startHeartbeat();
       _addDebugLog('Successfully connected to panic button');
+
+      // Set up fallback callback if none exists
+      if (_onAlertReceived == null) {
+        _addDebugLog('No callback set, setting up emergency callback directly');
+        // Set up a direct emergency service callback
+        setAlertCallback((alertType, alertData) {
+          debugPrint('🚨 DIRECT EMERGENCY ALERT: $alertType');
+          debugPrint('🚨 Alert data: $alertData');
+          // Direct emergency handling
+          _handleDirectEmergencyAlert(alertType, alertData);
+        });
+        _addDebugLog('Direct emergency callback set up successfully');
+      }
+
       notifyListeners();
     } catch (e) {
       _addDebugLog('Connection failed: $e');
       _isConnected = false;
       _isConnecting = false;
       _connectedDevice = null;
-      _characteristic = null;
+      _statusCharacteristic = null;
+      _alertCharacteristic = null;
+      _batteryCharacteristic = null;
       _updateConnectionStatus("Connection Failed: ${e.toString()}");
 
       if (_autoReconnect) {
@@ -561,6 +568,164 @@ class BLEService extends ChangeNotifier {
     }
   }
 
+  // Set up notifications for all characteristics
+  Future<void> _setupCharacteristicNotifications() async {
+    // Status characteristic
+    if (_statusCharacteristic != null &&
+        _statusCharacteristic!.properties.notify) {
+      try {
+        await _statusCharacteristic!.setNotifyValue(true);
+        _statusSubscription = _statusCharacteristic!.lastValueStream.listen(
+          _handleStatusUpdate,
+          onError: (error) =>
+              _addDebugLog('Status characteristic error: $error'),
+        );
+        _addDebugLog('Status notifications enabled');
+      } catch (e) {
+        _addDebugLog('Could not enable status notifications: $e');
+      }
+    }
+
+    // Alert characteristic
+    if (_alertCharacteristic != null &&
+        _alertCharacteristic!.properties.notify) {
+      try {
+        await _alertCharacteristic!.setNotifyValue(true);
+        _alertSubscription = _alertCharacteristic!.lastValueStream.listen(
+          _handleAlertUpdate,
+          onError: (error) =>
+              _addDebugLog('Alert characteristic error: $error'),
+        );
+        _addDebugLog('Alert notifications enabled');
+      } catch (e) {
+        _addDebugLog('Could not enable alert notifications: $e');
+      }
+    }
+
+    // Battery characteristic
+    if (_batteryCharacteristic != null &&
+        _batteryCharacteristic!.properties.notify) {
+      try {
+        await _batteryCharacteristic!.setNotifyValue(true);
+        _batterySubscription = _batteryCharacteristic!.lastValueStream.listen(
+          _handleBatteryUpdate,
+          onError: (error) =>
+              _addDebugLog('Battery characteristic error: $error'),
+        );
+        _addDebugLog('Battery notifications enabled');
+      } catch (e) {
+        _addDebugLog('Could not enable battery notifications: $e');
+      }
+    }
+  }
+
+  // Handle status updates from ESP32
+  void _handleStatusUpdate(List<int> data) {
+    try {
+      String statusMessage = utf8.decode(data);
+      _addDebugLog('Status update: $statusMessage');
+      _deviceState = statusMessage;
+      _lastHeartbeat = DateTime.now();
+      notifyListeners();
+    } catch (e) {
+      _addDebugLog('Error handling status update: $e');
+    }
+  }
+
+  // Handle alert updates from ESP32
+  void _handleAlertUpdate(List<int> data) {
+    try {
+      String alertMessage = utf8.decode(data);
+      _addDebugLog('ALERT RECEIVED: "$alertMessage" (${data.length} bytes)');
+      _addDebugLog('Raw bytes: ${data.toString()}');
+      _lastHeartbeat = DateTime.now();
+
+      // IMPORTANT: Trigger alert in the Flutter app
+      if (alertMessage != "none" && alertMessage.isNotEmpty) {
+        _addDebugLog('Processing alert: $alertMessage');
+
+        // Convert to uppercase for consistency
+        String normalizedAlert = alertMessage.toUpperCase();
+        _addDebugLog('Normalized alert: $normalizedAlert');
+
+        if (_onAlertReceived != null) {
+          _addDebugLog('Calling alert callback...');
+          Map<String, dynamic> alertData = {
+            'level': normalizedAlert,
+            'timestamp': DateTime.now().millisecondsSinceEpoch,
+            'device_id': _deviceId,
+            'battery': _batteryLevel,
+          };
+          _onAlertReceived!(normalizedAlert, alertData);
+          _addDebugLog('Alert callback completed');
+        } else {
+          _addDebugLog('ERROR: No alert callback set!');
+        }
+      } else {
+        _addDebugLog('Alert ignored: "$alertMessage" (none or empty)');
+      }
+      _lastAlert = '$alertMessage at ${DateTime.now().toString()}';
+      notifyListeners();
+    } catch (e) {
+      _addDebugLog('Error handling alert update: $e');
+    }
+  }
+
+  // Handle battery updates from ESP32
+  void _handleBatteryUpdate(List<int> data) {
+    try {
+      if (data.isNotEmpty) {
+        _batteryLevel = data[0]; // Battery sent as single byte
+        _addDebugLog('Battery update: ${_batteryLevel}%');
+        _lastHeartbeat = DateTime.now();
+        notifyListeners();
+      }
+    } catch (e) {
+      _addDebugLog('Error handling battery update: $e');
+    }
+  }
+
+  void _handleDirectEmergencyAlert(
+      String alertType, Map<String, dynamic> alertData) {
+    try {
+      debugPrint('🏥 Handling direct emergency alert: $alertType');
+
+      // Basic emergency response logic
+      switch (alertType.toUpperCase()) {
+        case 'REGULAR':
+          debugPrint('⚠️ REGULAR emergency alert triggered!');
+          // Handle regular emergency
+          break;
+        case 'CRITICAL':
+          debugPrint('🚨 CRITICAL emergency alert triggered!');
+          // Handle critical emergency
+          break;
+        case 'CANCEL':
+          debugPrint('❌ Emergency alert cancelled');
+          // Handle cancellation
+          break;
+        case 'CHECKIN':
+          debugPrint('✅ Check-in received');
+          // Handle check-in
+          break;
+        default:
+          debugPrint('❓ Unknown alert type: $alertType');
+      }
+
+      // Update last alert for other listeners
+      _lastAlert = '$alertType at ${DateTime.now().toString()}';
+      notifyListeners();
+    } catch (e) {
+      debugPrint('❌ Error handling direct emergency alert: $e');
+    }
+  }
+
+  // Set alert callback for external handling
+  void setAlertCallback(Function(String, Map<String, dynamic>) callback) {
+    _onAlertReceived = callback;
+    _addDebugLog('Alert callback set successfully');
+  }
+
   void _handleConnectionStateChange(BluetoothConnectionState state) {
     _addDebugLog('Connection state changed: $state');
 
@@ -568,7 +733,9 @@ class BLEService extends ChangeNotifier {
       _isConnected = false;
       _isConnecting = false;
       _connectedDevice = null;
-      _characteristic = null;
+      _statusCharacteristic = null;
+      _alertCharacteristic = null;
+      _batteryCharacteristic = null;
       _updateConnectionStatus("Panic Button Disconnected");
       _stopTimers();
 
@@ -580,79 +747,58 @@ class BLEService extends ChangeNotifier {
     }
   }
 
-  void _handleIncomingData(List<int> data) {
-    try {
-      String message = utf8.decode(data);
-      _addDebugLog('Received: $message');
-      _lastHeartbeat = DateTime.now();
-
-      // Parse different message types
-      if (message.startsWith('STATE:')) {
-        _deviceState = message.substring(6);
-      } else if (message.startsWith('{') && message.contains('ALERT')) {
-        Map<String, dynamic> alertData = json.decode(message);
-        _handleAlert(alertData);
-      } else if (message.startsWith('{') && message.contains('BATTERY')) {
-        Map<String, dynamic> batteryData = json.decode(message);
-        _batteryLevel = batteryData['value'] ?? _batteryLevel;
-      } else if (message == 'BTN_PRESS') {
-        _addDebugLog('Button pressed detected!');
-        // Simulate an alert for testing
-        _simulateButtonAlert('REGULAR');
-      } else if (message == 'BTN_RELEASE') {
-        _addDebugLog('Button released');
-      } else if (message == 'PONG') {
-        _addDebugLog('Heartbeat response received');
-      }
-
-      notifyListeners();
-    } catch (e) {
-      _addDebugLog('Error handling incoming data: $e');
-    }
-  }
-
-  void _simulateButtonAlert(String alertType) {
-    Map<String, dynamic> alertData = {
-      'type': 'ALERT',
-      'level': alertType,
-      'timestamp': DateTime.now().millisecondsSinceEpoch,
-      'battery': _batteryLevel,
-    };
-    _handleAlert(alertData);
-  }
-
-  void _handleAlert(Map<String, dynamic> alertData) {
-    String alertType = alertData['level'] ?? 'UNKNOWN';
-    int timestamp = alertData['timestamp'] ?? 0;
-    int battery = alertData['battery'] ?? _batteryLevel;
-
-    _lastAlert = '$alertType at ${DateTime.now().toString()}';
-    _batteryLevel = battery;
-
-    _addDebugLog('ALERT: $alertType (Battery: $battery%)');
-
-    // Send acknowledgment back if possible
-    sendMessage("ACK");
-
-    notifyListeners();
-  }
-
   Future<void> sendMessage(String message) async {
-    if (!_isConnected || _characteristic == null) {
+    if (!_isConnected || _statusCharacteristic == null) {
       _addDebugLog('Cannot send message - not connected');
       return;
     }
 
     try {
       List<int> bytes = utf8.encode(message);
-      if (_characteristic!.properties.write) {
-        await _characteristic!.write(bytes);
-      } else if (_characteristic!.properties.writeWithoutResponse) {
-        await _characteristic!.write(bytes, withoutResponse: true);
+
+      // Try different write methods based on characteristic properties
+      if (_statusCharacteristic!.properties.writeWithoutResponse) {
+        await _statusCharacteristic!.write(bytes, withoutResponse: true);
+        _addDebugLog('Sent (no response): $message');
+      } else if (_statusCharacteristic!.properties.write) {
+        await _statusCharacteristic!.write(bytes);
+        _addDebugLog('Sent (with response): $message');
+      } else {
+        _addDebugLog('Characteristic does not support writing');
+        return;
       }
-      _addDebugLog('Sent: $message');
     } catch (e) {
       _addDebugLog('Error sending message: $e');
+
+      // Try to find a different writable characteristic
+      if (_connectedDevice != null) {
+        _addDebugLog(
+            'Attempting to find alternative writable characteristic...');
+        await _findAlternativeCharacteristic();
+      }
+    }
+  }
+
+  Future<void> _findAlternativeCharacteristic() async {
+    if (_connectedDevice == null) return;
+
+    try {
+      List<BluetoothService> services =
+          await _connectedDevice!.discoverServices();
+
+      for (var service in services) {
+        for (var char in service.characteristics) {
+          if ((char.properties.write || char.properties.writeWithoutResponse) &&
+              char.uuid.toString() != _statusCharacteristic?.uuid.toString()) {
+            _statusCharacteristic = char;
+            _addDebugLog(
+                'Switched to alternative characteristic: ${char.uuid}');
+            return;
+          }
+        }
+      }
+    } catch (e) {
+      _addDebugLog('Error finding alternative characteristic: $e');
     }
   }
 
@@ -689,7 +835,6 @@ class BLEService extends ChangeNotifier {
       String? deviceId = prefs.getString('last_panic_button_id');
 
       if (_isBluetoothOn) {
-        String? deviceId0;
         _addDebugLog('Looking for saved device: $deviceId');
       }
     } catch (e) {
@@ -721,7 +866,20 @@ class BLEService extends ChangeNotifier {
   // Test method to simulate panic button press
   Future<void> simulatePanicButton(String alertType) async {
     _addDebugLog('Simulating panic button: $alertType');
-    _simulateButtonAlert(alertType);
+
+    // Simulate alert directly using our callback
+    if (_onAlertReceived != null) {
+      Map<String, dynamic> alertData = {
+        'type': 'ALERT',
+        'level': alertType,
+        'timestamp': DateTime.now().millisecondsSinceEpoch,
+        'battery': _batteryLevel,
+      };
+      _onAlertReceived!(alertType, alertData);
+    }
+
+    _lastAlert = '$alertType at ${DateTime.now().toString()}';
+    notifyListeners();
   }
 
   Map<String, dynamic> getConnectionInfo() {
@@ -746,7 +904,9 @@ class BLEService extends ChangeNotifier {
   @override
   void dispose() {
     _connectionSubscription?.cancel();
-    _characteristicSubscription?.cancel();
+    _statusSubscription?.cancel();
+    _alertSubscription?.cancel();
+    _batterySubscription?.cancel();
     _bluetoothStateSubscription?.cancel();
     _stopTimers();
     super.dispose();

@@ -17,7 +17,7 @@ class _GroupPageState extends State<GroupPage> {
   bool _isLoading = false;
   List<Map<String, dynamic>> _groups = [];
   List<Map<String, dynamic>> _searchResults = [];
-  Map<String, List<Map<String, dynamic>>> _groupMembers = {};
+  final Map<String, List<Map<String, dynamic>>> _groupMembers = {};
 
   // Add a separate loading state for search
   bool _isSearching = false;
@@ -69,7 +69,7 @@ class _GroupPageState extends State<GroupPage> {
           _groupMembers[group['id']] = List<Map<String, dynamic>>.from(members);
         });
       }
-      
+
       debugPrint('✅ Groups loading completed');
     } catch (e) {
       debugPrint('❌ Error loading groups: $e');
@@ -141,7 +141,7 @@ class _GroupPageState extends State<GroupPage> {
       final results = await supabase
           .from('user')
           .select('id, email, first_name, last_name, phone')
-          .or('email.ilike.%${searchTerm}%')
+          .or('email.ilike.%$searchTerm%')
           .limit(5);
 
       debugPrint('Search results for "$searchTerm": $results');
@@ -231,7 +231,7 @@ class _GroupPageState extends State<GroupPage> {
 
     try {
       debugPrint('Attempting to add user ${user['id']} to group $groupId');
-      
+
       // Check if user is already in the group by querying the database directly
       final existingMembers = await supabase
           .from('group_members')
@@ -239,7 +239,8 @@ class _GroupPageState extends State<GroupPage> {
           .eq('group_id', groupId)
           .eq('user_id', user['id']);
 
-      debugPrint('Found ${existingMembers.length} existing members for this user in this group');
+      debugPrint(
+          'Found ${existingMembers.length} existing members for this user in this group');
 
       if (existingMembers.isNotEmpty) {
         if (mounted) {
@@ -257,13 +258,16 @@ class _GroupPageState extends State<GroupPage> {
             .from('emergency_contacts')
             .select('id')
             .eq('user_id', currentUserId);
-        
-        debugPrint('Current user has ${existingContacts.length} emergency contacts');
-        
+
+        debugPrint(
+            'Current user has ${existingContacts.length} emergency contacts');
+
         if (existingContacts.length >= 2) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Maximum 2 emergency contacts allowed per person')),
+              const SnackBar(
+                  content:
+                      Text('Maximum 2 emergency contacts allowed per person')),
             );
           }
           return;
@@ -271,7 +275,7 @@ class _GroupPageState extends State<GroupPage> {
       }
 
       debugPrint('Adding user to group_members table...');
-      
+
       // Add user to group
       final result = await supabase
           .from('group_members')
@@ -312,10 +316,11 @@ class _GroupPageState extends State<GroupPage> {
     } catch (e) {
       debugPrint('Error adding member: $e');
       String errorMessage = 'Error adding member';
-      
+
       // Handle specific constraint violations
       if (e.toString().contains('group_members_group_id_key')) {
-        errorMessage = 'Database constraint error: Only one member allowed per group. Please contact support to fix this database issue.';
+        errorMessage =
+            'Database constraint error: Only one member allowed per group. Please contact support to fix this database issue.';
       } else if (e.toString().contains('group_members_user_group_unique')) {
         errorMessage = 'This person is already in this group.';
       } else if (e.toString().contains('duplicate key')) {
@@ -325,7 +330,7 @@ class _GroupPageState extends State<GroupPage> {
       } else {
         errorMessage = 'Error adding member: ${e.toString()}';
       }
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -390,7 +395,7 @@ class _GroupPageState extends State<GroupPage> {
   Future<void> _deleteGroup(String groupId) async {
     try {
       debugPrint('🗑️ Starting group deletion for groupId: $groupId');
-      
+
       // Show loading indicator
       if (mounted) {
         showDialog(
@@ -418,49 +423,44 @@ class _GroupPageState extends State<GroupPage> {
 
       // STEP 2: Delete group members (if any)
       debugPrint('🔄 Step 2: Deleting group members...');
-      await supabase
-          .from('group_members')
-          .delete()
-          .eq('group_id', groupId);
+      await supabase.from('group_members').delete().eq('group_id', groupId);
       debugPrint('✅ Group members deleted');
 
       // STEP 3: Delete the group - using multiple approaches to ensure deletion
       debugPrint('🔄 Step 3: Deleting group...');
-      
+
       // Check user permissions first
       final currentUserId = supabase.auth.currentUser?.id;
       if (currentUserId == null) {
         throw Exception('User not authenticated');
       }
       debugPrint('🔐 Current user ID: $currentUserId');
-      
+
       // Verify user owns this group
       final ownershipCheck = await supabase
           .from('group')
           .select('created_by')
           .eq('id', groupId)
           .single();
-      
+
       debugPrint('👤 Group owner: ${ownershipCheck['created_by']}');
-      
+
       if (ownershipCheck['created_by'] != currentUserId) {
-        throw Exception('Permission denied: You can only delete groups you created');
+        throw Exception(
+            'Permission denied: You can only delete groups you created');
       }
-      
+
       // Try multiple deletion methods with detailed response logging
       bool groupDeleted = false;
-      
+
       // Method 1: Standard delete with response checking
       try {
         debugPrint('🔄 Method 1: Standard delete...');
-        final deleteResponse1 = await supabase
-            .from('group')
-            .delete()
-            .eq('id', groupId)
-            .select();
+        final deleteResponse1 =
+            await supabase.from('group').delete().eq('id', groupId).select();
         debugPrint('✅ Method 1 response: $deleteResponse1');
         debugPrint('✅ Method 1 deleted ${deleteResponse1.length} records');
-        
+
         if (deleteResponse1.isNotEmpty) {
           groupDeleted = true;
           debugPrint('Method 1: Successfully deleted group');
@@ -468,7 +468,7 @@ class _GroupPageState extends State<GroupPage> {
       } catch (e) {
         debugPrint('❌ Method 1 failed: $e');
       }
-      
+
       // Method 2: Delete with explicit ownership filter (only if Method 1 failed)
       if (!groupDeleted) {
         try {
@@ -481,7 +481,7 @@ class _GroupPageState extends State<GroupPage> {
               .select();
           debugPrint('✅ Method 2 response: $deleteResponse2');
           debugPrint('✅ Method 2 deleted ${deleteResponse2.length} records');
-          
+
           if (deleteResponse2.isNotEmpty) {
             groupDeleted = true;
             debugPrint('Method 2: Successfully deleted group');
@@ -490,7 +490,7 @@ class _GroupPageState extends State<GroupPage> {
           debugPrint('❌ Method 2 failed: $e');
         }
       }
-      
+
       // Method 3: Raw SQL approach (only if previous methods failed)
       if (!groupDeleted) {
         try {
@@ -500,40 +500,40 @@ class _GroupPageState extends State<GroupPage> {
             'user_id': currentUserId,
           });
           debugPrint('✅ Method 3 SQL response: $sqlResult');
-          
+
           // Check if group still exists after SQL
-          final postSqlCheck = await supabase
-              .from('group')
-              .select('id')
-              .eq('id', groupId);
-          
+          final postSqlCheck =
+              await supabase.from('group').select('id').eq('id', groupId);
+
           if (postSqlCheck.isEmpty) {
             groupDeleted = true;
             debugPrint('✅ Method 3: Successfully deleted group via SQL');
           }
         } catch (e) {
-          debugPrint('❌ Method 3 failed (expected if RPC function doesn\'t exist): $e');
+          debugPrint(
+              '❌ Method 3 failed (expected if RPC function doesn\'t exist): $e');
         }
       }
-      
+
       // Method 4: Direct database check and force delete
       if (!groupDeleted) {
         try {
           debugPrint('🔄 Method 4: Force delete with verification...');
-          
+
           // Check if there are any foreign key constraints
           final constraintCheck = await supabase
               .from('group_members')
               .select('id')
               .eq('group_id', groupId);
           debugPrint('🔍 Remaining group_members: ${constraintCheck.length}');
-          
+
           final emergencyCheck = await supabase
               .from('emergency_contacts')
               .select('id')
               .eq('group_id', groupId);
-          debugPrint('🔍 Remaining emergency_contacts: ${emergencyCheck.length}');
-          
+          debugPrint(
+              '🔍 Remaining emergency_contacts: ${emergencyCheck.length}');
+
           // Force delete any remaining dependencies
           if (constraintCheck.isNotEmpty) {
             await supabase
@@ -542,7 +542,7 @@ class _GroupPageState extends State<GroupPage> {
                 .eq('group_id', groupId);
             debugPrint('🧹 Force deleted remaining group members');
           }
-          
+
           if (emergencyCheck.isNotEmpty) {
             await supabase
                 .from('emergency_contacts')
@@ -550,15 +550,12 @@ class _GroupPageState extends State<GroupPage> {
                 .eq('group_id', groupId);
             debugPrint('🧹 Force deleted remaining emergency contacts');
           }
-          
+
           // Try delete again after cleanup
-          final finalDeleteResponse = await supabase
-              .from('group')
-              .delete()
-              .eq('id', groupId)
-              .select();
+          final finalDeleteResponse =
+              await supabase.from('group').delete().eq('id', groupId).select();
           debugPrint('✅ Method 4 final delete response: $finalDeleteResponse');
-          
+
           if (finalDeleteResponse.isNotEmpty) {
             groupDeleted = true;
             debugPrint('✅ Method 4: Successfully deleted group after cleanup');
@@ -572,12 +569,11 @@ class _GroupPageState extends State<GroupPage> {
       await Future.delayed(const Duration(milliseconds: 1000));
 
       // FINAL VERIFICATION: Check if group still exists
-      final verificationQuery = await supabase
-          .from('group')
-          .select('id, name')
-          .eq('id', groupId);
-      
-      debugPrint('🔍 Final verification: ${verificationQuery.length} groups found');
+      final verificationQuery =
+          await supabase.from('group').select('id, name').eq('id', groupId);
+
+      debugPrint(
+          '🔍 Final verification: ${verificationQuery.length} groups found');
       if (verificationQuery.isNotEmpty) {
         debugPrint('⚠️ Group still exists: ${verificationQuery.first}');
       }
@@ -595,7 +591,7 @@ class _GroupPageState extends State<GroupPage> {
         });
 
         debugPrint('✅ DELETION SUCCESSFUL - Group completely removed');
-        
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -608,27 +604,29 @@ class _GroupPageState extends State<GroupPage> {
       } else {
         // FAILURE: Group still exists despite all attempts
         debugPrint('💥 CRITICAL: All deletion methods failed');
-        debugPrint('🔍 This indicates a database permission or RLS policy issue');
+        debugPrint(
+            '🔍 This indicates a database permission or RLS policy issue');
         debugPrint('💡 Possible causes:');
-        debugPrint('   - Row Level Security (RLS) policies preventing deletion');
+        debugPrint(
+            '   - Row Level Security (RLS) policies preventing deletion');
         debugPrint('   - Database user lacks DELETE permissions');
         debugPrint('   - Foreign key constraints (despite cleanup attempts)');
         debugPrint('   - Database triggers preventing deletion');
-        
-        throw Exception('Group deletion failed: Database may have security policies preventing deletion. Contact your database administrator.');
+
+        throw Exception(
+            'Group deletion failed: Database may have security policies preventing deletion. Contact your database administrator.');
       }
-      
     } catch (e) {
       debugPrint('💥 DELETION FAILED: $e');
-      
+
       // Close loading dialog if still open
       if (mounted && Navigator.of(context).canPop()) {
         Navigator.of(context).pop();
       }
-      
+
       // Force refresh to see current state
       await _loadGroups();
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -755,12 +753,14 @@ class _GroupPageState extends State<GroupPage> {
                           decoration: InputDecoration(
                             labelText: 'New Group Name',
                             labelStyle: TextStyle(color: Colors.black),
-                    floatingLabelStyle: TextStyle(color: Color(0xFFF73D5C)),
+                            floatingLabelStyle:
+                                TextStyle(color: Color(0xFFF73D5C)),
                             border: OutlineInputBorder(
                               borderSide: BorderSide(color: Color(0xFFF73D5C)),
                             ),
                             focusedBorder: OutlineInputBorder(
-                              borderSide: BorderSide(color: Color(0xFFF73D5C), width: 2),
+                              borderSide: BorderSide(
+                                  color: Color(0xFFF73D5C), width: 2),
                             ),
                           ),
                         ),
@@ -774,7 +774,8 @@ class _GroupPageState extends State<GroupPage> {
                             backgroundColor: const Color(0xFFF73D5C),
                             foregroundColor: Colors.white,
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(24), // match Add Emergency Contact button
+                              borderRadius: BorderRadius.circular(
+                                  24), // match Add Emergency Contact button
                             ),
                             elevation: 2,
                             padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -829,8 +830,10 @@ class _GroupPageState extends State<GroupPage> {
                             dividerColor: Colors.transparent,
                           ),
                           child: ExpansionTile(
-                            tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                            childrenPadding: const EdgeInsets.symmetric(horizontal: 0, vertical: 0),
+                            tilePadding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 8),
+                            childrenPadding: const EdgeInsets.symmetric(
+                                horizontal: 0, vertical: 0),
                             maintainState: true,
                             collapsedBackgroundColor: Colors.white,
                             backgroundColor: Colors.white,
@@ -847,7 +850,8 @@ class _GroupPageState extends State<GroupPage> {
                                 IconButton(
                                   icon: const Icon(Icons.delete_outline,
                                       color: Colors.red),
-                                  onPressed: () => _confirmDeleteGroup(group['id'], group['name']),
+                                  onPressed: () => _confirmDeleteGroup(
+                                      group['id'], group['name']),
                                 ),
                               ],
                             ),
@@ -859,7 +863,8 @@ class _GroupPageState extends State<GroupPage> {
                                 padding: const EdgeInsets.all(16.0),
                                 child: ElevatedButton.icon(
                                   icon: const Icon(Icons.person_add),
-                                  label: const Text('Add Emergency Contact',
+                                  label: const Text(
+                                    'Add Emergency Contact',
                                     style: TextStyle(
                                       color: Colors.white, // ensure white text
                                       fontWeight: FontWeight.w600,
@@ -884,14 +889,16 @@ class _GroupPageState extends State<GroupPage> {
                                   leading: const Icon(Icons.contact_emergency,
                                       color: Color(0xFFF73D5C)),
                                   title: Text(
-                                      '${user['first_name']} ${user['last_name']}',
+                                    '${user['first_name']} ${user['last_name']}',
                                     style: const TextStyle(
-                                      color: Color(0xFFF73D5C), // accent color for name
+                                      color: Color(
+                                          0xFFF73D5C), // accent color for name
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
                                   subtitle: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Text(user['email']),
                                       Text(
@@ -904,13 +911,14 @@ class _GroupPageState extends State<GroupPage> {
                                     ],
                                   ),
                                   trailing: IconButton(
-                                    icon: const Icon(Icons.remove_circle_outline,
+                                    icon: const Icon(
+                                        Icons.remove_circle_outline,
                                         color: Colors.red),
-                                    onPressed: () =>
-                                        _removeMember(group['id'], member['id']),
+                                    onPressed: () => _removeMember(
+                                        group['id'], member['id']),
                                   ),
                                 );
-                              }).toList(),
+                              }),
                             ],
                           ),
                         ),
@@ -977,7 +985,8 @@ class _GroupPageState extends State<GroupPage> {
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.warning_amber, color: Colors.orange, size: 20),
+                        Icon(Icons.warning_amber,
+                            color: Colors.orange, size: 20),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
@@ -999,11 +1008,13 @@ class _GroupPageState extends State<GroupPage> {
                     decoration: BoxDecoration(
                       color: const Color(0xFFF73D5C).withOpacity(0.1),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFFF73D5C).withOpacity(0.3)),
+                      border: Border.all(
+                          color: const Color(0xFFF73D5C).withOpacity(0.3)),
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.info_outline, color: const Color(0xFFF73D5C), size: 20),
+                        Icon(Icons.info_outline,
+                            color: const Color(0xFFF73D5C), size: 20),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
@@ -1031,7 +1042,8 @@ class _GroupPageState extends State<GroupPage> {
                       borderSide: BorderSide(color: Color(0xFFF73D5C)),
                     ),
                     focusedBorder: OutlineInputBorder(
-                      borderSide: BorderSide(color: Color(0xFFF73D5C), width: 2),
+                      borderSide:
+                          BorderSide(color: Color(0xFFF73D5C), width: 2),
                     ),
                     prefixIcon: Icon(Icons.email, color: Color(0xFFF73D5C)),
                   ),
@@ -1044,8 +1056,10 @@ class _GroupPageState extends State<GroupPage> {
                         _searchResults = [];
                         _isSearching = false;
                       });
-                    } else if (selectedUser != null && 
-                               !selectedUser!['email'].toLowerCase().contains(value.toLowerCase())) {
+                    } else if (selectedUser != null &&
+                        !selectedUser!['email']
+                            .toLowerCase()
+                            .contains(value.toLowerCase())) {
                       // Only reset if the current value doesn't match the selected user
                       dialogSetState(() {
                         selectedUser = null;
@@ -1069,9 +1083,11 @@ class _GroupPageState extends State<GroupPage> {
                       borderSide: BorderSide(color: Color(0xFFF73D5C)),
                     ),
                     focusedBorder: OutlineInputBorder(
-                      borderSide: BorderSide(color: Color(0xFFF73D5C), width: 2),
+                      borderSide:
+                          BorderSide(color: Color(0xFFF73D5C), width: 2),
                     ),
-                    prefixIcon: Icon(Icons.family_restroom, color: Color(0xFFF73D5C)),
+                    prefixIcon:
+                        Icon(Icons.family_restroom, color: Color(0xFFF73D5C)),
                     hintText: 'Enter relationship to this person',
                   ),
                   onChanged: (value) {
@@ -1083,7 +1099,7 @@ class _GroupPageState extends State<GroupPage> {
                 const SizedBox(height: 16),
 
                 // Add button - only show if all conditions are met
-                if (currentContactCount < 2 && 
+                if (currentContactCount < 2 &&
                     selectedUser != null &&
                     _relationshipController.text.trim().isNotEmpty)
                   SizedBox(
@@ -1129,14 +1145,16 @@ class _GroupPageState extends State<GroupPage> {
                     Flexible(
                       child: Container(
                         decoration: BoxDecoration(
-                          border: Border.all(color: const Color(0xFFF73D5C).withOpacity(0.3)),
+                          border: Border.all(
+                              color: const Color(0xFFF73D5C).withOpacity(0.3)),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         margin: const EdgeInsets.only(top: 8),
                         child: ListView.separated(
                           shrinkWrap: true,
                           itemCount: _searchResults.length,
-                          separatorBuilder: (_, __) => Divider(height: 1, color: Colors.grey.shade200),
+                          separatorBuilder: (_, __) =>
+                              Divider(height: 1, color: Colors.grey.shade200),
                           itemBuilder: (context, index) {
                             final user = _searchResults[index];
                             final isSelected = selectedUser != null &&
@@ -1148,7 +1166,8 @@ class _GroupPageState extends State<GroupPage> {
                                     : Colors.grey.shade200,
                                 child: Icon(
                                   Icons.person,
-                                  color: isSelected ? Colors.white : Colors.grey,
+                                  color:
+                                      isSelected ? Colors.white : Colors.grey,
                                   size: 20,
                                 ),
                               ),
@@ -1158,7 +1177,9 @@ class _GroupPageState extends State<GroupPage> {
                                   fontWeight: isSelected
                                       ? FontWeight.bold
                                       : FontWeight.normal,
-                                  color: isSelected ? const Color(0xFFF73D5C) : Colors.black,
+                                  color: isSelected
+                                      ? const Color(0xFFF73D5C)
+                                      : Colors.black,
                                   fontSize: 15,
                                 ),
                               ),

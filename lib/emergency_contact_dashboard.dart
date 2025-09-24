@@ -63,15 +63,17 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
       try {
         // First, get ALL group_member records to understand the relationships
         debugPrint('Analyzing group_member relationships...');
-        
+
         // Find emergency contacts that have a group_member_id
         final allEmergencyContacts = await supabase
             .from('emergency_contacts')
             .select('*')
-            .not('group_member_id', 'is', null); // Only get contacts with group_member_id
-        
-        debugPrint('Found ${allEmergencyContacts.length} emergency contacts with group_member_id');
-        
+            .not('group_member_id', 'is',
+                null); // Only get contacts with group_member_id
+
+        debugPrint(
+            'Found ${allEmergencyContacts.length} emergency contacts with group_member_id');
+
         for (var contact in allEmergencyContacts) {
           if (contact['group_member_id'] != null) {
             try {
@@ -81,17 +83,20 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
                   .select('*')
                   .eq('id', contact['group_member_id'])
                   .single();
-              
-              debugPrint('Emergency contact ${contact['id']} references group_member: ${referencedGroupMember['id']} with user_id: ${referencedGroupMember['user_id']}');
-              
+
+              debugPrint(
+                  'Emergency contact ${contact['id']} references group_member: ${referencedGroupMember['id']} with user_id: ${referencedGroupMember['user_id']}');
+
               // Check if this group_member belongs to the current user
               if (referencedGroupMember['user_id'] == userId) {
                 // This emergency contact references the current user!
                 emergencyContacts.add(contact);
-                debugPrint('FOUND MATCH: Emergency contact from user ${contact['user_id']} references current user via group_member_id ${contact['group_member_id']}');
+                debugPrint(
+                    'FOUND MATCH: Emergency contact from user ${contact['user_id']} references current user via group_member_id ${contact['group_member_id']}');
               }
             } catch (e) {
-              debugPrint('Error getting group_member ${contact['group_member_id']}: $e');
+              debugPrint(
+                  'Error getting group_member ${contact['group_member_id']}: $e');
             }
           }
         }
@@ -99,7 +104,8 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
         debugPrint('Error finding group_members: $e');
       }
 
-      debugPrint('Total emergency contacts where current user is listed: ${emergencyContacts.length}');
+      debugPrint(
+          'Total emergency contacts where current user is listed: ${emergencyContacts.length}');
 
       // Get group memberships where this user is a member
       List<dynamic> groupMemberships = [];
@@ -108,9 +114,10 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
             .from('group_members')
             .select('*')
             .eq('user_id', userId);
-        
-        debugPrint('Found ${groupMembers.length} group memberships in group_members table');
-        
+
+        debugPrint(
+            'Found ${groupMembers.length} group memberships in group_members table');
+
         // Load group details for each membership
         for (var member in groupMembers) {
           try {
@@ -120,7 +127,7 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
                 .select('id, name, created_by')
                 .eq('id', member['group_id'])
                 .single();
-            
+
             // Create membership object
             final membership = {
               'id': member['id'],
@@ -129,7 +136,7 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
               'relationship': member['relationship'],
               'group': groupData,
             };
-            
+
             // Load creator details
             if (groupData['created_by'] != null) {
               try {
@@ -140,15 +147,16 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
                     .single();
                 membership['group']['creator'] = creatorData;
               } catch (e) {
-                debugPrint('Error loading creator for group ${groupData['id']}: $e');
+                debugPrint(
+                    'Error loading creator for group ${groupData['id']}: $e');
               }
             }
-            
+
             groupMemberships.add(membership);
             debugPrint('Added group membership: ${groupData['name']}');
-            
           } catch (e) {
-            debugPrint('Error loading group details for group ${member['group_id']}: $e');
+            debugPrint(
+                'Error loading group details for group ${member['group_id']}: $e');
           }
         }
       } catch (e) {
@@ -160,8 +168,9 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
         'group_memberships': groupMemberships,
       };
 
-      debugPrint('Final result: Emergency contacts: ${emergencyContacts.length}, Group memberships: ${groupMemberships.length}');
-      
+      debugPrint(
+          'Final result: Emergency contacts: ${emergencyContacts.length}, Group memberships: ${groupMemberships.length}');
+
       return result;
     } catch (e) {
       debugPrint('Error getting emergency contact data: $e');
@@ -179,7 +188,7 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
 
       final relatedUserIds = _getRelatedUserIds();
       debugPrint('Looking for SOS alerts from users: $relatedUserIds');
-      
+
       if (relatedUserIds.isEmpty) {
         debugPrint('No related user IDs found, no alerts to load');
         setState(() {
@@ -224,7 +233,7 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
             final alertTime = DateTime.parse(alert['created_at']);
             final now = DateTime.now();
             final hoursDiff = now.difference(alertTime).inHours;
-            
+
             if (hoursDiff < 24 && alert['emergency_level'] != 'checkin') {
               status = 'active';
             }
@@ -260,7 +269,8 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
         }
       }
 
-      debugPrint('Processed ${processedAlerts.length} total alerts for history');
+      debugPrint(
+          'Processed ${processedAlerts.length} total alerts for history');
       setState(() {
         _sosAlerts = processedAlerts;
       });
@@ -282,7 +292,8 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
       if (membership['group'] != null &&
           membership['group']['created_by'] != null) {
         userIds.add(membership['group']['created_by']);
-        debugPrint('Added group creator user ID: ${membership['group']['created_by']}');
+        debugPrint(
+            'Added group creator user ID: ${membership['group']['created_by']}');
       }
     }
 
@@ -393,10 +404,10 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
                 MaterialPageRoute(builder: (_) => const HomeScreen()),
               );
             },
-            child: const Text('Switch to User View'),
             style: TextButton.styleFrom(
               foregroundColor: const Color(0xFFF73D5C),
             ),
+            child: const Text('Switch to User View'),
           ),
         ],
       ),
@@ -549,8 +560,6 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
     );
   }
 
-
-
   Widget _buildAlertCard(
       Map<String, dynamic> alert, double screenWidth, double screenHeight) {
     return Container(
@@ -581,7 +590,9 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
               child: snapshot.hasData && snapshot.data!.isNotEmpty
                   ? null
                   : Icon(
-                      alert['status'] == 'active' ? Icons.warning : Icons.check_circle,
+                      alert['status'] == 'active'
+                          ? Icons.warning
+                          : Icons.check_circle,
                       color: alert['status'] == 'active'
                           ? const Color(0xFFF73D5C)
                           : Colors.green,
@@ -663,16 +674,19 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
                   fontSize: 18,
                   color: Colors.black)),
           SizedBox(height: screenHeight * 0.015),
-          
+
           // Show total count
           if (_sosAlerts.isNotEmpty)
             Container(
-              padding: EdgeInsets.symmetric(horizontal: screenWidth * 0.04, vertical: screenHeight * 0.01),
+              padding: EdgeInsets.symmetric(
+                  horizontal: screenWidth * 0.04,
+                  vertical: screenHeight * 0.01),
               margin: EdgeInsets.only(bottom: screenHeight * 0.02),
               decoration: BoxDecoration(
                 color: const Color(0xFFF73D5C).withOpacity(0.1),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0xFFF73D5C).withOpacity(0.3)),
+                border:
+                    Border.all(color: const Color(0xFFF73D5C).withOpacity(0.3)),
               ),
               child: Text(
                 'Total alerts: ${_sosAlerts.length}',
@@ -683,7 +697,7 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
                 ),
               ),
             ),
-            
+
           if (_sosAlerts.isEmpty)
             Container(
               padding: EdgeInsets.all(screenWidth * 0.05),
@@ -750,18 +764,21 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
                               builder: (context, snapshot) {
                                 return CircleAvatar(
                                   backgroundColor: alert['status'] == 'active'
-                                      ? const Color(0xFFF73D5C).withOpacity(0.15)
+                                      ? const Color(0xFFF73D5C)
+                                          .withOpacity(0.15)
                                       : alert['status'] == 'resolved'
                                           ? Colors.green.withOpacity(0.15)
                                           : Colors.grey.withOpacity(0.15),
-                                  backgroundImage: snapshot.hasData && snapshot.data!.isNotEmpty
+                                  backgroundImage: snapshot.hasData &&
+                                          snapshot.data!.isNotEmpty
                                       ? NetworkImage(snapshot.data!)
                                       : null,
-                                  child: snapshot.hasData && snapshot.data!.isNotEmpty
+                                  child: snapshot.hasData &&
+                                          snapshot.data!.isNotEmpty
                                       ? null
                                       : Icon(
-                                          alert['status'] == 'active' 
-                                              ? Icons.warning 
+                                          alert['status'] == 'active'
+                                              ? Icons.warning
                                               : alert['status'] == 'resolved'
                                                   ? Icons.check_circle
                                                   : Icons.history,
@@ -791,13 +808,17 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
                                   if (alert['emergency_level'] != 'regular')
                                     Container(
                                       margin: const EdgeInsets.only(top: 2),
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 8, vertical: 2),
                                       decoration: BoxDecoration(
-                                        color: alert['emergency_level'] == 'critical'
+                                        color: alert['emergency_level'] ==
+                                                'critical'
                                             ? Colors.red.withOpacity(0.1)
-                                            : alert['emergency_level'] == 'checkin'
+                                            : alert['emergency_level'] ==
+                                                    'checkin'
                                                 ? Colors.blue.withOpacity(0.1)
-                                                : Colors.orange.withOpacity(0.1),
+                                                : Colors.orange
+                                                    .withOpacity(0.1),
                                         borderRadius: BorderRadius.circular(6),
                                       ),
                                       child: Text(
@@ -805,9 +826,11 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
                                         style: TextStyle(
                                           fontSize: 10,
                                           fontWeight: FontWeight.bold,
-                                          color: alert['emergency_level'] == 'critical'
+                                          color: alert['emergency_level'] ==
+                                                  'critical'
                                               ? Colors.red
-                                              : alert['emergency_level'] == 'checkin'
+                                              : alert['emergency_level'] ==
+                                                      'checkin'
                                                   ? Colors.blue
                                                   : Colors.orange,
                                         ),
@@ -817,7 +840,8 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
                               ),
                             ),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 4),
                               decoration: BoxDecoration(
                                 color: alert['status'] == 'active'
                                     ? const Color(0xFFF73D5C).withOpacity(0.1)
@@ -841,9 +865,9 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
                             ),
                           ],
                         ),
-                        
+
                         SizedBox(height: screenHeight * 0.015),
-                        
+
                         // Time & Date - More prominent
                         Row(
                           children: [
@@ -863,9 +887,9 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
                             ),
                           ],
                         ),
-                        
+
                         SizedBox(height: screenHeight * 0.01),
-                        
+
                         // Location - More prominent
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -890,7 +914,7 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
                             ),
                           ],
                         ),
-                        
+
                         // Description if available
                         if (alert['description']?.isNotEmpty == true) ...[
                           SizedBox(height: screenHeight * 0.01),
@@ -919,7 +943,7 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
                             ],
                           ),
                         ],
-                        
+
                         // Responded info if available
                         if (alert['responded_at'] != null) ...[
                           SizedBox(height: screenHeight * 0.01),
@@ -942,15 +966,17 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
                             ],
                           ),
                         ],
-                        
+
                         SizedBox(height: screenHeight * 0.015),
-                        
+
                         // Tap for details
                         GestureDetector(
-                          onTap: () => _showAlertDetails(alert, screenWidth, screenHeight),
+                          onTap: () => _showAlertDetails(
+                              alert, screenWidth, screenHeight),
                           child: Container(
                             width: double.infinity,
-                            padding: EdgeInsets.symmetric(vertical: screenHeight * 0.008),
+                            padding: EdgeInsets.symmetric(
+                                vertical: screenHeight * 0.008),
                             decoration: BoxDecoration(
                               color: Colors.grey.shade50,
                               borderRadius: BorderRadius.circular(6),
@@ -1032,12 +1058,14 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
                         return CircleAvatar(
                           backgroundColor: const Color(0xFFF73D5C),
                           radius: screenWidth * 0.07,
-                          backgroundImage: snapshot.hasData && snapshot.data!.isNotEmpty
-                              ? NetworkImage(snapshot.data!)
-                              : null,
+                          backgroundImage:
+                              snapshot.hasData && snapshot.data!.isNotEmpty
+                                  ? NetworkImage(snapshot.data!)
+                                  : null,
                           child: snapshot.hasData && snapshot.data!.isNotEmpty
                               ? null
-                              : const Icon(Icons.person, color: Colors.white, size: 32),
+                              : const Icon(Icons.person,
+                                  color: Colors.white, size: 32),
                         );
                       },
                     ),
@@ -1163,9 +1191,11 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
     );
   }
 
-  List<Widget> _buildEmergencyContactCards(double screenWidth, double screenHeight) {
-    final emergencyContacts = _emergencyContactData['emergency_contacts'] as List? ?? [];
-    
+  List<Widget> _buildEmergencyContactCards(
+      double screenWidth, double screenHeight) {
+    final emergencyContacts =
+        _emergencyContactData['emergency_contacts'] as List? ?? [];
+
     return emergencyContacts.map((contact) {
       return Container(
         margin: EdgeInsets.only(bottom: screenHeight * 0.015),
@@ -1201,7 +1231,8 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
             builder: (context, snapshot) {
               return Text(
                 snapshot.data ?? 'Loading...',
-                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+                style:
+                    const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
               );
             },
           ),
@@ -1241,7 +1272,8 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
             color: Colors.green,
             size: 24,
           ),
-          onTap: () => _showEmergencyContactDetails(contact, screenWidth, screenHeight),
+          onTap: () =>
+              _showEmergencyContactDetails(contact, screenWidth, screenHeight),
         ),
       );
     }).toList();
@@ -1249,18 +1281,18 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
 
   Future<String> _getUserName(String? userId) async {
     if (userId == null) return 'Unknown User';
-    
+
     try {
       final userData = await supabase
           .from('user')
           .select('first_name, last_name')
           .eq('id', userId)
           .single();
-      
+
       final firstName = userData['first_name'] ?? '';
       final lastName = userData['last_name'] ?? '';
       final fullName = '$firstName $lastName'.trim();
-      
+
       return fullName.isEmpty ? 'Unknown User' : fullName;
     } catch (e) {
       debugPrint('Error loading user name for $userId: $e');
@@ -1268,12 +1300,14 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
     }
   }
 
-  void _showEmergencyContactDetails(Map<String, dynamic> contact, double screenWidth, double screenHeight) {
+  void _showEmergencyContactDetails(
+      Map<String, dynamic> contact, double screenWidth, double screenHeight) {
     showDialog(
       context: context,
       builder: (context) {
         return Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
           child: Padding(
             padding: EdgeInsets.all(screenWidth * 0.06),
             child: Column(
@@ -1288,12 +1322,14 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
                         return CircleAvatar(
                           backgroundColor: const Color(0xFFF73D5C),
                           radius: screenWidth * 0.07,
-                          backgroundImage: snapshot.hasData && snapshot.data!.isNotEmpty
-                              ? NetworkImage(snapshot.data!)
-                              : null,
+                          backgroundImage:
+                              snapshot.hasData && snapshot.data!.isNotEmpty
+                                  ? NetworkImage(snapshot.data!)
+                                  : null,
                           child: snapshot.hasData && snapshot.data!.isNotEmpty
                               ? null
-                              : const Icon(Icons.person, color: Colors.white, size: 32),
+                              : const Icon(Icons.person,
+                                  color: Colors.white, size: 32),
                         );
                       },
                     ),
@@ -1317,12 +1353,18 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
                 const SizedBox(height: 18),
                 Row(
                   children: [
-                    const Icon(Icons.contact_emergency, color: Colors.grey, size: 20),
+                    const Icon(Icons.contact_emergency,
+                        color: Colors.grey, size: 20),
                     const SizedBox(width: 8),
-                    Text('Relationship: ', style: TextStyle(fontSize: 15, color: Colors.black)),
+                    Text('Relationship: ',
+                        style: TextStyle(fontSize: 15, color: Colors.black)),
                     Text(
-                      contact['emergency_contact_relationship'] ?? 'Not specified',
-                      style: TextStyle(fontSize: 15, color: const Color(0xFFF73D5C), fontWeight: FontWeight.w500),
+                      contact['emergency_contact_relationship'] ??
+                          'Not specified',
+                      style: TextStyle(
+                          fontSize: 15,
+                          color: const Color(0xFFF73D5C),
+                          fontWeight: FontWeight.w500),
                     ),
                   ],
                 ),
@@ -1332,10 +1374,12 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
                     children: [
                       const Icon(Icons.phone, color: Colors.grey, size: 20),
                       const SizedBox(width: 8),
-                      Text('Your contact info: ', style: TextStyle(fontSize: 15, color: Colors.black)),
+                      Text('Your contact info: ',
+                          style: TextStyle(fontSize: 15, color: Colors.black)),
                       Text(
                         contact['emergency_contact_phone'],
-                        style: TextStyle(fontSize: 15, color: Colors.grey.shade700),
+                        style: TextStyle(
+                            fontSize: 15, color: Colors.grey.shade700),
                       ),
                     ],
                   ),
@@ -1345,10 +1389,12 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
                   children: [
                     const Icon(Icons.access_time, color: Colors.grey, size: 20),
                     const SizedBox(width: 8),
-                    Text('Added on: ', style: TextStyle(fontSize: 15, color: Colors.black)),
+                    Text('Added on: ',
+                        style: TextStyle(fontSize: 15, color: Colors.black)),
                     Text(
                       _formatDate(DateTime.parse(contact['created_at'])),
-                      style: TextStyle(fontSize: 15, color: Colors.grey.shade700),
+                      style:
+                          TextStyle(fontSize: 15, color: Colors.grey.shade700),
                     ),
                   ],
                 ),
@@ -1356,12 +1402,15 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
                   const SizedBox(height: 10),
                   Row(
                     children: [
-                      const Icon(Icons.person_add, color: Colors.grey, size: 20),
+                      const Icon(Icons.person_add,
+                          color: Colors.grey, size: 20),
                       const SizedBox(width: 8),
-                      Text('Added by: ', style: TextStyle(fontSize: 15, color: Colors.black)),
+                      Text('Added by: ',
+                          style: TextStyle(fontSize: 15, color: Colors.black)),
                       Text(
                         contact['added_by'],
-                        style: TextStyle(fontSize: 15, color: Colors.grey.shade700),
+                        style: TextStyle(
+                            fontSize: 15, color: Colors.grey.shade700),
                       ),
                     ],
                   ),
@@ -1372,7 +1421,8 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFFF73D5C),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
                     onPressed: () => Navigator.pop(context),
@@ -1396,14 +1446,14 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
 
   Future<String?> _getUserProfilePhoto(String? userId) async {
     if (userId == null) return null;
-    
+
     try {
       final userData = await supabase
           .from('user')
           .select('profile_photo_url')
           .eq('id', userId)
           .single();
-      
+
       return userData['profile_photo_url'];
     } catch (e) {
       debugPrint('Error fetching profile photo for user $userId: $e');
@@ -1418,17 +1468,29 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
   String _formatDetailedDate(DateTime date) {
     final now = DateTime.now();
     final difference = now.difference(date);
-    
+
     // Format: "Dec 15, 2023 at 2:30 PM (2 hours ago)"
     String monthName = [
-      '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      '',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec'
     ][date.month];
-    
+
     String period = date.hour >= 12 ? 'PM' : 'AM';
-    int hour = date.hour > 12 ? date.hour - 12 : (date.hour == 0 ? 12 : date.hour);
+    int hour =
+        date.hour > 12 ? date.hour - 12 : (date.hour == 0 ? 12 : date.hour);
     String minute = date.minute.toString().padLeft(2, '0');
-    
+
     String timeAgo = '';
     if (difference.inMinutes < 60) {
       timeAgo = '${difference.inMinutes} minutes ago';
@@ -1439,7 +1501,7 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
     } else {
       timeAgo = '${(difference.inDays / 7).floor()} weeks ago';
     }
-    
+
     return '$monthName ${date.day}, ${date.year} at $hour:$minute $period ($timeAgo)';
   }
 }

@@ -284,7 +284,7 @@ class DebugScreen extends StatelessWidget {
                           '• Device Name: "SOSit!Button"\n'
                           '• Or any ESP32 device\n'
                           '• Service UUID: ${BLEService.SERVICE_UUID}\n'
-                          '• Characteristic: ${BLEService.CHARACTERISTIC_UUID}',
+                          '• Alert Characteristic: ${BLEService.ALERT_CHAR_UUID}',
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.grey.shade700,

@@ -18,7 +18,15 @@ class EmergencyService extends ChangeNotifier {
   String _lastKnownAddress = '';
   List<Map<String, dynamic>> _emergencyContacts = [];
   Timer? _emergencyTimer;
+  Timer? _regularAlertTimer;
   int _emergencyId = 0;
+
+  // Debounce mechanism to prevent rapid duplicate alerts
+  DateTime? _lastAlertTime;
+  String? _lastAlertType;
+
+  // UI callback for showing popups
+  Function(String alertType)? _showPopupCallback;
 
   // Getters
   bool get isEmergencyActive => _isEmergencyActive;
@@ -27,6 +35,12 @@ class EmergencyService extends ChangeNotifier {
   Position? get lastKnownLocation => _lastKnownLocation;
   String get lastKnownAddress => _lastKnownAddress;
   List<Map<String, dynamic>> get emergencyContacts => _emergencyContacts;
+
+  // Set callback for UI popup
+  void setPopupCallback(Function(String alertType) callback) {
+    _showPopupCallback = callback;
+    debugPrint('🎯 Emergency Service: Popup callback set');
+  }
 
   EmergencyService() {
     _initialize();
@@ -97,7 +111,19 @@ class EmergencyService extends ChangeNotifier {
       String alertType, Map<String, dynamic>? alertData) async {
     debugPrint('Handling emergency alert: $alertType');
 
-    // Update location before processing
+    // Debounce check - prevent duplicate alerts within 1 second
+    final now = DateTime.now();
+    if (_lastAlertTime != null &&
+        _lastAlertType == alertType &&
+        now.difference(_lastAlertTime!).inMilliseconds < 1000) {
+      debugPrint(
+          '🚫 Ignoring duplicate $alertType alert (debounced - ${now.difference(_lastAlertTime!).inMilliseconds}ms ago)');
+      return;
+    }
+
+    debugPrint('🎯 Processing $alertType alert');
+    _lastAlertTime = now;
+    _lastAlertType = alertType; // Update location before processing
     await _getCurrentLocation();
 
     switch (alertType) {
@@ -120,14 +146,26 @@ class EmergencyService extends ChangeNotifier {
 
   Future<void> _handleRegularAlert(Map<String, dynamic>? alertData) async {
     if (_isEmergencyActive) {
-      debugPrint('Emergency already active, ignoring regular alert');
+      debugPrint('🚫 Emergency already active, ignoring regular alert');
       return;
     }
 
+    debugPrint('⚠️ Starting REGULAR emergency...');
     await _startEmergency('REGULAR', alertData);
-    await _showSimpleAlert(
-        'Emergency Alert', 'Regular emergency alert activated');
     await _vibrateDevice([500, 300, 500]);
+
+    // Delay the popup by 1.5 seconds to allow for potential critical upgrade
+    debugPrint('⏰ Setting regular popup timer (1.5s delay)...');
+    _regularAlertTimer = Timer(const Duration(milliseconds: 1500), () {
+      if (_isEmergencyActive && _activeEmergencyType == 'REGULAR') {
+        debugPrint('📱 Showing REGULAR popup (timer expired)');
+        _showSimpleAlert(
+            'Emergency Alert', 'Regular emergency alert activated');
+      } else {
+        debugPrint(
+            '🚫 Regular popup cancelled - emergency type changed to $_activeEmergencyType');
+      }
+    });
 
     // Send to emergency contacts after 30 seconds unless cancelled
     _emergencyTimer = Timer(const Duration(seconds: 30), () {
@@ -142,7 +180,36 @@ class EmergencyService extends ChangeNotifier {
   }
 
   Future<void> _handleCriticalAlert(Map<String, dynamic>? alertData) async {
-    await _startEmergency('CRITICAL', alertData);
+    debugPrint('🚨 Processing CRITICAL alert...');
+
+    // Cancel any pending regular alert timer if upgrading to critical
+    if (_emergencyTimer != null) {
+      _emergencyTimer!.cancel();
+      _emergencyTimer = null;
+      debugPrint('✅ Cancelled pending regular emergency timer');
+    }
+
+    // Cancel the delayed regular popup if it's pending
+    if (_regularAlertTimer != null) {
+      _regularAlertTimer!.cancel();
+      _regularAlertTimer = null;
+      debugPrint(
+          '✅ Cancelled pending regular popup timer - will show critical instead');
+    } else {
+      debugPrint('ℹ️ No regular popup timer to cancel');
+    }
+
+    // If regular emergency is active, upgrade it to critical
+    if (_isEmergencyActive && _activeEmergencyType == 'REGULAR') {
+      debugPrint('⬆️ Upgrading regular emergency to critical');
+      _activeEmergencyType = 'CRITICAL';
+    } else if (!_isEmergencyActive) {
+      // Start new critical emergency
+      debugPrint('🚨 Starting new CRITICAL emergency...');
+      await _startEmergency('CRITICAL', alertData);
+    }
+
+    debugPrint('📱 Showing CRITICAL popup immediately');
     await _showSimpleAlert('CRITICAL EMERGENCY',
         'Critical emergency alert - sending immediately!');
     await _vibrateDevice([1000, 200, 1000, 200, 1000]);
@@ -315,9 +382,39 @@ Please call me or emergency services immediately.
   }
 
   Future<void> _showSimpleAlert(String title, String message) async {
-    // Simple console output for now - you can replace this with your preferred alert method
     debugPrint('ALERT: $title - $message');
-    // You could also use a simple dialog or snackbar here
+
+    // Don't show popup for system messages like "No Contacts"
+    if (title.toLowerCase().contains('no contacts') ||
+        title.toLowerCase().contains('alerts sent') ||
+        message.toLowerCase().contains('no emergency contacts')) {
+      debugPrint('ℹ️ System message - not showing popup');
+      return;
+    }
+
+    // Trigger UI popup if callback is set
+    if (_showPopupCallback != null) {
+      String alertType = 'regular'; // default
+
+      if (title.toLowerCase().contains('critical') ||
+          message.toLowerCase().contains('critical')) {
+        alertType = 'critical';
+      } else if (title.toLowerCase().contains('cancel') ||
+          message.toLowerCase().contains('cancel')) {
+        alertType = 'cancel';
+      } else if (title.toLowerCase().contains('check') ||
+          message.toLowerCase().contains('check')) {
+        alertType = 'checkin';
+      } else if (title.toLowerCase().contains('emergency') ||
+          message.toLowerCase().contains('emergency')) {
+        alertType = 'regular';
+      }
+
+      debugPrint('🎯 Triggering UI popup: $alertType');
+      _showPopupCallback!(alertType);
+    } else {
+      debugPrint('⚠️ No popup callback set - only console output');
+    }
   }
 
   Future<void> _vibrateDevice(List<int> pattern) async {

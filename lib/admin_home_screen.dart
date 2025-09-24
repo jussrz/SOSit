@@ -52,7 +52,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
   void initState() {
     super.initState();
     _createTabController();
-    
+
     // Ensure we have a valid auth session first, then load data
     _checkAndRestoreSession().then((_) {
       if (mounted) {
@@ -68,7 +68,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
       final session = supabase.auth.currentSession;
       if (session == null) {
         debugPrint('No active session found, attempting auto-login');
-        
+
         // Try to get stored credentials from secure storage
         // This is a placeholder - implement according to how you store credentials
         try {
@@ -117,7 +117,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
           _adminName =
               '${adminData['admin_firstname']} ${adminData['admin_lastname']}';
         });
-        
+
         // Ensure this admin also exists in the user table
         try {
           final userCheck = await supabase
@@ -125,18 +125,20 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
               .select('id')
               .eq('id', userId)
               .maybeSingle();
-          
+
           if (userCheck == null) {
             // Admin exists in admin table but not in user table
             // Let's add them to the user table for consistency
             await supabase.from('user').insert({
               'id': userId,
-              'email': adminData['admin_email'] ?? supabase.auth.currentUser?.email,
+              'email':
+                  adminData['admin_email'] ?? supabase.auth.currentUser?.email,
               'role': 'admin',
               'first_name': adminData['admin_firstname'],
               'last_name': adminData['admin_lastname'],
             });
-            debugPrint('Added current admin user to user table for consistency');
+            debugPrint(
+                'Added current admin user to user table for consistency');
           }
         } catch (userCheckError) {
           debugPrint('Error checking/creating user record: $userCheckError');
@@ -197,7 +199,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
       _clearForm();
     } catch (e) {
       debugPrint('Error creating account: $e');
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -218,18 +220,19 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
         email: _emailController.text.trim(),
         password: "dummy_password_that_wont_match",
       );
-      
+
       // If we get here without an error and have a user, the email exists in auth
       if (authResponse.user != null) {
-        throw Exception('An account with this email already exists in the system');
+        throw Exception(
+            'An account with this email already exists in the system');
       }
     } catch (e) {
       // Check specific error message that indicates the account doesn't exist or wrong password
       if (!e.toString().contains('Invalid login credentials')) {
         // This is a different error than invalid credentials, so re-throw it
-        throw e;
+        rethrow;
       }
-      
+
       // To be safe, let's also check the user table directly
       final existingUser = await supabase
           .from('user')
@@ -238,16 +241,17 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
           .maybeSingle();
 
       if (existingUser != null) {
-        throw Exception('An account with this email already exists in the database');
+        throw Exception(
+            'An account with this email already exists in the database');
       }
     }
 
     // Store current session
     final currentSession = supabase.auth.currentSession;
-    
+
     // Sign out temporarily
     await supabase.auth.signOut();
-    
+
     // Create new admin user
     final authResult = await supabase.auth.signUp(
       email: _emailController.text.trim(),
@@ -259,7 +263,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
 
       try {
         // Begin transaction pattern (not true transaction but sequential operations)
-        
+
         // 1. Insert into user table first
         await supabase.from('user').insert({
           'id': userId,
@@ -272,14 +276,14 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
         await supabase.from('admin').insert({
           'id': userId, // Must match auth.users.id
           'admin_email': _emailController.text.trim(),
-          'admin_firstname': _idNumberController.text.trim().isNotEmpty 
-              ? _idNumberController.text.trim() 
+          'admin_firstname': _idNumberController.text.trim().isNotEmpty
+              ? _idNumberController.text.trim()
               : 'Admin',
-          'admin_lastname': _stationNameController.text.trim().isNotEmpty 
-              ? _stationNameController.text.trim() 
+          'admin_lastname': _stationNameController.text.trim().isNotEmpty
+              ? _stationNameController.text.trim()
               : 'User',
         });
-        
+
         debugPrint('Successfully created admin user with ID: $userId');
       } catch (e) {
         // If anything fails, we should try to clean up the auth user
@@ -290,12 +294,12 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
           debugPrint('Failed to clean up auth user after error: $cleanupError');
         }
         // Re-throw the original error
-        throw e;
+        rethrow;
       }
 
       // Sign out new user
       await supabase.auth.signOut();
-      
+
       // Restore original session
       if (currentSession != null) {
         await supabase.auth.refreshSession(currentSession.refreshToken);
@@ -312,18 +316,19 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
         email: _emailController.text.trim(),
         password: "dummy_password_that_wont_match",
       );
-      
+
       // If we get here without an error and have a user, the email exists in auth
       if (authResponse.user != null) {
-        throw Exception('An account with this email already exists in the system');
+        throw Exception(
+            'An account with this email already exists in the system');
       }
     } catch (e) {
       // Check specific error message that indicates the account doesn't exist or wrong password
       if (!e.toString().contains('Invalid login credentials')) {
         // This is a different error than invalid credentials, so re-throw it
-        throw e;
+        rethrow;
       }
-      
+
       // Check if email exists in user table
       final existingUser = await supabase
           .from('user')
@@ -332,17 +337,19 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
           .maybeSingle();
 
       if (existingUser != null) {
-        throw Exception('An account with this email already exists in the database');
+        throw Exception(
+            'An account with this email already exists in the database');
       }
     }
-    
+
     // Create new user
     final res = await supabase.auth.signUp(
       email: _emailController.text.trim(),
       password: _passwordController.text.trim(),
     );
 
-    if (res.user == null) throw Exception('Failed to create user. Please try again.');
+    if (res.user == null)
+      throw Exception('Failed to create user. Please try again.');
 
     final userId = res.user!.id;
     final email = _emailController.text.trim();
@@ -381,8 +388,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
       String? proofUrl;
       if (_proofFile != null) {
         final fileBytes = await _proofFile!.readAsBytes();
-        final filePath =
-            'police_${DateTime.now().millisecondsSinceEpoch}.jpg';
+        final filePath = 'police_${DateTime.now().millisecondsSinceEpoch}.jpg';
         await supabase.storage
             .from('credentials_proof')
             .uploadBinary(filePath, fileBytes);
@@ -424,7 +430,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
       return true;
     } catch (e) {
       debugPrint('Database connectivity error: $e');
-      
+
       // Try another endpoint as a fallback
       try {
         await supabase.from('admin').select('count').limit(1);
@@ -467,18 +473,18 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
   Future<void> _loadAllUsers() async {
     if (!mounted) return; // Safety check
     setState(() => _isLoading = true);
-    
+
     // Check database connectivity first
     bool isConnected = await _checkDatabaseConnectivity();
     if (!isConnected) {
       debugPrint('Database connectivity check failed, using fallback data');
     }
-    
+
     // Track if any data was loaded
     bool anyDataLoaded = false;
     List<dynamic> users = [];
     List<Map<String, dynamic>> adminUsers = [];
-    
+
     try {
       // Attempt to reconnect to Supabase if needed
       if (supabase.auth.currentSession == null) {
@@ -495,44 +501,46 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
           });
           anyDataLoaded = true;
           debugPrint('Added temporary admin user since no session exists');
-          
+
           // Try to establish session - this may fail, but we have fallback data
           await supabase.auth.signInAnonymously();
         } catch (sessionError) {
           debugPrint('Session refresh failed: $sessionError');
         }
       }
-      
+
       // First attempt to load all users from user table
       try {
         users = await supabase
             .from('user')
             .select('*')
             .order('created_at', ascending: false);
-        
+
         debugPrint('Supabase user query result: ${users.length} users loaded');
         anyDataLoaded = true;
       } catch (userError) {
         debugPrint('Error loading users: $userError');
         users = []; // Ensure users is an empty list if the query fails
-        
+
         // Try again with limited fields if the full query failed
         try {
           users = await supabase
               .from('user')
               .select('id, email, role, first_name, last_name')
               .limit(100);
-          debugPrint('Second attempt: Loaded ${users.length} users with limited fields');
+          debugPrint(
+              'Second attempt: Loaded ${users.length} users with limited fields');
           anyDataLoaded = true;
         } catch (retryError) {
           debugPrint('Retry also failed: $retryError');
-          
+
           // Try with a stored procedure/function as last resort
           try {
             final response = await supabase.rpc('get_all_users');
             if (response != null) {
               users = List<dynamic>.from(response);
-              debugPrint('RPC fallback: Loaded ${users.length} users via function');
+              debugPrint(
+                  'RPC fallback: Loaded ${users.length} users via function');
               anyDataLoaded = true;
             }
           } catch (rpcError) {
@@ -540,22 +548,23 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
           }
         }
       }
-      
+
       // Special handling for admin users - load directly from admin table
       try {
         // Get all admin users from the admin table
         final adminData = await supabase
             .from('admin')
             .select('id, admin_email, admin_firstname, admin_lastname');
-        
+
         debugPrint('Loaded ${adminData.length} users from admin table');
         anyDataLoaded = anyDataLoaded || adminData.isNotEmpty;
-        
+
         // For each admin user, check if they're already in the users list
         // If not, create a new user entry with admin role
         for (final admin in adminData) {
-          final existingUserIndex = users.indexWhere((user) => user['id'] == admin['id']);
-          
+          final existingUserIndex =
+              users.indexWhere((user) => user['id'] == admin['id']);
+
           if (existingUserIndex == -1) {
             // Admin exists in admin table but not in user table
             adminUsers.add({
@@ -581,16 +590,17 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
         }
       } catch (adminError) {
         debugPrint('Error loading admin data: $adminError');
-        
+
         // Try with a more basic query
         try {
           final basicAdminData = await supabase
               .from('admin')
               .select('id, admin_firstname, admin_lastname')
               .limit(100);
-              
-          debugPrint('Retry: Loaded ${basicAdminData.length} basic admin records');
-          
+
+          debugPrint(
+              'Retry: Loaded ${basicAdminData.length} basic admin records');
+
           // Create admin entries from the basic data
           for (final admin in basicAdminData) {
             adminUsers.add({
@@ -606,19 +616,20 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
           debugPrint('Even basic admin query failed: $basicAdminError');
         }
       }
-      
+
       // Combine regular users with admin-only users
       final allUsers = [...users, ...adminUsers];
       debugPrint('Total combined users: ${allUsers.length}');
-      
+
       // Check admin count
-      final adminCount = allUsers.where((user) => user['role'] == 'admin').length;
+      final adminCount =
+          allUsers.where((user) => user['role'] == 'admin').length;
       debugPrint('Total admin users: $adminCount');
 
       // If we still have no data, try more approaches
       if (allUsers.isEmpty && !anyDataLoaded) {
         debugPrint('WARNING: No user data could be loaded from any source');
-        
+
         // Add emergency hard-coded admin entries
         try {
           // Hard-coded admin entries for emergency display
@@ -674,7 +685,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
         } catch (e) {
           debugPrint('Emergency fallback also failed: $e');
         }
-        
+
         // Last resort - add current admin as a user entry if available
         try {
           final currentUser = supabase.auth.currentUser;
@@ -708,10 +719,10 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
       });
     } catch (e) {
       debugPrint('Critical error in _loadAllUsers: $e');
-      
+
       if (!mounted) return;
       setState(() => _isLoading = false);
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -728,39 +739,40 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
     setState(() {
       _filteredUsers = _allUsers.where((user) {
         // Check if role exists and matches filter
-        final matchesRole = _userRoleFilter == 'all' || 
+        final matchesRole = _userRoleFilter == 'all' ||
             (user['role'] != null && user['role'] == _userRoleFilter);
-            
+
         // Construct name from available fields
         String searchName = '';
-        
+
         // For admin users, try to get names from admin table fields
         if (user['role'] == 'admin') {
           searchName = '${user['email'] ?? ''} ';
         }
-        
+
         // Add standard name fields if they exist
         final name = [
           user['first_name'] ?? '',
           user['middle_name'] ?? '',
           user['last_name'] ?? ''
         ].where((n) => n.isNotEmpty).join(' ').toLowerCase();
-        
+
         searchName += name;
-        
+
         // If we still don't have a name, use email as fallback
         if (searchName.trim().isEmpty && user['email'] != null) {
           searchName = user['email'].toLowerCase();
         }
-        
+
         // Match if search is empty or name contains search term
         final matchesName = _userNameFilter.isEmpty ||
             searchName.contains(_userNameFilter.toLowerCase());
-            
+
         return matchesRole && matchesName;
       }).toList();
-      
-      debugPrint('Filtered ${_allUsers.length} users down to ${_filteredUsers.length}');
+
+      debugPrint(
+          'Filtered ${_allUsers.length} users down to ${_filteredUsers.length}');
     });
   }
 
@@ -886,8 +898,11 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
               child: Column(
                 children: [
                   Icon(
-                    type == 'tanod' ? Icons.security : 
-                    type == 'police' ? Icons.local_police : Icons.admin_panel_settings,
+                    type == 'tanod'
+                        ? Icons.security
+                        : type == 'police'
+                            ? Icons.local_police
+                            : Icons.admin_panel_settings,
                     size: screenWidth * 0.15,
                     color: const Color(0xFFF73D5C),
                   ),
@@ -912,7 +927,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
             ),
 
             SizedBox(height: screenHeight * 0.03),
-            
+
             // First Name and Last Name for Admin (at the top)
             if (type == 'admin') ...[
               _buildFormField(
@@ -1245,17 +1260,21 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
                       value: _userRoleFilter,
                       underline: SizedBox(),
                       items: const [
-                        DropdownMenuItem(value: 'all', child: Text('All Roles')),
-                        DropdownMenuItem(value: 'citizen', child: Text('Citizen')),
+                        DropdownMenuItem(
+                            value: 'all', child: Text('All Roles')),
+                        DropdownMenuItem(
+                            value: 'citizen', child: Text('Citizen')),
                         DropdownMenuItem(value: 'tanod', child: Text('Tanod')),
-                        DropdownMenuItem(value: 'police', child: Text('Police')),
+                        DropdownMenuItem(
+                            value: 'police', child: Text('Police')),
                         DropdownMenuItem(value: 'admin', child: Text('Admin')),
                       ],
                       onChanged: (val) {
                         setState(() {
                           _userRoleFilter = val ?? 'all';
                           _applyUserFilters();
-                          _selectedUser = null; // Clear selection on filter change
+                          _selectedUser =
+                              null; // Clear selection on filter change
                         });
                       },
                     ),
@@ -1272,10 +1291,11 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
                       child: TextField(
                         decoration: InputDecoration(
                           hintText: 'Search by name',
-                          prefixIcon: Icon(Icons.search, color: Colors.grey.shade600),
+                          prefixIcon:
+                              Icon(Icons.search, color: Colors.grey.shade600),
                           border: InputBorder.none,
-                          contentPadding:
-                              EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+                          contentPadding: EdgeInsets.symmetric(
+                              vertical: 16, horizontal: 12),
                         ),
                         onChanged: (val) {
                           _userNameFilter = val;
@@ -1294,9 +1314,9 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    'Users: ${_filteredUsers.length} ${_userRoleFilter != 'all' ? "(" + _userRoleFilter + ")" : ""}',
+                    'Users: ${_filteredUsers.length} ${_userRoleFilter != 'all' ? "($_userRoleFilter)" : ""}',
                     style: TextStyle(
-                      fontSize: screenWidth * 0.04, 
+                      fontSize: screenWidth * 0.04,
                       fontWeight: FontWeight.w500,
                       color: Colors.grey.shade800,
                     ),
@@ -1345,34 +1365,35 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
                                 itemCount: _filteredUsers.length,
                                 itemBuilder: (context, index) {
                                   final user = _filteredUsers[index];
-                                  
+
                                   // Get name from various possible sources
                                   String displayName = '';
-                                  
+
                                   // First try standard name fields
                                   final fullName = [
                                     user['first_name'] ?? '',
                                     user['middle_name'] ?? '',
                                     user['last_name'] ?? ''
                                   ].where((n) => n.isNotEmpty).join(' ');
-                                  
+
                                   if (fullName.isNotEmpty) {
                                     displayName = fullName;
-                                  } 
+                                  }
                                   // Use email as fallback
                                   else if (user['email'] != null) {
                                     displayName = user['email'];
-                                  } 
+                                  }
                                   // Last resort
                                   else {
-                                    displayName = 'User ${user['id']?.toString().substring(0, 8) ?? 'Unknown'}';
+                                    displayName =
+                                        'User ${user['id']?.toString().substring(0, 8) ?? 'Unknown'}';
                                   }
-                                  
+
                                   // For admin users, add (Admin) label
                                   if (user['role'] == 'admin') {
                                     displayName += ' (Admin)';
                                   }
-                                  
+
                                   return Card(
                                     margin: EdgeInsets.only(
                                         bottom: screenHeight * 0.012),

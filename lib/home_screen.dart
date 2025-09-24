@@ -7,6 +7,7 @@ import 'package:geocoding/geocoding.dart';
 import 'package:provider/provider.dart';
 import 'services/ble_service.dart';
 import 'services/emergency_service.dart';
+import 'main.dart'; // Import for EmergencyAlertHandler
 import 'profile_page.dart';
 import 'settings_page.dart';
 import 'group_page.dart';
@@ -23,12 +24,12 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   String _gpsSignal = 'Getting signal...';
   String _location = 'Getting location...';
-  String _emergencyName = '';
-  String _emergencyPhone = '';
-  String _relationship = '';
-  String _emergencyName2 = '';
-  String _emergencyPhone2 = '';
-  String _relationship2 = '';
+  final String _emergencyName = '';
+  final String _emergencyPhone = '';
+  final String _relationship = '';
+  final String _emergencyName2 = '';
+  final String _emergencyPhone2 = '';
+  final String _relationship2 = '';
   String _profilePhotoUrl = '';
   GoogleMapController? _mapController;
   Position? _currentPosition;
@@ -59,6 +60,36 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _getCurrentLocation();
     _checkEmergencyContactStatus();
     _setupRealtimeSubscription();
+
+    // Ensure BLE callback is set up after build completes
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _ensureBLECallbackSetup();
+    });
+  }
+
+  void _ensureBLECallbackSetup() {
+    try {
+      final bleService = Provider.of<BLEService>(context, listen: false);
+      final emergencyService =
+          Provider.of<EmergencyService>(context, listen: false);
+      final alertHandler =
+          Provider.of<EmergencyAlertHandler>(context, listen: false);
+
+      debugPrint('🔧 HomeScreen: Setting up BLE callback manually...');
+      alertHandler.ensureCallbackSetup(bleService, emergencyService);
+      debugPrint('🔧 HomeScreen: BLE callback setup attempted');
+
+      // Set up emergency service popup callback
+      emergencyService.setPopupCallback((alertType) {
+        if (mounted) {
+          debugPrint('🎯 HomeScreen: Showing popup for $alertType');
+          showPanicPopup(context, alertType);
+        }
+      });
+      debugPrint('🎯 HomeScreen: Emergency popup callback set');
+    } catch (e) {
+      debugPrint('❌ HomeScreen: Failed to set up BLE callback: $e');
+    }
   }
 
   @override
@@ -83,31 +114,33 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void _setupRealtimeSubscription() {
     final supabase = Supabase.instance.client;
     final userId = supabase.auth.currentUser?.id;
-    
+
     if (userId != null && !_isSubscriptionActive) {
       try {
-        final channelName = 'emergency_contacts_${userId}_${DateTime.now().millisecondsSinceEpoch}';
+        final channelName =
+            'emergency_contacts_${userId}_${DateTime.now().millisecondsSinceEpoch}';
         debugPrint('Setting up realtime subscription: $channelName');
-        
-        _emergencyContactsChannel = supabase.channel(channelName)
-          .onPostgresChanges(
-            event: PostgresChangeEvent.all,
-            schema: 'public',
-            table: 'emergency_contacts',
-            filter: PostgresChangeFilter(
-              type: PostgresChangeFilterType.eq,
-              column: 'user_id',
-              value: userId,
-            ),
-            callback: (payload) {
-              debugPrint('Realtime update received: ${payload.eventType}');
-              if (mounted) {
-                _loadUserProfile();
-              }
-            },
-          )
-          .subscribe();
-          
+
+        _emergencyContactsChannel = supabase
+            .channel(channelName)
+            .onPostgresChanges(
+              event: PostgresChangeEvent.all,
+              schema: 'public',
+              table: 'emergency_contacts',
+              filter: PostgresChangeFilter(
+                type: PostgresChangeFilterType.eq,
+                column: 'user_id',
+                value: userId,
+              ),
+              callback: (payload) {
+                debugPrint('Realtime update received: ${payload.eventType}');
+                if (mounted) {
+                  _loadUserProfile();
+                }
+              },
+            )
+            .subscribe();
+
         _isSubscriptionActive = true;
         debugPrint('Realtime subscription setup complete');
       } catch (e) {
@@ -139,26 +172,28 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             .select('phone, email')
             .eq('id', userId)
             .single();
-            
+
         final emergencyContactCount = await supabase
             .from('emergency_contacts')
             .select('id')
             .or('emergency_contact_phone.eq.${currentUserData['phone'] ?? ''},emergency_contact_phone.eq.${currentUserData['email'] ?? ''}')
             .count(CountOption.exact);
 
-      // Check if this user is in any emergency groups
-      final groupMembershipCount = await supabase
-          .from('group_members')
-          .select('id')
-          .eq('user_id', userId)
-          .count(CountOption.exact);        setState(() {
+        // Check if this user is in any emergency groups
+        final groupMembershipCount = await supabase
+            .from('group_members')
+            .select('id')
+            .eq('user_id', userId)
+            .count(CountOption.exact);
+        setState(() {
           _isEmergencyContactForOthers =
-              (emergencyContactCount.data.length > 0) ||
-                  (groupMembershipCount.data.length > 0);
+              (emergencyContactCount.data.isNotEmpty) ||
+                  (groupMembershipCount.data.isNotEmpty);
           _checkingEmergencyContactStatus = false;
         });
       } catch (e) {
-        debugPrint('Error checking emergency contact status by phone/email: $e');
+        debugPrint(
+            'Error checking emergency contact status by phone/email: $e');
         setState(() {
           _isEmergencyContactForOthers = false;
           _checkingEmergencyContactStatus = false;
@@ -313,13 +348,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       // Debug prints
       debugPrint('Current UserId: $userId');
       debugPrint('Emergency Contacts Data: $emergencyData');
-      
+
       // Log each contact's structure to see what columns exist
       for (var contact in emergencyData) {
         debugPrint('Contact structure: ${contact.keys.toList()}');
-        debugPrint('Available columns in emergency_contacts table: ${contact.keys.join(', ')}');
-        debugPrint('emergency_contact_name: ${contact['emergency_contact_name']}');
-        debugPrint('emergency_contact_phone: ${contact['emergency_contact_phone']}');
+        debugPrint(
+            'Available columns in emergency_contacts table: ${contact.keys.join(', ')}');
+        debugPrint(
+            'emergency_contact_name: ${contact['emergency_contact_name']}');
+        debugPrint(
+            'emergency_contact_phone: ${contact['emergency_contact_phone']}');
       }
 
       setState(() {
@@ -345,14 +383,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   // Add this method to fetch user profile photo
   Future<String?> _getUserProfilePhoto(String? userId) async {
     if (userId == null) return null;
-    
+
     try {
       final userData = await Supabase.instance.client
           .from('user')
           .select('profile_photo_url')
           .eq('id', userId)
           .single();
-      
+
       return userData['profile_photo_url'];
     } catch (e) {
       debugPrint('Error fetching profile photo for user $userId: $e');
@@ -363,7 +401,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   // Method to find and link existing users by phone number
   Future<String?> _findUserByPhone(String phone) async {
     if (phone.isEmpty) return null;
-    
+
     try {
       // Try multiple phone number formats
       List<String> phoneVariants = [
@@ -371,29 +409,31 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         phone.replaceAll(RegExp(r'[^\d+]'), ''), // Only digits and +
         phone.replaceAll(RegExp(r'[^\d]'), ''), // Only digits
       ];
-      
+
       // Add formatted variants
       String digitsOnly = phone.replaceAll(RegExp(r'[^\d]'), '');
       if (digitsOnly.length >= 10) {
-        phoneVariants.add('+63${digitsOnly.substring(digitsOnly.length - 10)}'); // +63 format
-        phoneVariants.add('0${digitsOnly.substring(digitsOnly.length - 10)}'); // 0 prefix
+        phoneVariants.add(
+            '+63${digitsOnly.substring(digitsOnly.length - 10)}'); // +63 format
+        phoneVariants.add(
+            '0${digitsOnly.substring(digitsOnly.length - 10)}'); // 0 prefix
       }
-      
+
       debugPrint('Searching for phone variants: $phoneVariants');
-      
+
       for (String variant in phoneVariants) {
         final userData = await Supabase.instance.client
             .from('user')
             .select('id, phone')
             .eq('phone', variant)
             .maybeSingle();
-        
+
         if (userData != null) {
           debugPrint('Found user by phone $variant: ${userData['id']}');
           return userData['id'];
         }
       }
-      
+
       debugPrint('No user found for phone: $phone');
       return null;
     } catch (e) {
@@ -417,28 +457,35 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           .limit(1);
 
       if (emergencyData.isNotEmpty) {
-        debugPrint('Emergency contacts table columns: ${emergencyData.first.keys.join(', ')}');
-        
+        debugPrint(
+            'Emergency contacts table columns: ${emergencyData.first.keys.join(', ')}');
+
         // Check if we have a user linking column
-        bool hasUserIdColumn = emergencyData.first.containsKey('emergency_contact_user_id');
-        bool hasContactIdColumn = emergencyData.first.containsKey('contact_user_id');
-        bool hasLinkedUserIdColumn = emergencyData.first.containsKey('linked_user_id');
-        
+        bool hasUserIdColumn =
+            emergencyData.first.containsKey('emergency_contact_user_id');
+        bool hasContactIdColumn =
+            emergencyData.first.containsKey('contact_user_id');
+        bool hasLinkedUserIdColumn =
+            emergencyData.first.containsKey('linked_user_id');
+
         debugPrint('Has emergency_contact_user_id: $hasUserIdColumn');
         debugPrint('Has contact_user_id: $hasContactIdColumn');
         debugPrint('Has linked_user_id: $hasLinkedUserIdColumn');
-        
+
         if (!hasUserIdColumn && !hasContactIdColumn && !hasLinkedUserIdColumn) {
-          debugPrint('❌ No user linking column found. Emergency contacts can only show initials.');
-          debugPrint('💡 To show profile photos, you need to add a user linking column to the emergency_contacts table.');
+          debugPrint(
+              '❌ No user linking column found. Emergency contacts can only show initials.');
+          debugPrint(
+              '💡 To show profile photos, you need to add a user linking column to the emergency_contacts table.');
           return;
         }
       }
 
       // Since the column doesn't exist, we can't do automatic linking
-      debugPrint('❌ Cannot perform automatic user linking - database schema needs to be updated');
-      debugPrint('💡 Your emergency contacts table needs an emergency_contact_user_id column to link to users');
-      
+      debugPrint(
+          '❌ Cannot perform automatic user linking - database schema needs to be updated');
+      debugPrint(
+          '💡 Your emergency contacts table needs an emergency_contact_user_id column to link to users');
     } catch (e) {
       debugPrint('Error checking emergency contact schema: $e');
     }
@@ -495,10 +542,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               );
               refreshData();
             },
-            child: const Text('Go to Emergency Contact Dashboard'),
             style: TextButton.styleFrom(
               foregroundColor: const Color(0xFFF73D5C),
             ),
+            child: const Text('Go to Emergency Contact Dashboard'),
           ),
         ],
       ),
@@ -701,16 +748,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 Navigator.of(context).pop();
                 emergencyService.triggerManualEmergency('CHECKIN');
               },
+              style: TextButton.styleFrom(
+                  foregroundColor: Color.fromARGB(255, 247, 145, 61)),
               child: const Text('Check-in'),
-              style: TextButton.styleFrom(foregroundColor: Color.fromARGB(255, 247, 145, 61)),
             ),
             TextButton(
               onPressed: () {
                 Navigator.of(context).pop();
                 emergencyService.triggerManualEmergency('REGULAR');
               },
+              style: TextButton.styleFrom(
+                  foregroundColor: Color.fromARGB(255, 247, 145, 61)),
               child: const Text('Regular'),
-              style: TextButton.styleFrom(foregroundColor: Color.fromARGB(255, 247, 145, 61)),
             ),
             TextButton(
               onPressed: () {
@@ -722,8 +771,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ),
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
+              style: TextButton.styleFrom(
+                  foregroundColor: Color.fromARGB(255, 247, 145, 61)),
               child: const Text('Cancel'),
-              style: TextButton.styleFrom(foregroundColor: Color.fromARGB(255, 247, 145, 61)),
             ),
           ],
         );
@@ -1336,12 +1386,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   // Helper method to get initials from a name
   String _getInitials(String name) {
     if (name.isEmpty) return '?';
-    
+
     List<String> nameParts = name.trim().split(' ');
     if (nameParts.length == 1) {
       return nameParts[0].substring(0, 1).toUpperCase();
     } else {
-      return (nameParts[0].substring(0, 1) + nameParts[nameParts.length - 1].substring(0, 1)).toUpperCase();
+      return (nameParts[0].substring(0, 1) +
+              nameParts[nameParts.length - 1].substring(0, 1))
+          .toUpperCase();
     }
   }
 
