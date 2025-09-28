@@ -633,10 +633,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ),
           ),
 
-          // Group FAB and Emergency Alert buttons (moved closer together with small gap)
+          // Group FAB
           Positioned(
             right: screenWidth * 0.05,
-            bottom: screenHeight * 0.52, // adjusted to maintain small gap
+            bottom: screenHeight *
+                0.45, // moved to previous emergency button position
             child: FloatingActionButton(
               heroTag: 'group_fab',
               backgroundColor: Colors.white,
@@ -652,32 +653,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               },
               child:
                   Icon(Icons.groups, color: const Color(0xFFF73D5C), size: 32),
-            ),
-          ),
-
-          // Floating Emergency Button (kept in same position)
-          Positioned(
-            right: screenWidth * 0.05,
-            bottom: screenHeight * 0.45,
-            child: Consumer<EmergencyService>(
-              builder: (context, emergencyService, child) {
-                return FloatingActionButton(
-                  onPressed: emergencyService.isEmergencyActive
-                      ? () =>
-                          emergencyService.handleEmergencyAlert('CANCEL', null)
-                      : () => _showEmergencyDialog(emergencyService),
-                  backgroundColor: emergencyService.isEmergencyActive
-                      ? Colors.orange
-                      : const Color(0xFFF73D5C),
-                  child: Icon(
-                    emergencyService.isEmergencyActive
-                        ? Icons.stop
-                        : Icons.warning,
-                    color: Colors.white,
-                    size: 30,
-                  ),
-                );
-              },
             ),
           ),
 
@@ -732,185 +707,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ),
         ],
       ),
-    );
-  }
-
-  void _showEmergencyDialog(EmergencyService emergencyService) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Emergency Alert'),
-          content: const Text('Choose emergency type:'),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                emergencyService.triggerManualEmergency('CHECKIN');
-              },
-              style: TextButton.styleFrom(
-                  foregroundColor: Color.fromARGB(255, 247, 145, 61)),
-              child: const Text('Check-in'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                emergencyService.triggerManualEmergency('REGULAR');
-              },
-              style: TextButton.styleFrom(
-                  foregroundColor: Color.fromARGB(255, 247, 145, 61)),
-              child: const Text('Regular'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                emergencyService.triggerManualEmergency('CRITICAL');
-              },
-              style: TextButton.styleFrom(foregroundColor: Colors.red),
-              child: const Text('CRITICAL'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              style: TextButton.styleFrom(
-                  foregroundColor: Color.fromARGB(255, 247, 145, 61)),
-              child: const Text('Cancel'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  void _showSosPopup(BuildContext context) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) {
-        bool isHolding = false;
-        late DateTime holdStart;
-
-        return Dialog(
-          backgroundColor: Colors.white,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-          child: Stack(
-            children: [
-              Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const SizedBox(height: 8),
-                    // SOS Button with concentric circles
-                    Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        Container(
-                          width: 180,
-                          height: 180,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: const Color(0xFFF73D5C).withOpacity(0.2),
-                          ),
-                        ),
-                        Container(
-                          width: 130,
-                          height: 130,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: const Color(0xFFF73D5C).withOpacity(0.4),
-                          ),
-                        ),
-                        GestureDetector(
-                          onLongPressStart: (_) {
-                            isHolding = true;
-                            holdStart = DateTime.now();
-                          },
-                          onLongPressEnd: (_) {
-                            isHolding = false;
-                            if (DateTime.now()
-                                    .difference(holdStart)
-                                    .inSeconds >=
-                                3) {
-                              if (Navigator.of(context).canPop()) {
-                                Navigator.of(context).pop();
-                              }
-                            }
-                          },
-                          child: Container(
-                            width: 90,
-                            height: 90,
-                            decoration: const BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: Color(0xFFF73D5C),
-                            ),
-                            alignment: Alignment.center,
-                            child: const Text(
-                              'SOS',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 28,
-                                letterSpacing: 2,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 28),
-                    const Text(
-                      'You have pressed the panic button!',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 17,
-                        color: Colors.black,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 10),
-                    RichText(
-                      textAlign: TextAlign.center,
-                      text: const TextSpan(
-                        style: TextStyle(
-                          color: Colors.black87,
-                          fontSize: 15,
-                        ),
-                        children: [
-                          TextSpan(text: 'add text pa'),
-                          TextSpan(
-                            text: 'SOS',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFFF73D5C),
-                            ),
-                          ),
-                          TextSpan(text: ' for cancel'),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    // No countdown
-                    const SizedBox(height: 8),
-                  ],
-                ),
-              ),
-              // Close button
-              Positioned(
-                top: 8,
-                right: 8,
-                child: GestureDetector(
-                  onTap: () {
-                    Navigator.of(context).pop();
-                  },
-                  child: const Icon(Icons.close, color: Colors.grey, size: 26),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
     );
   }
 
