@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "363891894437",
+    "project_id": "sosit-64bfe",
+    "storage_bucket": "sosit-64bfe.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:363891894437:android:bc614923ca8283dcebc54c",
+        "android_client_info": {
+          "package_name": "com.example.sosit_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCcCgIefXNgLu9y7E9NY3lxFH0NIKKHXaY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

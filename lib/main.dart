@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'services/ble_service.dart';
 import 'services/emergency_service.dart';
 import 'splash_screen.dart';
+import 'notifications/firebase_messaging_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -16,7 +18,14 @@ Future<void> main() async {
         'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN0c25wdXBicGN6bndiYnRxZGxuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDgzNjMxMjksImV4cCI6MjA2MzkzOTEyOX0.qerDMur3ms75KP2ahzQV6znO2Ri4NLtOAZorUf6soag',
   );
 
-  // Request notification permissions if needed
+  // Initialize Firebase Messaging (FCM)
+  try {
+    // Ensure Firebase core is initialized before using any Firebase APIs
+    await Firebase.initializeApp();
+    await FirebaseMessagingService.initialize();
+  } catch (e) {
+    debugPrint('⚠️ FirebaseMessaging init error: $e');
+  }
 
   runApp(const MyApp());
 }
