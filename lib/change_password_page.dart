@@ -9,7 +9,6 @@ class ChangePasswordPage extends StatefulWidget {
 }
 
 class _ChangePasswordPageState extends State<ChangePasswordPage> {
-  final _formKey = GlobalKey<FormState>();
   final _currentPasswordController = TextEditingController();
   final _newPasswordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
@@ -179,7 +178,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.04),
+                      color: Colors.black.withValues(alpha: 0.04),
                       blurRadius: 6,
                       offset: const Offset(0, 2),
                     ),
@@ -207,13 +206,13 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                       child: TextFormField(
                         controller: _currentPasswordController,
                         decoration: InputDecoration(
-                          prefixIcon: Icon(Icons.lock_outline, 
-                              color: const Color(0xFFF73D5C).withOpacity(0.7)),
+                          prefixIcon: Icon(Icons.lock_outline,
+                              color: const Color(0xFFF73D5C).withValues(alpha: 0.7)),
                           hintText: 'Enter current password',
                           hintStyle: TextStyle(color: Colors.grey.shade500),
                           border: InputBorder.none,
-                          contentPadding:
-                              EdgeInsets.symmetric(vertical: screenHeight * 0.020),
+                          contentPadding: EdgeInsets.symmetric(
+                              vertical: screenHeight * 0.020),
                           suffixIcon: IconButton(
                             icon: Icon(
                               _obscureCurrentPassword
@@ -222,7 +221,8 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                               color: Colors.grey,
                             ),
                             onPressed: () => setState(() =>
-                                _obscureCurrentPassword = !_obscureCurrentPassword),
+                                _obscureCurrentPassword =
+                                    !_obscureCurrentPassword),
                           ),
                         ),
                         obscureText: _obscureCurrentPassword,
@@ -233,7 +233,8 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                         padding: const EdgeInsets.only(left: 8, top: 4),
                         child: Text(
                           _currentPasswordError!,
-                          style: const TextStyle(color: Colors.red, fontSize: 12),
+                          style:
+                              const TextStyle(color: Colors.red, fontSize: 12),
                         ),
                       ),
 
@@ -258,13 +259,13 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                       child: TextFormField(
                         controller: _newPasswordController,
                         decoration: InputDecoration(
-                          prefixIcon: Icon(Icons.lock, 
-                              color: const Color(0xFFF73D5C).withOpacity(0.7)),
+                          prefixIcon: Icon(Icons.lock,
+                              color: const Color(0xFFF73D5C).withValues(alpha: 0.7)),
                           hintText: 'Enter new password',
                           hintStyle: TextStyle(color: Colors.grey.shade500),
                           border: InputBorder.none,
-                          contentPadding:
-                              EdgeInsets.symmetric(vertical: screenHeight * 0.020),
+                          contentPadding: EdgeInsets.symmetric(
+                              vertical: screenHeight * 0.020),
                           suffixIcon: IconButton(
                             icon: Icon(
                               _obscureNewPassword
@@ -272,8 +273,8 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                                   : Icons.visibility,
                               color: Colors.grey,
                             ),
-                            onPressed: () => setState(
-                                () => _obscureNewPassword = !_obscureNewPassword),
+                            onPressed: () => setState(() =>
+                                _obscureNewPassword = !_obscureNewPassword),
                           ),
                         ),
                         obscureText: _obscureNewPassword,
@@ -284,7 +285,8 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                         padding: const EdgeInsets.only(left: 8, top: 4),
                         child: Text(
                           _newPasswordError!,
-                          style: const TextStyle(color: Colors.red, fontSize: 12),
+                          style:
+                              const TextStyle(color: Colors.red, fontSize: 12),
                         ),
                       ),
 
@@ -309,13 +311,13 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                       child: TextFormField(
                         controller: _confirmPasswordController,
                         decoration: InputDecoration(
-                          prefixIcon: Icon(Icons.lock, 
-                              color: const Color(0xFFF73D5C).withOpacity(0.7)),
+                          prefixIcon: Icon(Icons.lock,
+                              color: const Color(0xFFF73D5C).withValues(alpha: 0.7)),
                           hintText: 'Confirm new password',
                           hintStyle: TextStyle(color: Colors.grey.shade500),
                           border: InputBorder.none,
-                          contentPadding:
-                              EdgeInsets.symmetric(vertical: screenHeight * 0.020),
+                          contentPadding: EdgeInsets.symmetric(
+                              vertical: screenHeight * 0.020),
                           suffixIcon: IconButton(
                             icon: Icon(
                               _obscureConfirmPassword
@@ -324,7 +326,8 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                               color: Colors.grey,
                             ),
                             onPressed: () => setState(() =>
-                                _obscureConfirmPassword = !_obscureConfirmPassword),
+                                _obscureConfirmPassword =
+                                    !_obscureConfirmPassword),
                           ),
                         ),
                         obscureText: _obscureConfirmPassword,
@@ -335,7 +338,8 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                         padding: const EdgeInsets.only(left: 8, top: 4),
                         child: Text(
                           _confirmPasswordError!,
-                          style: const TextStyle(color: Colors.red, fontSize: 12),
+                          style:
+                              const TextStyle(color: Colors.red, fontSize: 12),
                         ),
                       ),
 
@@ -355,7 +359,8 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                         ),
                         onPressed: _isLoading ? null : _changePassword,
                         child: _isLoading
-                            ? const CircularProgressIndicator(color: Colors.white)
+                            ? const CircularProgressIndicator(
+                                color: Colors.white)
                             : Text(
                                 'Update Password',
                                 style: TextStyle(
@@ -373,10 +378,10 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                     Container(
                       padding: EdgeInsets.all(screenWidth * 0.04),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF73D5C).withOpacity(0.05),
+                        color: const Color(0xFFF73D5C).withValues(alpha: 0.05),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: const Color(0xFFF73D5C).withOpacity(0.2),
+                          color: const Color(0xFFF73D5C).withValues(alpha: 0.2),
                         ),
                       ),
                       child: Row(

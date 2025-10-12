@@ -183,7 +183,7 @@ class _AccountValidationPageState extends State<AccountValidationPage> {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 6,
             offset: const Offset(0, 2),
           ),
@@ -203,8 +203,8 @@ class _AccountValidationPageState extends State<AccountValidationPage> {
                     padding: EdgeInsets.all(screenWidth * 0.025),
                     decoration: BoxDecoration(
                       color: accountType == 'tanod'
-                          ? Colors.blue.withOpacity(0.1)
-                          : Colors.green.withOpacity(0.1),
+                          ? Colors.blue.withValues(alpha: 0.1)
+                          : Colors.green.withValues(alpha: 0.1),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
@@ -252,7 +252,7 @@ class _AccountValidationPageState extends State<AccountValidationPage> {
                           vertical: screenHeight * 0.005,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.orange.withOpacity(0.1),
+                          color: Colors.orange.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
@@ -621,7 +621,7 @@ class _AccountDetailsPageState extends State<AccountDetailsPage> {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 6,
             offset: const Offset(0, 2),
           ),
@@ -690,7 +690,7 @@ class _AccountDetailsPageState extends State<AccountDetailsPage> {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 6,
             offset: const Offset(0, 2),
           ),

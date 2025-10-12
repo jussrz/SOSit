@@ -200,7 +200,7 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
                             width: screenWidth * 0.25,
                             height: screenWidth * 0.25,
                             decoration: BoxDecoration(
-                              color: const Color(0xFFF73D5C).withOpacity(0.1),
+                              color: const Color(0xFFF73D5C).withValues(alpha: 0.1),
                               shape: BoxShape.circle,
                             ),
                             child: Icon(
@@ -389,7 +389,7 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
           Container(
             padding: EdgeInsets.all(screenWidth * 0.025),
             decoration: BoxDecoration(
-              color: const Color(0xFFF73D5C).withOpacity(0.1),
+              color: const Color(0xFFF73D5C).withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(

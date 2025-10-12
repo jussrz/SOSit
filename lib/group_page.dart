@@ -954,6 +954,8 @@ class _GroupPageState extends State<GroupPage> {
       }
     }
 
+    if (!mounted) return;
+
     await showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -1006,10 +1008,11 @@ class _GroupPageState extends State<GroupPage> {
                     padding: const EdgeInsets.all(12),
                     margin: const EdgeInsets.only(bottom: 16),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF73D5C).withOpacity(0.1),
+                      color: const Color(0xFFF73D5C).withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
-                          color: const Color(0xFFF73D5C).withOpacity(0.3)),
+                          color:
+                              const Color(0xFFF73D5C).withValues(alpha: 0.3)),
                     ),
                     child: Row(
                       children: [
@@ -1146,7 +1149,8 @@ class _GroupPageState extends State<GroupPage> {
                       child: Container(
                         decoration: BoxDecoration(
                           border: Border.all(
-                              color: const Color(0xFFF73D5C).withOpacity(0.3)),
+                              color: const Color(0xFFF73D5C)
+                                  .withValues(alpha: 0.3)),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         margin: const EdgeInsets.only(top: 8),

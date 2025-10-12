@@ -9,12 +9,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class BLEService extends ChangeNotifier {
   // ESP32 Constants - Matching your ESP32 code exactly
-  static const String SERVICE_UUID = "12345678-1234-5678-9abc-123456789abc";
-  static const String STATUS_CHAR_UUID = "12345678-1234-5678-9abc-123456789abd";
-  static const String ALERT_CHAR_UUID = "12345678-1234-5678-9abc-123456789abe";
-  static const String BATTERY_CHAR_UUID =
-      "12345678-1234-5678-9abc-123456789abf";
-  static const String DEVICE_NAME = "SOSit!Button";
+  static const String serviceUuid = "12345678-1234-5678-9abc-123456789abc";
+  static const String statusCharUuid = "12345678-1234-5678-9abc-123456789abd";
+  static const String alertCharUuid = "12345678-1234-5678-9abc-123456789abe";
+  static const String batteryCharUuid = "12345678-1234-5678-9abc-123456789abf";
+  static const String deviceName = "SOSit!Button";
 
   // Private variables
   BluetoothDevice? _connectedDevice;
@@ -129,14 +128,16 @@ class BLEService extends ChangeNotifier {
 
         for (var device in bondedDevices) {
           _addDebugLog(
-              'Bonded device: ${device.platformName} (${device.remoteId})');
+            'Bonded device: ${device.platformName} (${device.remoteId})',
+          );
           if (device.platformName.contains("SOSit") ||
               device.platformName.contains("ESP32") ||
-              device.platformName == DEVICE_NAME) {
+              device.platformName == deviceName) {
             _isPaired = true;
             _deviceId = device.remoteId.toString();
             _addDebugLog(
-                'Found potential panic button: ${device.platformName}');
+              'Found potential panic button: ${device.platformName}',
+            );
           }
         }
       }
@@ -204,9 +205,11 @@ class BLEService extends ChangeNotifier {
 
       _addDebugLog('Permission statuses: $statuses');
 
-      bool allGranted = statuses.values.every((status) =>
-          status == PermissionStatus.granted ||
-          status == PermissionStatus.limited);
+      bool allGranted = statuses.values.every(
+        (status) =>
+            status == PermissionStatus.granted ||
+            status == PermissionStatus.limited,
+      );
 
       if (!allGranted) {
         _updateConnectionStatus("Bluetooth Permissions Required");
@@ -251,10 +254,11 @@ class BLEService extends ChangeNotifier {
         for (ScanResult result in results) {
           String deviceName = result.device.platformName.isNotEmpty
               ? result.device.platformName
-              : result.advertisementData.localName;
+              : result.advertisementData.advName;
 
           _addDebugLog(
-              'Found device: $deviceName (${result.device.remoteId}) RSSI: ${result.rssi}');
+            'Found device: $deviceName (${result.device.remoteId}) RSSI: ${result.rssi}',
+          );
 
           // Store all scanned devices for debugging
           _scannedDevices.add({
@@ -272,8 +276,9 @@ class BLEService extends ChangeNotifier {
           if (isTargetDevice) {
             _addDebugLog('Target device identified: $deviceName');
 
-            if (!_foundDevices
-                .any((d) => d.remoteId == result.device.remoteId)) {
+            if (!_foundDevices.any(
+              (d) => d.remoteId == result.device.remoteId,
+            )) {
               _foundDevices.add(result.device);
               _signalStrength = result.rssi;
               _updateConnectionStatus("Panic Button Found - Connecting...");
@@ -291,7 +296,8 @@ class BLEService extends ChangeNotifier {
         if (_isScanning) {
           stopScan();
           _addDebugLog(
-              'Scan completed. Found ${_foundDevices.length} target devices, ${_scannedDevices.length} total devices');
+            'Scan completed. Found ${_foundDevices.length} target devices, ${_scannedDevices.length} total devices',
+          );
 
           if (!_isConnected && _foundDevices.isEmpty) {
             _updateConnectionStatus("Panic Button Not Found");
@@ -315,7 +321,8 @@ class BLEService extends ChangeNotifier {
         List<BluetoothDevice> bondedDevices =
             await FlutterBluePlus.bondedDevices;
         _addDebugLog(
-            'Checking ${bondedDevices.length} bonded devices for ESP32...');
+          'Checking ${bondedDevices.length} bonded devices for ESP32...',
+        );
 
         for (var device in bondedDevices) {
           String deviceName = device.platformName;
@@ -328,7 +335,8 @@ class BLEService extends ChangeNotifier {
             if (!_foundDevices.any((d) => d.remoteId == device.remoteId)) {
               _foundDevices.add(device);
               _updateConnectionStatus(
-                  "Bonded Panic Button Found - Connecting...");
+                "Bonded Panic Button Found - Connecting...",
+              );
 
               // Try to connect to bonded device
               connectToDevice(device);
@@ -344,7 +352,7 @@ class BLEService extends ChangeNotifier {
 
   bool _isTargetDevice(String deviceName, ScanResult? result) {
     // Check by exact name
-    if (deviceName == DEVICE_NAME) {
+    if (deviceName == deviceName) {
       _addDebugLog('Found device by exact name match');
       return true;
     }
@@ -370,10 +378,11 @@ class BLEService extends ChangeNotifier {
 
     // Check if device name is empty but has our service UUID
     if (result != null &&
-        result.advertisementData.serviceUuids.any((uuid) => uuid
-            .toString()
-            .toLowerCase()
-            .contains(SERVICE_UUID.toLowerCase()))) {
+        result.advertisementData.serviceUuids.any(
+          (uuid) => uuid.toString().toLowerCase().contains(
+                serviceUuid.toLowerCase(),
+              ),
+        )) {
       _addDebugLog('Found device with our service UUID');
       return true;
     }
@@ -420,7 +429,8 @@ class BLEService extends ChangeNotifier {
     try {
       _isConnecting = true;
       _addDebugLog(
-          'Connecting to: ${device.platformName} (${device.remoteId})');
+        'Connecting to: ${device.platformName} (${device.remoteId})',
+      );
       _updateConnectionStatus("Connecting to ${device.platformName}...");
 
       await stopScan();
@@ -469,7 +479,7 @@ class BLEService extends ChangeNotifier {
       // Find the panic button service
       for (var service in services) {
         if (service.uuid.toString().toLowerCase() ==
-            SERVICE_UUID.toLowerCase()) {
+            serviceUuid.toLowerCase()) {
           panicService = service;
           _addDebugLog('Found panic button service: ${service.uuid}');
           break;
@@ -481,22 +491,24 @@ class BLEService extends ChangeNotifier {
         for (var characteristic in panicService.characteristics) {
           String charUUID = characteristic.uuid.toString().toLowerCase();
 
-          if (charUUID == STATUS_CHAR_UUID.toLowerCase()) {
+          if (charUUID == statusCharUuid.toLowerCase()) {
             statusChar = characteristic;
             _addDebugLog('Found status characteristic: ${characteristic.uuid}');
-          } else if (charUUID == ALERT_CHAR_UUID.toLowerCase()) {
+          } else if (charUUID == alertCharUuid.toLowerCase()) {
             alertChar = characteristic;
             _addDebugLog('Found alert characteristic: ${characteristic.uuid}');
-          } else if (charUUID == BATTERY_CHAR_UUID.toLowerCase()) {
+          } else if (charUUID == batteryCharUuid.toLowerCase()) {
             batteryChar = characteristic;
             _addDebugLog(
-                'Found battery characteristic: ${characteristic.uuid}');
+              'Found battery characteristic: ${characteristic.uuid}',
+            );
           }
         }
       } else {
         // Fallback to any writable characteristic for basic connectivity
         _addDebugLog(
-            'Panic button service not found, looking for any writable characteristic...');
+          'Panic button service not found, looking for any writable characteristic...',
+        );
         for (var service in services) {
           for (var char in service.characteristics) {
             if (char.properties.write ||
@@ -504,7 +516,8 @@ class BLEService extends ChangeNotifier {
                 char.properties.notify) {
               statusChar = char;
               _addDebugLog(
-                  'Found fallback writable characteristic: ${char.uuid}');
+                'Found fallback writable characteristic: ${char.uuid}',
+              );
               break;
             }
           }
@@ -676,7 +689,7 @@ class BLEService extends ChangeNotifier {
     try {
       if (data.isNotEmpty) {
         _batteryLevel = data[0]; // Battery sent as single byte
-        _addDebugLog('Battery update: ${_batteryLevel}%');
+        _addDebugLog('Battery update: $_batteryLevel%');
         _lastHeartbeat = DateTime.now();
         notifyListeners();
       }
@@ -686,7 +699,9 @@ class BLEService extends ChangeNotifier {
   }
 
   void _handleDirectEmergencyAlert(
-      String alertType, Map<String, dynamic> alertData) {
+    String alertType,
+    Map<String, dynamic> alertData,
+  ) {
     try {
       debugPrint('🏥 Handling direct emergency alert: $alertType');
 
@@ -773,7 +788,8 @@ class BLEService extends ChangeNotifier {
       // Try to find a different writable characteristic
       if (_connectedDevice != null) {
         _addDebugLog(
-            'Attempting to find alternative writable characteristic...');
+          'Attempting to find alternative writable characteristic...',
+        );
         await _findAlternativeCharacteristic();
       }
     }
@@ -792,7 +808,8 @@ class BLEService extends ChangeNotifier {
               char.uuid.toString() != _statusCharacteristic?.uuid.toString()) {
             _statusCharacteristic = char;
             _addDebugLog(
-                'Switched to alternative characteristic: ${char.uuid}');
+              'Switched to alternative characteristic: ${char.uuid}',
+            );
             return;
           }
         }

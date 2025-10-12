@@ -176,7 +176,7 @@ class _TanodSettingsPageState extends State<TanodSettingsPage> {
                             width: screenWidth * 0.25,
                             height: screenWidth * 0.25,
                             decoration: BoxDecoration(
-                              color: Colors.orange.withOpacity(0.1),
+                              color: Colors.orange.withValues(alpha: 0.1),
                               shape: BoxShape.circle,
                             ),
                             child: Icon(
@@ -383,7 +383,7 @@ class _TanodSettingsPageState extends State<TanodSettingsPage> {
           Container(
             padding: EdgeInsets.all(screenWidth * 0.025),
             decoration: BoxDecoration(
-              color: Colors.orange.withOpacity(0.1),
+              color: Colors.orange.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(

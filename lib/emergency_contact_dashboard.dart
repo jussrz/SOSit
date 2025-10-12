@@ -427,10 +427,10 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
               padding: EdgeInsets.all(screenWidth * 0.04),
               margin: EdgeInsets.only(bottom: screenHeight * 0.02),
               decoration: BoxDecoration(
-                color: const Color(0xFFF73D5C).withOpacity(0.1),
+                color: const Color(0xFFF73D5C).withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
                 border:
-                    Border.all(color: const Color(0xFFF73D5C).withOpacity(0.3)),
+                    Border.all(color: const Color(0xFFF73D5C).withValues(alpha: 0.3)),
               ),
               child: Row(
                 children: [
@@ -569,7 +569,7 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 6,
             offset: const Offset(0, 2),
           ),
@@ -582,8 +582,8 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
           builder: (context, snapshot) {
             return CircleAvatar(
               backgroundColor: alert['status'] == 'active'
-                  ? const Color(0xFFF73D5C).withOpacity(0.15)
-                  : Colors.green.withOpacity(0.15),
+                  ? const Color(0xFFF73D5C).withValues(alpha: 0.15)
+                  : Colors.green.withValues(alpha: 0.15),
               backgroundImage: snapshot.hasData && snapshot.data!.isNotEmpty
                   ? NetworkImage(snapshot.data!)
                   : null,
@@ -620,8 +620,8 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
                   color: alert['emergency_level'] == 'critical'
-                      ? Colors.red.withOpacity(0.1)
-                      : Colors.orange.withOpacity(0.1),
+                      ? Colors.red.withValues(alpha: 0.1)
+                      : Colors.orange.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
@@ -641,8 +641,8 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
             color: alert['status'] == 'active'
-                ? const Color(0xFFF73D5C).withOpacity(0.1)
-                : Colors.green.withOpacity(0.1),
+                ? const Color(0xFFF73D5C).withValues(alpha: 0.1)
+                : Colors.green.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Text(
@@ -683,10 +683,10 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
                   vertical: screenHeight * 0.01),
               margin: EdgeInsets.only(bottom: screenHeight * 0.02),
               decoration: BoxDecoration(
-                color: const Color(0xFFF73D5C).withOpacity(0.1),
+                color: const Color(0xFFF73D5C).withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
                 border:
-                    Border.all(color: const Color(0xFFF73D5C).withOpacity(0.3)),
+                    Border.all(color: const Color(0xFFF73D5C).withValues(alpha: 0.3)),
               ),
               child: Text(
                 'Total alerts: ${_sosAlerts.length}',
@@ -744,7 +744,7 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.04),
+                        color: Colors.black.withValues(alpha: 0.04),
                         blurRadius: 6,
                         offset: const Offset(0, 2),
                       ),
@@ -765,10 +765,10 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
                                 return CircleAvatar(
                                   backgroundColor: alert['status'] == 'active'
                                       ? const Color(0xFFF73D5C)
-                                          .withOpacity(0.15)
+                                          .withValues(alpha: 0.15)
                                       : alert['status'] == 'resolved'
-                                          ? Colors.green.withOpacity(0.15)
-                                          : Colors.grey.withOpacity(0.15),
+                                          ? Colors.green.withValues(alpha: 0.15)
+                                          : Colors.grey.withValues(alpha: 0.15),
                                   backgroundImage: snapshot.hasData &&
                                           snapshot.data!.isNotEmpty
                                       ? NetworkImage(snapshot.data!)
@@ -813,12 +813,12 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
                                       decoration: BoxDecoration(
                                         color: alert['emergency_level'] ==
                                                 'critical'
-                                            ? Colors.red.withOpacity(0.1)
+                                            ? Colors.red.withValues(alpha: 0.1)
                                             : alert['emergency_level'] ==
                                                     'checkin'
-                                                ? Colors.blue.withOpacity(0.1)
+                                                ? Colors.blue.withValues(alpha: 0.1)
                                                 : Colors.orange
-                                                    .withOpacity(0.1),
+                                                    .withValues(alpha: 0.1),
                                         borderRadius: BorderRadius.circular(6),
                                       ),
                                       child: Text(
@@ -844,10 +844,10 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
                                   horizontal: 8, vertical: 4),
                               decoration: BoxDecoration(
                                 color: alert['status'] == 'active'
-                                    ? const Color(0xFFF73D5C).withOpacity(0.1)
+                                    ? const Color(0xFFF73D5C).withValues(alpha: 0.1)
                                     : alert['status'] == 'resolved'
-                                        ? Colors.green.withOpacity(0.1)
-                                        : Colors.grey.withOpacity(0.1),
+                                        ? Colors.green.withValues(alpha: 0.1)
+                                        : Colors.grey.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Text(
@@ -1204,7 +1204,7 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.04),
+              color: Colors.black.withValues(alpha: 0.04),
               blurRadius: 6,
               offset: const Offset(0, 2),
             ),
@@ -1216,7 +1216,7 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
             future: _getUserProfilePhoto(contact['user_id']),
             builder: (context, snapshot) {
               return CircleAvatar(
-                backgroundColor: const Color(0xFFF73D5C).withOpacity(0.15),
+                backgroundColor: const Color(0xFFF73D5C).withValues(alpha: 0.15),
                 backgroundImage: snapshot.hasData && snapshot.data!.isNotEmpty
                     ? NetworkImage(snapshot.data!)
                     : null,

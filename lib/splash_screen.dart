@@ -18,7 +18,7 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   void initState() {
     super.initState();
-    
+
     _animationController = AnimationController(
       duration: const Duration(seconds: 2),
       vsync: this,
@@ -63,7 +63,6 @@ class _SplashScreenState extends State<SplashScreen>
   Widget build(BuildContext context) {
     final screenSize = MediaQuery.of(context).size;
     final screenWidth = screenSize.width;
-    final screenHeight = screenSize.height;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -80,7 +79,7 @@ class _SplashScreenState extends State<SplashScreen>
                   ),
                 ),
               ),
-              
+
               // Center logo
               Center(
                 child: FadeTransition(
@@ -130,10 +129,10 @@ class ConcentricCirclesPainter extends CustomPainter {
 
     // Define circle colors (from outer to inner)
     final colors = [
-      const Color(0xFFF73D5C).withOpacity(0.1 * progress),
-      const Color(0xFFF73D5C).withOpacity(0.15 * progress),
-      const Color(0xFFF73D5C).withOpacity(0.2 * progress),
-      const Color(0xFFF73D5C).withOpacity(0.25 * progress),
+      const Color(0xFFF73D5C).withValues(alpha: 0.1 * progress),
+      const Color(0xFFF73D5C).withValues(alpha: 0.15 * progress),
+      const Color(0xFFF73D5C).withValues(alpha: 0.2 * progress),
+      const Color(0xFFF73D5C).withValues(alpha: 0.25 * progress),
     ];
 
     // Draw concentric circles

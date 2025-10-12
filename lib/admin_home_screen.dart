@@ -348,8 +348,9 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
       password: _passwordController.text.trim(),
     );
 
-    if (res.user == null)
+    if (res.user == null) {
       throw Exception('Failed to create user. Please try again.');
+    }
 
     final userId = res.user!.id;
     final email = _emailController.text.trim();
@@ -889,7 +890,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
                 borderRadius: BorderRadius.circular(12),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
+                    color: Colors.black.withValues(alpha: 0.05),
                     blurRadius: 4,
                     offset: const Offset(0, 2),
                   ),
@@ -1403,7 +1404,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
                                     child: ListTile(
                                       leading: CircleAvatar(
                                         backgroundColor: const Color(0xFFF73D5C)
-                                            .withOpacity(0.1),
+                                            .withValues(alpha: 0.1),
                                         child: Icon(Icons.person,
                                             color: const Color(0xFFF73D5C)),
                                       ),
@@ -1449,7 +1450,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
                                 padding: EdgeInsets.all(screenWidth * 0.025),
                                 decoration: BoxDecoration(
                                   color:
-                                      const Color(0xFFF73D5C).withOpacity(0.1),
+                                      const Color(0xFFF73D5C).withValues(alpha: 0.1),
                                   shape: BoxShape.circle,
                                 ),
                                 child: Icon(

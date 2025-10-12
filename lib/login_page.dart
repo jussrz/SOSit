@@ -43,7 +43,8 @@ class _LoginPageState extends State<LoginPage> {
           .count(CountOption.exact);
 
       setState(() {
-        _showAdminSignup = adminCount == 0; // Show only if no admins exist
+        _showAdminSignup =
+            adminCount.count == 0; // Show only if no admins exist
         _checkingAdminStatus = false;
       });
     } catch (e) {
@@ -110,12 +111,14 @@ class _LoginPageState extends State<LoginPage> {
         return;
       }
 
-      // Check if user is police or tanod
+      // If not admin, check if user exists in the user table and get their role
       final userData = await Supabase.instance.client
           .from('user')
           .select('role')
           .eq('id', user.id)
           .maybeSingle();
+
+      if (!mounted) return;
 
       if (userData != null && userData['role'] != null) {
         // Navigate based on user role
@@ -147,6 +150,168 @@ class _LoginPageState extends State<LoginPage> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  Future<void> _showForgotPasswordDialog() async {
+    final emailController = TextEditingController();
+    bool isLoading = false;
+    String? message;
+
+    await showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Text(
+            'Reset Password',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Enter your email address and we\'ll send you a link to reset your password.',
+                style: TextStyle(fontSize: 14),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: emailController,
+                keyboardType: TextInputType.emailAddress,
+                decoration: InputDecoration(
+                  labelText: 'Email',
+                  hintText: 'Enter your email',
+                  prefixIcon: const Icon(Icons.email_outlined),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(
+                      color: Color(0xFFF73D5C),
+                      width: 2,
+                    ),
+                  ),
+                ),
+              ),
+              if (message != null) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: message!.contains('Error')
+                        ? Colors.red.withValues(alpha: 0.1)
+                        : Colors.green.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        message!.contains('Error')
+                            ? Icons.error_outline
+                            : Icons.check_circle_outline,
+                        color: message!.contains('Error')
+                            ? Colors.red
+                            : Colors.green,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          message!,
+                          style: TextStyle(
+                            color: message!.contains('Error')
+                                ? Colors.red.shade700
+                                : Colors.green.shade700,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: isLoading ? null : () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: isLoading
+                  ? null
+                  : () async {
+                      final email = emailController.text.trim();
+                      if (email.isEmpty) {
+                        setState(() {
+                          message = 'Error: Please enter your email address';
+                        });
+                        return;
+                      }
+
+                      if (!email.contains('@')) {
+                        setState(() {
+                          message = 'Error: Please enter a valid email address';
+                        });
+                        return;
+                      }
+
+                      setState(() {
+                        isLoading = true;
+                        message = null;
+                      });
+
+                      try {
+                        await Supabase.instance.client.auth
+                            .resetPasswordForEmail(
+                          email,
+                          redirectTo: 'io.supabase.flutter://reset-password',
+                        );
+
+                        setState(() {
+                          isLoading = false;
+                          message =
+                              'Password reset link sent! Check your email inbox.';
+                        });
+
+                        // Auto-close dialog after 2 seconds on success
+                        Future.delayed(const Duration(seconds: 2), () {
+                          if (context.mounted) {
+                            Navigator.pop(context);
+                          }
+                        });
+                      } catch (e) {
+                        setState(() {
+                          isLoading = false;
+                          message = 'Error: ${e.toString()}';
+                        });
+                      }
+                    },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFF73D5C),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: isLoading
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    )
+                  : const Text('Send Reset Link'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -302,9 +467,7 @@ class _LoginPageState extends State<LoginPage> {
                   children: [
                     const Spacer(),
                     GestureDetector(
-                      onTap: () {
-                        // TODO: Implement forgot password
-                      },
+                      onTap: _showForgotPasswordDialog,
                       child: Text(
                         'Forgot Password?',
                         style: TextStyle(

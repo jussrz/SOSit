@@ -163,7 +163,7 @@ class _PoliceSettingsPageState extends State<PoliceSettingsPage> {
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
+                          color: Colors.black.withValues(alpha: 0.05),
                           blurRadius: 10,
                           offset: const Offset(0, 2),
                         ),
@@ -176,7 +176,7 @@ class _PoliceSettingsPageState extends State<PoliceSettingsPage> {
                           width: screenWidth * 0.2,
                           height: screenWidth * 0.2,
                           decoration: BoxDecoration(
-                            color: const Color(0xFF2196F3).withOpacity(0.1),
+                            color: const Color(0xFF2196F3).withValues(alpha: 0.1),
                             shape: BoxShape.circle,
                           ),
                           child: Icon(
@@ -209,7 +209,7 @@ class _PoliceSettingsPageState extends State<PoliceSettingsPage> {
                             vertical: screenHeight * 0.005,
                           ),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF2196F3).withOpacity(0.1),
+                            color: const Color(0xFF2196F3).withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Text(
@@ -256,7 +256,7 @@ class _PoliceSettingsPageState extends State<PoliceSettingsPage> {
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
+                          color: Colors.black.withValues(alpha: 0.05),
                           blurRadius: 10,
                           offset: const Offset(0, 2),
                         ),
@@ -310,7 +310,7 @@ class _PoliceSettingsPageState extends State<PoliceSettingsPage> {
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
+                          color: Colors.black.withValues(alpha: 0.05),
                           blurRadius: 10,
                           offset: const Offset(0, 2),
                         ),
@@ -394,7 +394,7 @@ class _PoliceSettingsPageState extends State<PoliceSettingsPage> {
           Container(
             padding: EdgeInsets.all(screenWidth * 0.025),
             decoration: BoxDecoration(
-              color: const Color(0xFF2196F3).withOpacity(0.1),
+              color: const Color(0xFF2196F3).withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(

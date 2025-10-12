@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'change_password_page.dart';
-import 'admin_management_page.dart';
 import 'login_page.dart';
 import 'panic_button_settings_page.dart';
 import 'profile_page.dart'; //
@@ -106,7 +105,6 @@ class _SettingsPageState extends State<SettingsPage> {
               },
             ),
 
-
             _buildSettingsItem(
               icon: Icons.person_outline,
               title: 'Change Password',
@@ -118,8 +116,6 @@ class _SettingsPageState extends State<SettingsPage> {
                 );
               },
             ),
-
-            
 
             // Emergency Section
             Text('Emergency',
@@ -214,7 +210,7 @@ class _SettingsPageState extends State<SettingsPage> {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 4,
             offset: const Offset(0, 2),
           ),

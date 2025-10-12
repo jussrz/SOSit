@@ -14,20 +14,15 @@ class TanodDashboard extends StatefulWidget {
 class _TanodDashboardState extends State<TanodDashboard> {
   final supabase = Supabase.instance.client;
   GoogleMapController? _mapController;
-  Position? _currentPosition;
   bool _isCardExpanded = false;
   List<Map<String, dynamic>> _incidents = [];
   bool _isLoadingIncidents = false;
-  String _profilePhotoUrl = '';
   Set<Marker> _markers = {};
   List<Map<String, dynamic>> _incidentHistory = [];
   bool _isLoadingHistory = false;
 
   // Tracking state
-  Map<String, dynamic>? _trackedUser;
-  bool _isTracking = false;
   Marker? _userLocationMarker;
-  Polyline? _routeToUser;
 
   @override
   void initState() {
@@ -79,10 +74,6 @@ class _TanodDashboardState extends State<TanodDashboard> {
       Position position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
       );
-
-      setState(() {
-        _currentPosition = position;
-      });
 
       if (_mapController != null) {
         await _mapController!.animateCamera(
@@ -272,15 +263,6 @@ class _TanodDashboardState extends State<TanodDashboard> {
 
     // Update state to track this user
     setState(() {
-      _isTracking = true;
-      _trackedUser = {
-        'id': userId,
-        'name': userName,
-        'contact': contactNumber,
-        'latitude': latitude,
-        'longitude': longitude,
-      };
-
       // Add marker for user's location
       _userLocationMarker = Marker(
         markerId: MarkerId('user_$userId'),
@@ -314,11 +296,7 @@ class _TanodDashboardState extends State<TanodDashboard> {
     try {
       final userId = supabase.auth.currentUser?.id;
       if (userId != null) {
-        final userData =
-            await supabase.from('user').select().eq('id', userId).single();
-        setState(() {
-          _profilePhotoUrl = userData['profile_photo_url'] ?? '';
-        });
+        await supabase.from('user').select().eq('id', userId).single();
       }
     } catch (e) {
       debugPrint('Error loading profile: $e');
@@ -406,6 +384,8 @@ class _TanodDashboardState extends State<TanodDashboard> {
         'responded_at': DateTime.now().toIso8601String(),
       });
 
+      if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Response recorded: $responseType'),
@@ -415,6 +395,7 @@ class _TanodDashboardState extends State<TanodDashboard> {
 
       _loadIncidents(); // Refresh incidents
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Failed to record response: $e'),
@@ -667,14 +648,12 @@ class _TanodDashboardState extends State<TanodDashboard> {
                           onPressed: () {
                             Navigator.pop(context);
                             setState(() {
-                              _isTracking = false;
                               if (_userLocationMarker != null) {
                                 _markers = Set.from(_markers)
                                   ..removeWhere((m) =>
                                       m.markerId ==
                                       _userLocationMarker!.markerId);
                               }
-                              _trackedUser = null;
                             });
                           },
                           child: const Text('Exit',
@@ -781,7 +760,7 @@ class _TanodDashboardState extends State<TanodDashboard> {
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
+                      color: Colors.black.withValues(alpha: 0.1),
                       blurRadius: 6,
                       offset: const Offset(0, 2),
                     ),
@@ -878,7 +857,7 @@ class _TanodDashboardState extends State<TanodDashboard> {
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
+                      color: Colors.black.withValues(alpha: 0.1),
                       blurRadius: 12,
                       offset: const Offset(0, -4),
                     ),
@@ -947,7 +926,7 @@ class _TanodDashboardState extends State<TanodDashboard> {
                   vertical: screenHeight * 0.005,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.1),
+                  color: Colors.green.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
@@ -1148,7 +1127,7 @@ class _TanodDashboardState extends State<TanodDashboard> {
                   vertical: screenHeight * 0.005,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.orange.withOpacity(0.2),
+                  color: Colors.orange.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(

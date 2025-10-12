@@ -47,12 +47,14 @@ class _OtpPageState extends State<OtpPage> {
       });
 
       if (mounted) {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Signup successful!")),
         );
         Navigator.pop(context); // go back or move to home
       }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text("OTP error: $e")));
     } finally {

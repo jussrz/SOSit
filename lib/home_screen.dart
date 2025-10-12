@@ -8,7 +8,6 @@ import 'package:provider/provider.dart';
 import 'services/ble_service.dart';
 import 'services/emergency_service.dart';
 import 'main.dart'; // Import for EmergencyAlertHandler
-import 'profile_page.dart';
 import 'settings_page.dart';
 import 'group_page.dart';
 import 'emergency_contact_dashboard.dart'; // Import for switch view
@@ -24,21 +23,9 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   String _gpsSignal = 'Getting signal...';
   String _location = 'Getting location...';
-  final String _emergencyName = '';
-  final String _emergencyPhone = '';
-  final String _relationship = '';
-  final String _emergencyName2 = '';
-  final String _emergencyPhone2 = '';
-  final String _relationship2 = '';
-  String _profilePhotoUrl = '';
   GoogleMapController? _mapController;
-  Position? _currentPosition;
   bool _isLoadingProfile = false;
   bool _isCardExpanded = false;
-
-  // Track if user has emergency contact status
-  bool _isEmergencyContactForOthers = false;
-  bool _checkingEmergencyContactStatus = true;
 
   // Controllers to display user info
   final _emailController = TextEditingController();
@@ -157,8 +144,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _checkEmergencyContactStatus() async {
-    setState(() => _checkingEmergencyContactStatus = true);
-
     try {
       final supabase = Supabase.instance.client;
       final userId = supabase.auth.currentUser?.id;
@@ -173,38 +158,24 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             .eq('id', userId)
             .single();
 
-        final emergencyContactCount = await supabase
+        await supabase
             .from('emergency_contacts')
             .select('id')
             .or('emergency_contact_phone.eq.${currentUserData['phone'] ?? ''},emergency_contact_phone.eq.${currentUserData['email'] ?? ''}')
             .count(CountOption.exact);
 
         // Check if this user is in any emergency groups
-        final groupMembershipCount = await supabase
+        await supabase
             .from('group_members')
             .select('id')
             .eq('user_id', userId)
             .count(CountOption.exact);
-        setState(() {
-          _isEmergencyContactForOthers =
-              (emergencyContactCount.data.isNotEmpty) ||
-                  (groupMembershipCount.data.isNotEmpty);
-          _checkingEmergencyContactStatus = false;
-        });
       } catch (e) {
         debugPrint(
             'Error checking emergency contact status by phone/email: $e');
-        setState(() {
-          _isEmergencyContactForOthers = false;
-          _checkingEmergencyContactStatus = false;
-        });
       }
     } catch (e) {
       debugPrint('Error checking emergency contact status: $e');
-      setState(() {
-        _isEmergencyContactForOthers = false;
-        _checkingEmergencyContactStatus = false;
-      });
     }
   }
 
@@ -253,7 +224,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       );
 
       setState(() {
-        _currentPosition = position;
         if (position.accuracy <= 5) {
           _gpsSignal = 'Excellent';
         } else if (position.accuracy <= 10) {
@@ -362,7 +332,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
       setState(() {
         _isLoadingProfile = false;
-        _profilePhotoUrl = userData['profile_photo_url'] ?? '';
         _emailController.text = userData['email'] ?? '';
         _phoneController.text = userData['phone'] ?? '';
         _birthdateController.text = userData['birthdate'] ?? '';
@@ -377,68 +346,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         _emergencyContacts = [];
       });
       debugPrint('Error loading profile or emergency contacts: $e');
-    }
-  }
-
-  // Add this method to fetch user profile photo
-  Future<String?> _getUserProfilePhoto(String? userId) async {
-    if (userId == null) return null;
-
-    try {
-      final userData = await Supabase.instance.client
-          .from('user')
-          .select('profile_photo_url')
-          .eq('id', userId)
-          .single();
-
-      return userData['profile_photo_url'];
-    } catch (e) {
-      debugPrint('Error fetching profile photo for user $userId: $e');
-      return null;
-    }
-  }
-
-  // Method to find and link existing users by phone number
-  Future<String?> _findUserByPhone(String phone) async {
-    if (phone.isEmpty) return null;
-
-    try {
-      // Try multiple phone number formats
-      List<String> phoneVariants = [
-        phone, // Original
-        phone.replaceAll(RegExp(r'[^\d+]'), ''), // Only digits and +
-        phone.replaceAll(RegExp(r'[^\d]'), ''), // Only digits
-      ];
-
-      // Add formatted variants
-      String digitsOnly = phone.replaceAll(RegExp(r'[^\d]'), '');
-      if (digitsOnly.length >= 10) {
-        phoneVariants.add(
-            '+63${digitsOnly.substring(digitsOnly.length - 10)}'); // +63 format
-        phoneVariants.add(
-            '0${digitsOnly.substring(digitsOnly.length - 10)}'); // 0 prefix
-      }
-
-      debugPrint('Searching for phone variants: $phoneVariants');
-
-      for (String variant in phoneVariants) {
-        final userData = await Supabase.instance.client
-            .from('user')
-            .select('id, phone')
-            .eq('phone', variant)
-            .maybeSingle();
-
-        if (userData != null) {
-          debugPrint('Found user by phone $variant: ${userData['id']}');
-          return userData['id'];
-        }
-      }
-
-      debugPrint('No user found for phone: $phone');
-      return null;
-    } catch (e) {
-      debugPrint('Error finding user by phone $phone: $e');
-      return null;
     }
   }
 
@@ -750,11 +657,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) {
+      builder: (dialogContext) {
         // Auto-dismiss after 5 seconds
         Future.delayed(const Duration(seconds: 5), () {
-          if (Navigator.of(context).canPop()) {
-            Navigator.of(context).pop();
+          if (mounted && dialogContext.mounted) {
+            if (Navigator.of(dialogContext).canPop()) {
+              Navigator.of(dialogContext).pop();
+            }
           }
         });
 
@@ -774,7 +683,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   height: 90,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: color.withOpacity(0.15),
+                    color: color.withValues(alpha: 0.15),
                   ),
                   alignment: Alignment.center,
                   child: Icon(
@@ -1025,7 +934,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   width: screenWidth * 0.12,
                   height: screenWidth * 0.12,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF73D5C).withOpacity(0.15),
+                    color: const Color(0xFFF73D5C).withValues(alpha: 0.15),
                     shape: BoxShape.circle,
                   ),
                   child: Center(

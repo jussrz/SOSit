@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import 'services/ble_service.dart';
 
 class BLETestPage extends StatefulWidget {
-  const BLETestPage({Key? key}) : super(key: key);
+  const BLETestPage({super.key});
 
   @override
   State<BLETestPage> createState() => _BLETestPageState();

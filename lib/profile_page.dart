@@ -257,7 +257,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.04),
+                      color: Colors.black.withValues(alpha: 0.04),
                       blurRadius: 6,
                       offset: const Offset(0, 2),
                     ),
@@ -452,7 +452,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
             cursorColor: const Color(0xFFF73D5C),
             decoration: InputDecoration(
               prefixIcon: icon != null 
-                  ? Icon(icon, color: const Color(0xFFF73D5C).withOpacity(0.7))
+                  ? Icon(icon, color: const Color(0xFFF73D5C).withValues(alpha: 0.7))
                   : null,
               hintText: 'Enter $label',
               hintStyle: TextStyle(color: Colors.grey.shade500),
