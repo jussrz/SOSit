@@ -6,9 +6,14 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 class EmergencyService extends ChangeNotifier {
   final SupabaseClient _supabase = Supabase.instance.client;
+
+  // Local notifications
+  static final FlutterLocalNotificationsPlugin _localNotificationsPlugin =
+      FlutterLocalNotificationsPlugin();
 
   // Emergency state
   bool _isEmergencyActive = false;
@@ -47,8 +52,177 @@ class EmergencyService extends ChangeNotifier {
   }
 
   Future<void> _initialize() async {
+    await _initializeNotifications();
     await _loadEmergencyContacts();
     await _getCurrentLocation();
+  }
+
+  // Initialize local notifications
+  Future<void> _initializeNotifications() async {
+    const androidSettings =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
+    const iosSettings = DarwinInitializationSettings(
+      requestAlertPermission: true,
+      requestBadgePermission: true,
+      requestSoundPermission: true,
+    );
+    const initSettings = InitializationSettings(
+      android: androidSettings,
+      iOS: iosSettings,
+    );
+    await _localNotificationsPlugin.initialize(initSettings);
+
+    // Create notification channels for Android
+    await _createNotificationChannels();
+  }
+
+  // Create notification channels for different alert types
+  Future<void> _createNotificationChannels() async {
+    // Critical Emergency Channel
+    const criticalChannel = AndroidNotificationChannel(
+      'emergency_critical',
+      'Critical Emergency Alerts',
+      description: 'High priority alerts for critical emergencies',
+      importance: Importance.max,
+      playSound: true,
+      enableVibration: true,
+      enableLights: true,
+      ledColor: Color(0xFFFF0000), // Red
+      showBadge: true,
+    );
+
+    // Regular Emergency Channel
+    const regularChannel = AndroidNotificationChannel(
+      'emergency_regular',
+      'Emergency Alerts',
+      description: 'Standard emergency alerts',
+      importance: Importance.high,
+      playSound: true,
+      enableVibration: true,
+      enableLights: true,
+      ledColor: Color(0xFFFF9800), // Orange
+      showBadge: true,
+    );
+
+    // Cancel/Info Channel
+    const cancelChannel = AndroidNotificationChannel(
+      'emergency_cancel',
+      'Emergency Status Updates',
+      description: 'Updates on emergency status changes',
+      importance: Importance.high,
+      playSound: true,
+      enableVibration: true,
+      showBadge: false,
+    );
+
+    // General Channel
+    const generalChannel = AndroidNotificationChannel(
+      'emergency_general',
+      'General Alerts',
+      description: 'General app notifications',
+      importance: Importance.defaultImportance,
+      playSound: true,
+      showBadge: false,
+    );
+
+    // Create all channels
+    final plugin =
+        _localNotificationsPlugin.resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>();
+
+    if (plugin != null) {
+      await plugin.createNotificationChannel(criticalChannel);
+      await plugin.createNotificationChannel(regularChannel);
+      await plugin.createNotificationChannel(cancelChannel);
+      await plugin.createNotificationChannel(generalChannel);
+      debugPrint('📱 Notification channels created');
+    }
+  }
+
+  // Send push notification for ESP32 alerts
+  Future<void> _sendPushNotification(String alertType, String message) async {
+    String title;
+    String body;
+    String channelId;
+    Importance importance;
+    Priority priority;
+
+    switch (alertType) {
+      case 'CRITICAL':
+        title = '🚨 CRITICAL EMERGENCY';
+        body = 'Emergency button pressed! $message';
+        channelId = 'emergency_critical';
+        importance = Importance.max;
+        priority = Priority.max;
+        break;
+      case 'REGULAR':
+        title = '⚠️ Emergency Alert';
+        body = 'Alert button pressed. $message';
+        channelId = 'emergency_regular';
+        importance = Importance.high;
+        priority = Priority.high;
+        break;
+      case 'CANCEL':
+        title = '✅ Emergency Cancelled';
+        body = 'Emergency alert has been cancelled.';
+        channelId = 'emergency_cancel';
+        importance = Importance.high;
+        priority = Priority.high;
+        break;
+      default:
+        title = '📱 SOSit Alert';
+        body = message;
+        channelId = 'emergency_general';
+        importance = Importance.defaultImportance;
+        priority = Priority.defaultPriority;
+    }
+
+    final androidDetails = AndroidNotificationDetails(
+      channelId,
+      'Emergency Alerts',
+      channelDescription: 'Notifications for emergency button presses',
+      importance: importance,
+      priority: priority,
+      icon: '@mipmap/ic_launcher',
+      playSound: true,
+      enableVibration: true,
+      fullScreenIntent: alertType == 'CRITICAL', // Full screen for critical
+      category: AndroidNotificationCategory.alarm,
+      visibility: NotificationVisibility.public, // Show on lock screen
+      showWhen: true,
+      when: DateTime.now().millisecondsSinceEpoch,
+      usesChronometer: false,
+      ongoing: alertType == 'CRITICAL', // Keep critical alerts persistent
+      autoCancel: alertType != 'CRITICAL', // Don't auto-cancel critical
+      enableLights: true,
+      ledColor: alertType == 'CRITICAL'
+          ? const Color(0xFFFF0000)
+          : const Color(0xFFFF9800),
+      ledOnMs: 1000,
+      ledOffMs: 500,
+      ticker: title, // Shows briefly when notification arrives
+    );
+
+    const iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+      interruptionLevel: InterruptionLevel.critical,
+    );
+
+    final notificationDetails = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+    );
+
+    await _localNotificationsPlugin.show(
+      DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      title,
+      body,
+      notificationDetails,
+    );
+
+    debugPrint('📱 Push notification sent: $title - $body');
   }
 
   Future<void> _loadEmergencyContacts() async {
@@ -109,34 +283,41 @@ class EmergencyService extends ChangeNotifier {
 
   Future<void> handleEmergencyAlert(
       String alertType, Map<String, dynamic>? alertData) async {
-    debugPrint('Handling emergency alert: $alertType');
+    debugPrint('Emergency alert: $alertType');
 
     // Debounce check - prevent duplicate alerts within 1 second
     final now = DateTime.now();
     if (_lastAlertTime != null &&
         _lastAlertType == alertType &&
         now.difference(_lastAlertTime!).inMilliseconds < 1000) {
-      debugPrint(
-          '🚫 Ignoring duplicate $alertType alert (debounced - ${now.difference(_lastAlertTime!).inMilliseconds}ms ago)');
-      return;
+      return; // Ignore duplicate
     }
 
-    debugPrint('🎯 Processing $alertType alert');
     _lastAlertTime = now;
-    _lastAlertType = alertType; // Update location before processing
+    _lastAlertType = alertType;
+
+    // Update location before processing
     await _getCurrentLocation();
 
     switch (alertType) {
+      case 'TEST':
+        await _showSimpleAlert('Test Alert', 'Callback system working!');
+        break;
       case 'REGULAR':
+        await _sendPushNotification('REGULAR', 'Location: $_lastKnownAddress');
         await _handleRegularAlert(alertData);
         break;
       case 'CHECKIN':
+        await _sendPushNotification('REGULAR', 'Check-in signal received');
         await _handleCheckInAlert(alertData);
         break;
       case 'CRITICAL':
+        await _sendPushNotification(
+            'CRITICAL', 'IMMEDIATE HELP NEEDED! Location: $_lastKnownAddress');
         await _handleCriticalAlert(alertData);
         break;
       case 'CANCEL':
+        await _sendPushNotification('CANCEL', 'Emergency has been cancelled');
         await _handleCancelAlert();
         break;
       default:
@@ -393,6 +574,10 @@ Please call me or emergency services immediately.
     }
 
     // Trigger UI popup if callback is set
+    print('🔥 EMERGENCY: _showSimpleAlert - checking popup callback');
+    print(
+        '🔥 EMERGENCY: _showPopupCallback != null: ${_showPopupCallback != null}');
+
     if (_showPopupCallback != null) {
       String alertType = 'regular'; // default
 
@@ -410,9 +595,12 @@ Please call me or emergency services immediately.
         alertType = 'regular';
       }
 
+      print('🔥 EMERGENCY: Triggering UI popup with type: $alertType');
       debugPrint('🎯 Triggering UI popup: $alertType');
       _showPopupCallback!(alertType);
+      print('🔥 EMERGENCY: UI popup callback completed');
     } else {
+      print('🔥 EMERGENCY: No popup callback set - only console output');
       debugPrint('⚠️ No popup callback set - only console output');
     }
   }

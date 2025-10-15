@@ -62,17 +62,25 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       final alertHandler =
           Provider.of<EmergencyAlertHandler>(context, listen: false);
 
+      print('🔥 HOME: Setting up BLE callback manually...');
       debugPrint('🔧 HomeScreen: Setting up BLE callback manually...');
       alertHandler.ensureCallbackSetup(bleService, emergencyService);
+      print('🔥 HOME: BLE callback setup attempted');
       debugPrint('🔧 HomeScreen: BLE callback setup attempted');
 
       // Set up emergency service popup callback
+      print('🔥 HOME: Setting up emergency popup callback...');
       emergencyService.setPopupCallback((alertType) {
         if (mounted) {
+          print('🔥 HOME: Showing popup for $alertType');
           debugPrint('🎯 HomeScreen: Showing popup for $alertType');
           showPanicPopup(context, alertType);
+        } else {
+          print(
+              '🔥 HOME: Widget not mounted - cannot show popup for $alertType');
         }
       });
+      print('🔥 HOME: Emergency popup callback set');
       debugPrint('🎯 HomeScreen: Emergency popup callback set');
     } catch (e) {
       debugPrint('❌ HomeScreen: Failed to set up BLE callback: $e');

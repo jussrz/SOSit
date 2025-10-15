@@ -649,42 +649,99 @@ class BLEService extends ChangeNotifier {
   void _handleAlertUpdate(List<int> data) {
     try {
       String alertMessage = utf8.decode(data);
-      _addDebugLog('ALERT RECEIVED: "$alertMessage" (${data.length} bytes)');
-      _addDebugLog('Raw bytes: ${data.toString()}');
+      _addDebugLog('Alert: "$alertMessage"');
       _lastHeartbeat = DateTime.now();
 
       // IMPORTANT: Trigger alert in the Flutter app
       if (alertMessage != "none" && alertMessage.isNotEmpty) {
-        _addDebugLog('Processing alert: $alertMessage');
-
         // Convert to uppercase for consistency
-        String normalizedAlert = alertMessage.toUpperCase();
-        _addDebugLog('Normalized alert: $normalizedAlert');
+        String normalizedAlert = alertMessage.toUpperCase().trim();
+
+        // Map button press patterns to alert types
+        String mappedAlertType = _mapButtonPressToAlertType(normalizedAlert);
 
         if (_onAlertReceived != null) {
-          _addDebugLog('Calling alert callback...');
           Map<String, dynamic> alertData = {
-            'level': normalizedAlert,
+            'level': mappedAlertType,
             'timestamp': DateTime.now().millisecondsSinceEpoch,
             'device_id': _deviceId,
             'battery': _batteryLevel,
+            'raw_message': normalizedAlert,
           };
-          _onAlertReceived!(normalizedAlert, alertData);
-          _addDebugLog('Alert callback completed');
-        } else {
-          _addDebugLog('ERROR: No alert callback set!');
+          _onAlertReceived!(mappedAlertType, alertData);
         }
-      } else {
-        _addDebugLog('Alert ignored: "$alertMessage" (none or empty)');
       }
-      _lastAlert = '$alertMessage at ${DateTime.now().toString()}';
+      String mappedType = alertMessage != "none" && alertMessage.isNotEmpty
+          ? _mapButtonPressToAlertType(alertMessage.toUpperCase().trim())
+          : 'none';
+      _lastAlert =
+          'Raw: "$alertMessage" → Mapped: "$mappedType" at ${DateTime.now().toString().substring(11, 19)}';
       notifyListeners();
     } catch (e) {
       _addDebugLog('Error handling alert update: $e');
     }
   }
 
-  // Handle battery updates from ESP32
+  // Map button press patterns to alert types
+  String _mapButtonPressToAlertType(String rawAlert) {
+    // Handle ESP32 alert strings (convert to uppercase for case-insensitive matching)
+    switch (rawAlert) {
+      // ESP32 sends "regular" for 2 presses (double press)
+      case 'REGULAR':
+        return 'REGULAR';
+
+      // ESP32 sends "critical" for long press (3+ seconds)
+      case 'CRITICAL':
+        return 'CRITICAL';
+
+      // ESP32 sends "cancel" for 3 presses (triple press)
+      case 'CANCEL':
+        return 'CANCEL';
+
+      // Handle other possible variations for compatibility
+      case 'DOUBLE':
+      case 'TWO':
+      case '2':
+      case 'DOUBLE_PRESS':
+      case 'DOUBLE_CLICK':
+        return 'REGULAR';
+
+      case 'TRIPLE':
+      case 'THREE':
+      case '3':
+      case 'TRIPLE_PRESS':
+      case 'TRIPLE_CLICK':
+        return 'CANCEL';
+
+      case 'LONG':
+      case 'LONG_PRESS':
+      case 'HOLD':
+      case 'EMERGENCY':
+      case 'LONG_HOLD':
+        return 'CRITICAL';
+
+      // Single press = Check-in (if needed)
+      case 'SINGLE':
+      case 'ONE':
+      case '1':
+      case 'CHECKIN':
+      case 'CHECK':
+      case 'SINGLE_PRESS':
+      case 'SINGLE_CLICK':
+        return 'CHECKIN';
+
+      // Special cases
+      case 'NONE':
+        return 'NONE';
+
+      // Default case - return as-is if already uppercase
+      default:
+        print(
+            '🔥 BLE: No specific mapping found, returning as-is: "$rawAlert"');
+        return rawAlert;
+    }
+  } // Handle battery updates from ESP32
+
   void _handleBatteryUpdate(List<int> data) {
     try {
       if (data.isNotEmpty) {
@@ -738,7 +795,23 @@ class BLEService extends ChangeNotifier {
   // Set alert callback for external handling
   void setAlertCallback(Function(String, Map<String, dynamic>) callback) {
     _onAlertReceived = callback;
-    _addDebugLog('Alert callback set successfully');
+    _addDebugLog('Alert callback set');
+  }
+
+  // Test method to verify callback is working
+  void testCallback() {
+    if (_onAlertReceived != null) {
+      print('🔥 BLE: Callback test - calling callback with test data');
+      try {
+        _onAlertReceived!('TEST',
+            {'test': true, 'timestamp': DateTime.now().millisecondsSinceEpoch});
+        print('🔥 BLE: Callback test completed successfully');
+      } catch (e) {
+        print('🔥 BLE: Callback test failed: $e');
+      }
+    } else {
+      print('🔥 BLE: Callback test failed - callback is null');
+    }
   }
 
   void _handleConnectionStateChange(BluetoothConnectionState state) {
@@ -897,6 +970,19 @@ class BLEService extends ChangeNotifier {
 
     _lastAlert = '$alertType at ${DateTime.now().toString()}';
     notifyListeners();
+  }
+
+  // Test method to simulate ESP32 button press patterns
+  Future<void> simulateButtonPress(String buttonPattern) async {
+    print('🔥 BLE: simulateButtonPress called with pattern: "$buttonPattern"');
+    _addDebugLog('Simulating ESP32 button pattern: $buttonPattern');
+
+    // Simulate receiving data from ESP32 as if it came through BLE
+    List<int> fakeData = utf8.encode(buttonPattern);
+    print('🔥 BLE: Encoded data: $fakeData');
+    print('🔥 BLE: Calling _handleAlertUpdate...');
+    _handleAlertUpdate(fakeData);
+    print('🔥 BLE: simulateButtonPress completed');
   }
 
   Map<String, dynamic> getConnectionInfo() {

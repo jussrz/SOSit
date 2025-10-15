@@ -70,8 +70,6 @@ class EmergencyAlertHandler extends ChangeNotifier {
 
   void updateServices(
       BLEService bleService, EmergencyService emergencyService) {
-    debugPrint('🔄 EmergencyAlertHandler: updateServices called');
-
     // Remove old listener if exists
     if (_bleService != null) {
       _bleService!.removeListener(_handleBLEUpdate);
@@ -81,42 +79,50 @@ class EmergencyAlertHandler extends ChangeNotifier {
     _emergencyService = emergencyService;
 
     // Set up direct callback for ESP32 alerts
-    debugPrint('🔄 EmergencyAlertHandler: Setting up alert callback...');
     _setupCallback();
-    debugPrint('🔄 EmergencyAlertHandler: Alert callback setup complete');
 
     // Also listen for BLE state changes and forward to emergency service
     bleService.addListener(_handleBLEUpdate);
   }
 
   void _setupCallback() {
-    if (_bleService != null && _emergencyService != null && !_callbackSetup) {
+    // Skip if already set up to prevent loops
+    if (_callbackSetup) {
+      return;
+    }
+
+    if (_bleService != null && _emergencyService != null) {
       _bleService!.setAlertCallback(_handleDirectAlert);
       _callbackSetup = true;
-      debugPrint('✅ EmergencyAlertHandler: Callback successfully set up');
+      debugPrint('✅ Alert callback setup complete');
     }
   }
 
   // Try to set up callback even if called directly
   void ensureCallbackSetup(
       BLEService? bleService, EmergencyService? emergencyService) {
-    if (bleService != null && emergencyService != null && !_callbackSetup) {
+    print('🔥 MAIN: ensureCallbackSetup called');
+    print('🔥 MAIN: bleService != null: ${bleService != null}');
+    print('🔥 MAIN: emergencyService != null: ${emergencyService != null}');
+    print('🔥 MAIN: Current _callbackSetup: $_callbackSetup');
+
+    if (bleService != null && emergencyService != null) {
+      print('🔥 MAIN: Force updating services and setting up callback');
       _bleService = bleService;
       _emergencyService = emergencyService;
-      _setupCallback();
+      _setupCallback(); // This will force reset the callback
+      print('🔥 MAIN: Manual callback setup completed');
       debugPrint('🔧 EmergencyAlertHandler: Manual callback setup completed');
+    } else {
+      print('🔥 MAIN: Cannot ensure callback - services are null');
     }
   }
 
   // Direct callback handler for ESP32 alerts
   void _handleDirectAlert(String alertType, Map<String, dynamic> alertData) {
     if (_emergencyService != null) {
-      debugPrint('🚨 PROCESSING DIRECT ESP32 ALERT: $alertType');
-      debugPrint('🚨 Alert data: $alertData');
+      debugPrint('🚨 ESP32 Alert: $alertType');
       _emergencyService!.handleEmergencyAlert(alertType, alertData);
-      debugPrint('🚨 Emergency service called successfully');
-    } else {
-      debugPrint('❌ ERROR: Emergency service is null!');
     }
   }
 

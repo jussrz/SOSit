@@ -89,7 +89,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
   Future<void> _pickProfilePhoto() async {
     try {
       final picker = ImagePicker();
-      
+
       // Show options to pick from gallery or camera
       final ImageSource? source = await showDialog<ImageSource>(
         context: context,
@@ -117,12 +117,12 @@ class _UserProfilePageState extends State<UserProfilePage> {
 
       if (source != null) {
         final picked = await picker.pickImage(
-          source: source, 
+          source: source,
           imageQuality: 80,
           maxWidth: 800,
           maxHeight: 800,
         );
-        
+
         if (picked != null) {
           setState(() {
             _newProfilePhoto = File(picked.path);
@@ -286,14 +286,17 @@ class _UserProfilePageState extends State<UserProfilePage> {
                                       )
                                     : (_profilePhotoUrl.isNotEmpty
                                         ? DecorationImage(
-                                            image: NetworkImage(_profilePhotoUrl),
+                                            image:
+                                                NetworkImage(_profilePhotoUrl),
                                             fit: BoxFit.cover,
                                           )
                                         : null),
                               ),
-                              child: (_newProfilePhoto == null && _profilePhotoUrl.isEmpty)
+                              child: (_newProfilePhoto == null &&
+                                      _profilePhotoUrl.isEmpty)
                                   ? Icon(Icons.person,
-                                      size: screenWidth * 0.1, color: Colors.grey[600])
+                                      size: screenWidth * 0.1,
+                                      color: Colors.grey[600])
                                   : null,
                             ),
                             Positioned(
@@ -307,10 +310,12 @@ class _UserProfilePageState extends State<UserProfilePage> {
                                   decoration: BoxDecoration(
                                     color: const Color(0xFFF73D5C),
                                     shape: BoxShape.circle,
-                                    border: Border.all(color: Colors.white, width: 2),
+                                    border: Border.all(
+                                        color: Colors.white, width: 2),
                                   ),
                                   child: Icon(Icons.edit,
-                                      color: Colors.white, size: screenWidth * 0.04),
+                                      color: Colors.white,
+                                      size: screenWidth * 0.04),
                                 ),
                               ),
                             ),
@@ -330,16 +335,19 @@ class _UserProfilePageState extends State<UserProfilePage> {
                       ),
                       SizedBox(height: screenHeight * 0.025),
 
-                      _buildTextField('First Name', _firstNameController, screenWidth, screenHeight),
+                      _buildTextField('First Name', _firstNameController,
+                          screenWidth, screenHeight),
                       SizedBox(height: screenHeight * 0.02),
-                      _buildTextField('Middle Name', _middleNameController, screenWidth, screenHeight),
+                      _buildTextField('Middle Name', _middleNameController,
+                          screenWidth, screenHeight),
                       SizedBox(height: screenHeight * 0.02),
-                      _buildTextField('Last Name', _lastNameController, screenWidth, screenHeight),
+                      _buildTextField('Last Name', _lastNameController,
+                          screenWidth, screenHeight),
                       SizedBox(height: screenHeight * 0.02),
-                      _buildTextField('Date of Birth', _birthdateController, screenWidth, screenHeight,
-                          readOnly: true, 
-                          icon: Icons.calendar_today,
-                          onTap: () async {
+                      _buildTextField('Date of Birth', _birthdateController,
+                          screenWidth, screenHeight,
+                          readOnly: true,
+                          icon: Icons.calendar_today, onTap: () async {
                         DateTime? picked = await showDatePicker(
                           context: context,
                           initialDate: _birthdateController.text.isNotEmpty
@@ -372,10 +380,12 @@ class _UserProfilePageState extends State<UserProfilePage> {
                         }
                       }),
                       SizedBox(height: screenHeight * 0.02),
-                      _buildTextField('Phone Number', _userPhoneController, screenWidth, screenHeight,
+                      _buildTextField('Phone Number', _userPhoneController,
+                          screenWidth, screenHeight,
                           keyboardType: TextInputType.phone, icon: Icons.phone),
                       SizedBox(height: screenHeight * 0.02),
-                      _buildTextField('Email Address', _emailController, screenWidth, screenHeight,
+                      _buildTextField('Email Address', _emailController,
+                          screenWidth, screenHeight,
                           readOnly: true, icon: Icons.email),
 
                       SizedBox(height: screenHeight * 0.04),
@@ -394,7 +404,8 @@ class _UserProfilePageState extends State<UserProfilePage> {
                           ),
                           onPressed: _isLoading ? null : _saveProfile,
                           child: _isLoading
-                              ? const CircularProgressIndicator(color: Colors.white)
+                              ? const CircularProgressIndicator(
+                                  color: Colors.white)
                               : Text(
                                   'Save Profile',
                                   style: TextStyle(
@@ -451,14 +462,16 @@ class _UserProfilePageState extends State<UserProfilePage> {
             keyboardType: keyboardType,
             cursorColor: const Color(0xFFF73D5C),
             decoration: InputDecoration(
-              prefixIcon: icon != null 
-                  ? Icon(icon, color: const Color(0xFFF73D5C).withValues(alpha: 0.7))
+              prefixIcon: icon != null
+                  ? Icon(icon,
+                      color: const Color(0xFFF73D5C).withValues(alpha: 0.7))
                   : null,
               hintText: 'Enter $label',
               hintStyle: TextStyle(color: Colors.grey.shade500),
               border: InputBorder.none,
               contentPadding: EdgeInsets.symmetric(
-                horizontal: icon != null ? screenWidth * 0.02 : screenWidth * 0.04,
+                horizontal:
+                    icon != null ? screenWidth * 0.02 : screenWidth * 0.04,
                 vertical: screenHeight * 0.020,
               ),
             ),
