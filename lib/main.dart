@@ -51,6 +51,7 @@ class MyApp extends StatelessWidget {
       child: MaterialApp(
         title: 'SOSit App',
         debugShowCheckedModeBanner: false,
+        navigatorKey: navigatorKey, // Add global navigator key for FCM modals
         theme: ThemeData(
           primarySwatch: Colors.blue,
           fontFamily: 'Roboto',

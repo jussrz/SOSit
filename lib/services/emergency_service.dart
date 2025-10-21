@@ -7,6 +7,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:vibration/vibration.dart';
 
 class EmergencyService extends ChangeNotifier {
   final SupabaseClient _supabase = Supabase.instance.client;
@@ -154,6 +155,9 @@ class EmergencyService extends ChangeNotifier {
         channelId = 'emergency_critical';
         importance = Importance.max;
         priority = Priority.max;
+
+        // Vibrate for 5 seconds on CRITICAL alerts only
+        await _vibrateCriticalAlert();
         break;
       case 'REGULAR':
         title = '⚠️ Emergency Alert';
@@ -223,6 +227,50 @@ class EmergencyService extends ChangeNotifier {
     );
 
     debugPrint('📱 Push notification sent: $title - $body');
+  }
+
+  // Vibrate for 5 seconds on CRITICAL alerts (for parent accounts)
+  Future<void> _vibrateCriticalAlert() async {
+    try {
+      // Check if device supports vibration
+      final hasVibrator = await Vibration.hasVibrator();
+      if (hasVibrator != true) {
+        debugPrint('⚠️ Device does not support vibration');
+        return;
+      }
+
+      debugPrint('📳 Starting 5-second vibration for CRITICAL alert...');
+
+      // Vibration pattern: [wait, vibrate, wait, vibrate, ...]
+      // Total duration: 5 seconds
+      // Pattern: 500ms vibrate, 200ms pause (repeating)
+      const pattern = [
+        0, 500, 200, // First pulse
+        500, 200, // Second pulse
+        500, 200, // Third pulse
+        500, 200, // Fourth pulse
+        500, 200, // Fifth pulse
+        500, 200, // Sixth pulse
+        500, // Final pulse
+      ];
+
+      // Vibrate with pattern for approximately 5 seconds
+      await Vibration.vibrate(pattern: pattern);
+
+      debugPrint('✅ 5-second critical alert vibration completed');
+    } catch (e) {
+      debugPrint('❌ Error vibrating device: $e');
+      // Fallback to system haptic feedback
+      try {
+        HapticFeedback.heavyImpact();
+        await Future.delayed(const Duration(milliseconds: 200));
+        HapticFeedback.heavyImpact();
+        await Future.delayed(const Duration(milliseconds: 200));
+        HapticFeedback.heavyImpact();
+      } catch (hapticError) {
+        debugPrint('❌ Haptic feedback also failed: $hapticError');
+      }
+    }
   }
 
   Future<void> _loadEmergencyContacts() async {
@@ -460,8 +508,52 @@ class EmergencyService extends ChangeNotifier {
       });
 
       debugPrint('Emergency logged to database');
+
+      // Notify parent accounts
+      await _notifyParentAccounts(type);
     } catch (e) {
       debugPrint('Error logging emergency: $e');
+    }
+  }
+
+  /// Notify parent accounts via Supabase Edge Function
+  Future<void> _notifyParentAccounts(String alertType) async {
+    try {
+      final userId = _supabase.auth.currentUser?.id;
+      if (userId == null) {
+        debugPrint('⚠️ Cannot notify parents: User not authenticated');
+        return;
+      }
+
+      debugPrint('🔔 Notifying parent accounts of $alertType alert...');
+
+      // Call Supabase Edge Function to send FCM notifications
+      final response = await _supabase.functions.invoke(
+        'send-parent-alerts',
+        body: {
+          'alert': {
+            'id': _emergencyId,
+            'user_id': userId,
+            'alert_type': alertType,
+            'timestamp': _emergencyStartTime?.toIso8601String(),
+            'latitude': _lastKnownLocation?.latitude,
+            'longitude': _lastKnownLocation?.longitude,
+            'address': _lastKnownAddress,
+            'battery_level': 100, // You can get this from device if available
+            'status': 'ACTIVE',
+          }
+        },
+      );
+
+      if (response.data != null && response.data['success'] == true) {
+        final sent = response.data['sent'] ?? 0;
+        debugPrint('✅ Parent notifications sent to $sent device(s)');
+      } else {
+        debugPrint('⚠️ Parent notification response: ${response.data}');
+      }
+    } catch (e) {
+      debugPrint('❌ Error notifying parents: $e');
+      // Don't fail the entire emergency flow if parent notification fails
     }
   }
 
