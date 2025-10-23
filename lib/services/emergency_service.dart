@@ -560,9 +560,9 @@ class EmergencyService extends ChangeNotifier {
 
       // Call Postgres function to create parent notifications
       debugPrint(
-          '🚀 Calling Postgres function: create_parent_notifications_for_alert_v6');
+          '🚀 Calling Postgres function: create_parent_notifications_for_alert_v7');
       final response = await _supabase.rpc(
-        'create_parent_notifications_for_alert_v6',
+        'create_parent_notifications_for_alert_v7',
         params: {'p_panic_alert_id': panicAlertId},
       );
 

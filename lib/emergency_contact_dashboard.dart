@@ -1284,13 +1284,12 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
                                       decoration: BoxDecoration(
                                         color: alert['emergency_level'] ==
                                                 'critical'
-                                            ? Colors.red.withValues(alpha: 0.1)
+                                            ? Colors.red.withOpacity(0.1)
                                             : alert['emergency_level'] ==
                                                     'checkin'
-                                                ? Colors.blue
-                                                    .withValues(alpha: 0.1)
+                                                ? Colors.blue.withOpacity(0.1)
                                                 : Colors.orange
-                                                    .withValues(alpha: 0.1),
+                                                    .withOpacity(0.1),
                                         borderRadius: BorderRadius.circular(6),
                                       ),
                                       child: Text(
@@ -1511,154 +1510,253 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
 
   void _showAlertDetails(
       Map<String, dynamic> alert, double screenWidth, double screenHeight) {
+    // Extract location data
+    final notificationData =
+        alert['raw_data']?['notification_data'] as Map<String, dynamic>?;
+    final double? latitude = notificationData?['latitude'];
+    final double? longitude = notificationData?['longitude'];
+    final String address = notificationData?['address'] ?? alert['location'];
+    final int? batteryLevel = notificationData?['battery_level'];
+
+    // Get real-time timestamp from alert
+    final DateTime alertTime = alert['time'] as DateTime;
+
     showDialog(
       context: context,
       builder: (context) {
         return Dialog(
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-          child: Padding(
-            padding: EdgeInsets.all(screenWidth * 0.06),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    FutureBuilder<String?>(
-                      future: _getUserProfilePhoto(alert['userId']),
-                      builder: (context, snapshot) {
-                        return CircleAvatar(
-                          backgroundColor: const Color(0xFFF73D5C),
-                          radius: screenWidth * 0.07,
-                          backgroundImage:
-                              snapshot.hasData && snapshot.data!.isNotEmpty
-                                  ? NetworkImage(snapshot.data!)
-                                  : null,
-                          child: snapshot.hasData && snapshot.data!.isNotEmpty
-                              ? null
-                              : const Icon(Icons.person,
-                                  color: Colors.white, size: 32),
-                        );
-                      },
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Text(alert['name'],
-                          style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: screenWidth * 0.05)),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 18),
-                Row(
-                  children: [
-                    const Icon(Icons.access_time, color: Colors.grey, size: 20),
-                    const SizedBox(width: 8),
-                    Text(_formatDate(alert['time']),
-                        style: TextStyle(
-                            fontSize: 15, color: Colors.grey.shade700)),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    const Icon(Icons.location_on, color: Colors.grey, size: 20),
-                    const SizedBox(width: 8),
-                    Expanded(
-                        child: Text(alert['location'],
-                            style: const TextStyle(fontSize: 15))),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    const Icon(Icons.info_outline,
-                        color: Colors.grey, size: 20),
-                    const SizedBox(width: 8),
-                    Text('Status: ',
-                        style: TextStyle(fontSize: 15, color: Colors.black)),
-                    Text(alert['status'],
-                        style: TextStyle(
-                            fontSize: 15,
-                            color: alert['status'] == 'active'
-                                ? const Color(0xFFF73D5C)
-                                : Colors.green)),
-                  ],
-                ),
-                if (alert['emergency_level'] != 'regular') ...[
-                  const SizedBox(height: 10),
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: EdgeInsets.all(screenWidth * 0.06),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header with profile
                   Row(
                     children: [
-                      const Icon(Icons.priority_high,
-                          color: Colors.grey, size: 20),
-                      const SizedBox(width: 8),
-                      Text('Level: ',
-                          style: TextStyle(fontSize: 15, color: Colors.black)),
-                      Text(
-                        alert['emergency_level'].toUpperCase(),
-                        style: TextStyle(
-                          fontSize: 15,
-                          color: alert['emergency_level'] == 'critical'
-                              ? Colors.red
-                              : Colors.orange,
-                          fontWeight: FontWeight.bold,
-                        ),
+                      FutureBuilder<String?>(
+                        future: _getUserProfilePhoto(alert['userId']),
+                        builder: (context, snapshot) {
+                          return CircleAvatar(
+                            backgroundColor: const Color(0xFFF73D5C),
+                            radius: screenWidth * 0.07,
+                            backgroundImage:
+                                snapshot.hasData && snapshot.data!.isNotEmpty
+                                    ? NetworkImage(snapshot.data!)
+                                    : null,
+                            child: snapshot.hasData && snapshot.data!.isNotEmpty
+                                ? null
+                                : const Icon(Icons.person,
+                                    color: Colors.white, size: 32),
+                          );
+                        },
                       ),
-                    ],
-                  ),
-                ],
-                if (alert['description']?.isNotEmpty == true) ...[
-                  const SizedBox(height: 10),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Icon(Icons.description,
-                          color: Colors.grey, size: 20),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 16),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Description:',
+                            Text(alert['name'],
                                 style: TextStyle(
-                                    fontSize: 15, color: Colors.black)),
-                            const SizedBox(height: 4),
-                            Text(alert['description'],
-                                style: TextStyle(
-                                    fontSize: 14, color: Colors.grey.shade700)),
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: screenWidth * 0.05)),
+                            if (batteryLevel != null)
+                              Row(
+                                children: [
+                                  Icon(Icons.battery_std,
+                                      size: 16,
+                                      color: batteryLevel < 20
+                                          ? Colors.red
+                                          : Colors.grey),
+                                  SizedBox(width: 4),
+                                  Text('$batteryLevel%',
+                                      style: TextStyle(
+                                          fontSize: 12,
+                                          color: batteryLevel < 20
+                                              ? Colors.red
+                                              : Colors.grey)),
+                                ],
+                              ),
                           ],
                         ),
                       ),
                     ],
                   ),
-                ],
-                const SizedBox(height: 22),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFF73D5C),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
+                  const SizedBox(height: 18),
+
+                  // Real-time Date & Time
+                  Container(
+                    padding: EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.grey.shade200),
                     ),
-                    onPressed: () => Navigator.pop(context),
-                    child: Text(
-                      alert['status'] == 'active'
-                          ? 'Mark as Acknowledged'
-                          : 'Close',
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 16),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.calendar_today,
+                                color: Color(0xFFF73D5C), size: 20),
+                            const SizedBox(width: 8),
+                            Text(
+                              _formatDateOnly(alertTime),
+                              style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.black87),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: 8),
+                        Row(
+                          children: [
+                            const Icon(Icons.access_time,
+                                color: Color(0xFFF73D5C), size: 20),
+                            const SizedBox(width: 8),
+                            Text(
+                              _formatTimeOnly(alertTime),
+                              style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.black87),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 16),
+
+                  // Map (if coordinates available)
+                  if (latitude != null && longitude != null) ...[
+                    Text('Location Map',
+                        style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87)),
+                    SizedBox(height: 8),
+                    Container(
+                      height: 200,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.grey.shade300),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: _buildMapWidget(latitude, longitude),
+                      ),
+                    ),
+                    SizedBox(height: 12),
+                  ],
+
+                  // Address
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.location_on,
+                          color: Color(0xFFF73D5C), size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(address,
+                            style: const TextStyle(fontSize: 15, height: 1.4)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      const Icon(Icons.info_outline,
+                          color: Colors.grey, size: 20),
+                      const SizedBox(width: 8),
+                      Text('Status: ',
+                          style: TextStyle(fontSize: 15, color: Colors.black)),
+                      Text(alert['status'],
+                          style: TextStyle(
+                              fontSize: 15,
+                              color: alert['status'] == 'active'
+                                  ? const Color(0xFFF73D5C)
+                                  : Colors.green)),
+                    ],
+                  ),
+                  if (alert['emergency_level'] != 'regular') ...[
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        const Icon(Icons.priority_high,
+                            color: Colors.grey, size: 20),
+                        const SizedBox(width: 8),
+                        Text('Level: ',
+                            style:
+                                TextStyle(fontSize: 15, color: Colors.black)),
+                        Text(
+                          alert['emergency_level'].toUpperCase(),
+                          style: TextStyle(
+                            fontSize: 15,
+                            color: alert['emergency_level'] == 'critical'
+                                ? Colors.red
+                                : Colors.orange,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                  if (alert['description']?.isNotEmpty == true) ...[
+                    const SizedBox(height: 10),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.description,
+                            color: Colors.grey, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Description:',
+                                  style: TextStyle(
+                                      fontSize: 15, color: Colors.black)),
+                              const SizedBox(height: 4),
+                              Text(alert['description'],
+                                  style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.grey.shade700)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                  const SizedBox(height: 22),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFF73D5C),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      onPressed: () => Navigator.pop(context),
+                      child: Text(
+                        alert['status'] == 'active'
+                            ? 'Mark as Acknowledged'
+                            : 'Close',
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 16),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
+          ), // Close SingleChildScrollView
         );
       },
     );
@@ -1977,5 +2075,110 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
     }
 
     return '$monthName ${date.day}, ${date.year} at $hour:$minute $period ($timeAgo)';
+  }
+
+  String _formatDateOnly(DateTime date) {
+    String monthName = [
+      '',
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December'
+    ][date.month];
+
+    return '$monthName ${date.day}, ${date.year}';
+  }
+
+  String _formatTimeOnly(DateTime date) {
+    String period = date.hour >= 12 ? 'PM' : 'AM';
+    int hour =
+        date.hour > 12 ? date.hour - 12 : (date.hour == 0 ? 12 : date.hour);
+    String minute = date.minute.toString().padLeft(2, '0');
+    String second = date.second.toString().padLeft(2, '0');
+
+    return '$hour:$minute:$second $period';
+  }
+
+  Widget _buildMapWidget(double latitude, double longitude) {
+    // Using Google Maps Static API for a simple map display
+    return Stack(
+      children: [
+        Image.network(
+          'https://maps.googleapis.com/maps/api/staticmap?'
+          'center=$latitude,$longitude'
+          '&zoom=15'
+          '&size=600x400'
+          '&markers=color:red%7C$latitude,$longitude'
+          '&key=AIzaSyBmKbuujHem0Nk-TZdxUHbcEsLqwXeAwQs',
+          fit: BoxFit.cover,
+          width: double.infinity,
+          height: double.infinity,
+          errorBuilder: (context, error, stackTrace) {
+            return Container(
+              color: Colors.grey.shade200,
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.map, size: 48, color: Colors.grey.shade400),
+                    SizedBox(height: 8),
+                    Text('Map unavailable',
+                        style: TextStyle(color: Colors.grey.shade600)),
+                    SizedBox(height: 4),
+                    Text('Lat: ${latitude.toStringAsFixed(4)}',
+                        style: TextStyle(
+                            fontSize: 12, color: Colors.grey.shade500)),
+                    Text('Lng: ${longitude.toStringAsFixed(4)}',
+                        style: TextStyle(
+                            fontSize: 12, color: Colors.grey.shade500)),
+                  ],
+                ),
+              ),
+            );
+          },
+          loadingBuilder: (context, child, loadingProgress) {
+            if (loadingProgress == null) return child;
+            return Container(
+              color: Colors.grey.shade200,
+              child: Center(
+                child: CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFF73D5C)),
+                ),
+              ),
+            );
+          },
+        ),
+        Positioned(
+          bottom: 8,
+          right: 8,
+          child: Container(
+            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(4),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black26,
+                  blurRadius: 4,
+                  offset: Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Text(
+              '${latitude.toStringAsFixed(6)}, ${longitude.toStringAsFixed(6)}',
+              style: TextStyle(fontSize: 10, fontWeight: FontWeight.w500),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
