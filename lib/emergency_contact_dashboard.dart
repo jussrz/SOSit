@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'home_screen.dart';
+import 'services/parent_notification_service.dart';
 
 class EmergencyContactDashboard extends StatefulWidget {
   const EmergencyContactDashboard({super.key});
@@ -14,34 +15,107 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
   final supabase = Supabase.instance.client;
   int _selectedIndex = 0;
   bool _isLoading = true;
+  bool _isRefreshing = false;
 
   List<Map<String, dynamic>> _sosAlerts = [];
   Map<String, dynamic> _emergencyContactData = {};
+
+  // Track unread alerts
+  int get _unreadAlertsCount => _sosAlerts
+      .where((alert) =>
+          alert['viewed_at'] == null && alert['status'] != 'resolved')
+      .length;
 
   @override
   void initState() {
     super.initState();
     _loadData();
+    _initializeNotifications();
+  }
+
+  /// Initialize parent notification service
+  Future<void> _initializeNotifications() async {
+    try {
+      debugPrint('🔔 Initializing parent notifications in dashboard...');
+      await ParentNotificationService().initialize(
+        onNewNotification: () {
+          // Refresh the alerts list when a new notification arrives
+          debugPrint('🔄 New notification received, refreshing dashboard...');
+          if (mounted) {
+            _loadSosAlerts();
+            // Show a snackbar to indicate new alert
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Row(
+                  children: [
+                    Icon(Icons.notification_important, color: Colors.white),
+                    SizedBox(width: 8),
+                    Text('New emergency alert received!'),
+                  ],
+                ),
+                backgroundColor: Color(0xFFF73D5C),
+                duration: Duration(seconds: 3),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+        },
+      );
+      debugPrint('✅ Parent notifications initialized in dashboard');
+    } catch (e) {
+      debugPrint('❌ Error initializing parent notifications: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    // Clean up notification service
+    ParentNotificationService().dispose();
+    super.dispose();
   }
 
   Future<void> _loadData() async {
-    setState(() => _isLoading = true);
+    if (!mounted) return;
+
+    setState(() {
+      _isLoading = true;
+      _isRefreshing = true;
+    });
 
     try {
+      debugPrint('🔄 Loading emergency contact dashboard data...');
+
       // Load emergency contact data directly
       _emergencyContactData = await _getEmergencyContactData();
 
       // Load SOS alerts (emergency logs where this user is the emergency contact)
       await _loadSosAlerts();
+
+      debugPrint('✅ Dashboard data loaded successfully');
     } catch (e) {
-      debugPrint('Error loading data: $e');
+      debugPrint('❌ Error loading data: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading data: $e')),
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.error_outline, color: Colors.white),
+                SizedBox(width: 8),
+                Expanded(child: Text('Error loading data: $e')),
+              ],
+            ),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 3),
+          ),
         );
       }
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _isRefreshing = false;
+        });
+      }
     }
   }
 
@@ -121,12 +195,19 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
         // Load group details for each membership
         for (var member in groupMembers) {
           try {
-            // Use 'group' table as shown in debug output
+            // Use 'group' table - use maybeSingle() to handle missing groups gracefully
             final groupData = await supabase
                 .from('group')
                 .select('id, name, created_by')
                 .eq('id', member['group_id'])
-                .single();
+                .maybeSingle();
+
+            // Skip if group doesn't exist (orphaned group_member record)
+            if (groupData == null) {
+              debugPrint(
+                  '⚠️ Skipping orphaned group_member record - group ${member['group_id']} does not exist');
+              continue;
+            }
 
             // Create membership object
             final membership = {
@@ -144,19 +225,25 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
                     .from('user')
                     .select('id, first_name, last_name, phone, email')
                     .eq('id', groupData['created_by'])
-                    .single();
-                membership['group']['creator'] = creatorData;
+                    .maybeSingle();
+
+                if (creatorData != null) {
+                  membership['group']['creator'] = creatorData;
+                } else {
+                  debugPrint(
+                      '⚠️ Group creator user ${groupData['created_by']} not found');
+                }
               } catch (e) {
                 debugPrint(
-                    'Error loading creator for group ${groupData['id']}: $e');
+                    '❌ Error loading creator for group ${groupData['id']}: $e');
               }
             }
 
             groupMemberships.add(membership);
-            debugPrint('Added group membership: ${groupData['name']}');
+            debugPrint('✅ Added group membership: ${groupData['name']}');
           } catch (e) {
             debugPrint(
-                'Error loading group details for group ${member['group_id']}: $e');
+                '❌ Error loading group details for group ${member['group_id']}: $e');
           }
         }
       } catch (e) {
@@ -186,85 +273,128 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
       final userId = supabase.auth.currentUser?.id;
       if (userId == null) return;
 
-      final relatedUserIds = _getRelatedUserIds();
-      debugPrint('Looking for SOS alerts from users: $relatedUserIds');
+      debugPrint('🔍 Loading parent notifications for user: $userId');
 
-      if (relatedUserIds.isEmpty) {
-        debugPrint('No related user IDs found, no alerts to load');
+      // Load from parent_notifications table instead of logs
+      final notifications = await supabase
+          .from('parent_notifications')
+          .select('*')
+          .eq('parent_user_id', userId)
+          .order('created_at', ascending: false);
+
+      debugPrint('📥 Found ${notifications.length} parent notifications');
+
+      if (notifications.isEmpty) {
+        debugPrint('No notifications found for this parent');
         setState(() {
           _sosAlerts = [];
         });
         return;
       }
 
-      // Get all emergency logs where this user might be involved as an emergency contact
-      // Remove limit to get full history and order by most recent first
-      final alerts = await supabase
-          .from('logs')
-          .select('*')
-          .inFilter('user_id', relatedUserIds)
-          .order('created_at', ascending: false);
-
-      debugPrint('Found ${alerts.length} total logs from related users');
-
-      // Get user details separately for each alert
+      // Process parent notifications
       List<Map<String, dynamic>> processedAlerts = [];
-      for (var alert in alerts) {
+      for (var notification in notifications) {
         try {
-          // Get user info for this alert
-          String userName = 'Unknown User';
-          if (alert['user_id'] != null) {
-            final userInfo = await supabase
-                .from('user')
-                .select('first_name, last_name')
-                .eq('id', alert['user_id'])
-                .single();
+          final notificationData =
+              notification['notification_data'] as Map<String, dynamic>?;
 
-            userName =
-                '${userInfo['first_name'] ?? ''} ${userInfo['last_name'] ?? ''}'
-                    .trim();
-            if (userName.isEmpty) userName = 'Unknown User';
-          }
+          // Get child user info
+          String childName = notificationData?['child_name'] ?? 'Unknown User';
+          if (notification['child_user_id'] != null) {
+            try {
+              final userInfo = await supabase
+                  .from('user')
+                  .select('first_name, last_name')
+                  .eq('id', notification['child_user_id'])
+                  .maybeSingle();
 
-          // Determine status based on responded_at and emergency_level
-          String status = 'resolved';
-          if (alert['responded_at'] == null) {
-            // If no response time, check if it's recent (within last 24 hours)
-            final alertTime = DateTime.parse(alert['created_at']);
-            final now = DateTime.now();
-            final hoursDiff = now.difference(alertTime).inHours;
-
-            if (hoursDiff < 24 && alert['emergency_level'] != 'checkin') {
-              status = 'active';
+              if (userInfo != null) {
+                childName =
+                    '${userInfo['first_name'] ?? ''} ${userInfo['last_name'] ?? ''}'
+                        .trim();
+                if (childName.isEmpty) {
+                  childName = notificationData?['child_name'] ?? 'Unknown User';
+                }
+              }
+            } catch (e) {
+              debugPrint('Error fetching child user info: $e');
             }
           }
 
+          // Determine status based on alert_type and viewed_at
+          String status = 'active';
+          final alertType = notification['alert_type'] as String?;
+          if (alertType == 'CANCEL') {
+            status = 'resolved';
+          } else if (notification['viewed_at'] != null) {
+            status = 'viewed';
+          }
+
+          // Extract location from notification_data
+          String location = 'Location not available';
+          if (notificationData != null) {
+            if (notificationData['address'] != null) {
+              location = notificationData['address'];
+            } else if (notificationData['latitude'] != null &&
+                notificationData['longitude'] != null) {
+              location =
+                  'Lat: ${notificationData['latitude']}, Lng: ${notificationData['longitude']}';
+            }
+          }
+
+          // Determine emergency level based on alert type
+          String emergencyLevel = 'regular';
+          if (alertType == 'CRITICAL') {
+            emergencyLevel = 'critical';
+          } else if (alertType == 'CANCEL') {
+            emergencyLevel = 'cancelled';
+          } else if (alertType == 'REGULAR') {
+            emergencyLevel = 'regular';
+          }
+
           processedAlerts.add({
-            'id': alert['id'],
-            'name': userName,
-            'time': DateTime.parse(alert['created_at']),
-            'location': alert['location'] ?? 'Location not available',
+            'id': notification['id'],
+            'name': childName,
+            'time': DateTime.parse(notification['created_at']),
+            'location': location,
             'status': status,
-            'emergency_level': alert['emergency_level'] ?? 'regular',
-            'description': alert['description'] ?? '',
-            'userId': alert['user_id'],
-            'responded_at': alert['responded_at'],
-            'raw_data': alert, // Keep raw data for debugging
+            'emergency_level': emergencyLevel,
+            'alert_type': alertType, // Add raw alert type for reference
+            'description': notification['notification_body'] ?? '',
+            'title': notification['notification_title'] ?? '',
+            'userId': notification['child_user_id'],
+            'viewed_at': notification['viewed_at'],
+            'battery_level': notificationData?['battery_level'],
+            'raw_data': notification, // Keep raw data for debugging
           });
+
+          debugPrint('✅ Processed notification: $childName at $location');
         } catch (e) {
-          debugPrint('Error processing alert ${alert['id']}: $e');
-          // Still add the alert with basic info
+          debugPrint(
+              '❌ Error processing notification ${notification['id']}: $e');
+          // Still add the notification with basic info
+          final alertType = notification['alert_type'] as String?;
+          String emergencyLevel = 'regular';
+          if (alertType == 'CRITICAL') {
+            emergencyLevel = 'critical';
+          } else if (alertType == 'CANCEL') {
+            emergencyLevel = 'cancelled';
+          }
+
           processedAlerts.add({
-            'id': alert['id'],
+            'id': notification['id'],
             'name': 'Unknown User',
-            'time': DateTime.parse(alert['created_at']),
-            'location': alert['location'] ?? 'Location not available',
-            'status': alert['responded_at'] != null ? 'resolved' : 'active',
-            'emergency_level': alert['emergency_level'] ?? 'regular',
-            'description': alert['description'] ?? '',
-            'userId': alert['user_id'],
-            'responded_at': alert['responded_at'],
-            'raw_data': alert,
+            'time': DateTime.parse(notification['created_at']),
+            'location': 'Location not available',
+            'status': alertType == 'CANCEL' ? 'resolved' : 'active',
+            'emergency_level': emergencyLevel,
+            'alert_type': alertType,
+            'description': notification['notification_body'] ?? '',
+            'title': notification['notification_title'] ?? '',
+            'userId': notification['child_user_id'],
+            'viewed_at': notification['viewed_at'],
+            'raw_data': notification,
           });
         }
       }
@@ -279,6 +409,40 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
       setState(() {
         _sosAlerts = [];
       });
+    }
+  }
+
+  /// Mark an alert as viewed
+  Future<void> _markAlertAsViewed(Map<String, dynamic> alert) async {
+    try {
+      final alertId = alert['id'];
+      debugPrint('👁️ Marking alert $alertId as viewed...');
+
+      await supabase.from('parent_notifications').update(
+          {'viewed_at': DateTime.now().toIso8601String()}).eq('id', alertId);
+
+      // Update local state
+      setState(() {
+        final index = _sosAlerts.indexWhere((a) => a['id'] == alertId);
+        if (index != -1) {
+          _sosAlerts[index]['viewed_at'] = DateTime.now().toIso8601String();
+          _sosAlerts[index]['status'] = 'viewed';
+        }
+      });
+
+      debugPrint('✅ Alert marked as viewed');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Alert marked as viewed'),
+            duration: Duration(seconds: 2),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('❌ Error marking alert as viewed: $e');
     }
   }
 
@@ -340,8 +504,45 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
         elevation: 0,
         centerTitle: true,
         automaticallyImplyLeading: false,
-        title: const Text('Emergency Contact Dashboard',
-            style: TextStyle(color: Colors.black, fontWeight: FontWeight.w600)),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Emergency Contact Dashboard',
+                style: TextStyle(
+                    color: Colors.black,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 18)),
+            if (_unreadAlertsCount > 0) ...[
+              SizedBox(width: 8),
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Color(0xFFF73D5C),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '$_unreadAlertsCount',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          // Refresh button
+          IconButton(
+            icon: Icon(
+              Icons.refresh,
+              color: _isRefreshing ? Color(0xFFF73D5C) : Colors.black,
+            ),
+            onPressed: _isRefreshing ? null : _loadData,
+            tooltip: 'Refresh',
+          ),
+        ],
       ),
       body: Stack(
         children: [
@@ -379,6 +580,88 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
           BottomNavigationBarItem(
             icon: Icon(Icons.swap_horiz),
             label: 'Switch View',
+          ),
+        ],
+      ),
+      floatingActionButton: _selectedIndex == 0 && _sosAlerts.isNotEmpty
+          ? FloatingActionButton.extended(
+              onPressed: () => _showAlertStatistics(),
+              backgroundColor: Color(0xFFF73D5C),
+              icon: Icon(Icons.analytics),
+              label: Text('Statistics'),
+            )
+          : null,
+    );
+  }
+
+  void _showAlertStatistics() {
+    final criticalCount =
+        _sosAlerts.where((a) => a['emergency_level'] == 'critical').length;
+    final regularCount =
+        _sosAlerts.where((a) => a['emergency_level'] == 'regular').length;
+    final cancelledCount =
+        _sosAlerts.where((a) => a['emergency_level'] == 'cancelled').length;
+    final activeCount = _sosAlerts.where((a) => a['status'] == 'active').length;
+    final resolvedCount =
+        _sosAlerts.where((a) => a['status'] == 'resolved').length;
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.analytics, color: Color(0xFFF73D5C)),
+            SizedBox(width: 8),
+            Text('Alert Statistics'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Total Alerts: ${_sosAlerts.length}',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            Divider(height: 24),
+            _buildStatRow('🔴 Critical', criticalCount, Colors.red),
+            _buildStatRow('🟠 Regular', regularCount, Colors.orange),
+            _buildStatRow('🟢 Cancelled', cancelledCount, Colors.green),
+            Divider(height: 24),
+            _buildStatRow('⚠️ Active', activeCount, Color(0xFFF73D5C)),
+            _buildStatRow('✅ Resolved', resolvedCount, Colors.green),
+            _buildStatRow('👁️ Unread', _unreadAlertsCount, Colors.blue),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatRow(String label, int count, Color color) {
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: TextStyle(fontSize: 14)),
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: color.withValues(alpha: 0.3)),
+            ),
+            child: Text(
+              '$count',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
           ),
         ],
       ),
@@ -421,6 +704,85 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
       child: ListView(
         padding: EdgeInsets.all(screenWidth * 0.05),
         children: [
+          // Loading indicator banner
+          if (_isRefreshing)
+            Container(
+              padding: EdgeInsets.all(12),
+              margin: EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: Color(0xFFF73D5C).withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+                border:
+                    Border.all(color: Color(0xFFF73D5C).withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor:
+                          AlwaysStoppedAnimation<Color>(Color(0xFFF73D5C)),
+                    ),
+                  ),
+                  SizedBox(width: 12),
+                  Text(
+                    'Refreshing alerts...',
+                    style: TextStyle(
+                      color: Color(0xFFF73D5C),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          // Unread alerts summary
+          if (_unreadAlertsCount > 0)
+            Container(
+              padding: EdgeInsets.all(12),
+              margin: EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Color(0xFFF73D5C).withValues(alpha: 0.15),
+                    Color(0xFFF73D5C).withValues(alpha: 0.05),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(12),
+                border:
+                    Border.all(color: Color(0xFFF73D5C).withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.notification_important,
+                      color: Color(0xFFF73D5C), size: 24),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'You have $_unreadAlertsCount unread alert${_unreadAlertsCount > 1 ? 's' : ''}',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                            color: Color(0xFFF73D5C),
+                          ),
+                        ),
+                        Text(
+                          'Swipe right on alerts to mark as viewed',
+                          style: TextStyle(
+                              fontSize: 12, color: Colors.grey.shade700),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
           // Role indicator - only show when not listed as emergency contact yet
           if (_getContactCount() == 0)
             Container(
@@ -429,8 +791,8 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
               decoration: BoxDecoration(
                 color: const Color(0xFFF73D5C).withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
-                border:
-                    Border.all(color: const Color(0xFFF73D5C).withValues(alpha: 0.3)),
+                border: Border.all(
+                    color: const Color(0xFFF73D5C).withValues(alpha: 0.3)),
               ),
               child: Row(
                 children: [
@@ -562,101 +924,210 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
 
   Widget _buildAlertCard(
       Map<String, dynamic> alert, double screenWidth, double screenHeight) {
-    return Container(
-      margin: EdgeInsets.only(bottom: screenHeight * 0.015),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
-        border: Border.all(color: Colors.grey.shade200),
-      ),
-      child: ListTile(
-        leading: FutureBuilder<String?>(
-          future: _getUserProfilePhoto(alert['userId']),
-          builder: (context, snapshot) {
-            return CircleAvatar(
-              backgroundColor: alert['status'] == 'active'
-                  ? const Color(0xFFF73D5C).withValues(alpha: 0.15)
-                  : Colors.green.withValues(alpha: 0.15),
-              backgroundImage: snapshot.hasData && snapshot.data!.isNotEmpty
-                  ? NetworkImage(snapshot.data!)
-                  : null,
-              child: snapshot.hasData && snapshot.data!.isNotEmpty
-                  ? null
-                  : Icon(
-                      alert['status'] == 'active'
-                          ? Icons.warning
-                          : Icons.check_circle,
-                      color: alert['status'] == 'active'
-                          ? const Color(0xFFF73D5C)
-                          : Colors.green,
-                    ),
-            );
-          },
+    final isUnread =
+        alert['viewed_at'] == null && alert['status'] != 'resolved';
+
+    return Dismissible(
+      key: Key('alert_${alert['id']}'),
+      background: Container(
+        margin: EdgeInsets.only(bottom: screenHeight * 0.015),
+        decoration: BoxDecoration(
+          color: Colors.green,
+          borderRadius: BorderRadius.circular(16),
         ),
-        title: Text(alert['name'],
-            style: const TextStyle(fontWeight: FontWeight.w600)),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        alignment: Alignment.centerLeft,
+        padding: EdgeInsets.only(left: 20),
+        child: Icon(Icons.check_circle, color: Colors.white, size: 30),
+      ),
+      secondaryBackground: Container(
+        margin: EdgeInsets.only(bottom: screenHeight * 0.015),
+        decoration: BoxDecoration(
+          color: Colors.blue,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        alignment: Alignment.centerRight,
+        padding: EdgeInsets.only(right: 20),
+        child: Icon(Icons.info, color: Colors.white, size: 30),
+      ),
+      confirmDismiss: (direction) async {
+        if (direction == DismissDirection.startToEnd) {
+          // Mark as viewed
+          await _markAlertAsViewed(alert);
+          return false; // Don't dismiss the card
+        } else {
+          // Show details
+          _showAlertDetails(alert, screenWidth, screenHeight);
+          return false; // Don't dismiss the card
+        }
+      },
+      child: Container(
+        margin: EdgeInsets.only(bottom: screenHeight * 0.015),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
+          border: Border.all(
+            color: isUnread
+                ? Color(0xFFF73D5C).withValues(alpha: 0.3)
+                : Colors.grey.shade200,
+            width: isUnread ? 2 : 1,
+          ),
+        ),
+        child: Column(
           children: [
-            const SizedBox(height: 2),
-            Text(alert['location'],
-                style: TextStyle(
-                    fontSize: screenWidth * 0.035,
-                    color: Colors.grey.shade700)),
-            Text(_formatDate(alert['time']),
-                style: TextStyle(
-                    fontSize: screenWidth * 0.032,
-                    color: Colors.grey.shade500)),
-            if (alert['emergency_level'] != 'regular')
-              Container(
-                margin: const EdgeInsets.only(top: 4),
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            ListTile(
+              leading: Stack(
+                children: [
+                  FutureBuilder<String?>(
+                    future: _getUserProfilePhoto(alert['userId']),
+                    builder: (context, snapshot) {
+                      return CircleAvatar(
+                        backgroundColor: alert['status'] == 'active'
+                            ? const Color(0xFFF73D5C).withValues(alpha: 0.15)
+                            : Colors.green.withValues(alpha: 0.15),
+                        backgroundImage:
+                            snapshot.hasData && snapshot.data!.isNotEmpty
+                                ? NetworkImage(snapshot.data!)
+                                : null,
+                        child: snapshot.hasData && snapshot.data!.isNotEmpty
+                            ? null
+                            : Icon(
+                                alert['status'] == 'active'
+                                    ? Icons.warning
+                                    : Icons.check_circle,
+                                color: alert['status'] == 'active'
+                                    ? const Color(0xFFF73D5C)
+                                    : Colors.green,
+                              ),
+                      );
+                    },
+                  ),
+                  if (isUnread)
+                    Positioned(
+                      right: 0,
+                      top: 0,
+                      child: Container(
+                        width: 12,
+                        height: 12,
+                        decoration: BoxDecoration(
+                          color: Color(0xFFF73D5C),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              title: Text(alert['name'],
+                  style: TextStyle(
+                    fontWeight: isUnread ? FontWeight.w700 : FontWeight.w600,
+                  )),
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 2),
+                  Text(alert['location'],
+                      style: TextStyle(
+                          fontSize: screenWidth * 0.035,
+                          color: Colors.grey.shade700)),
+                  Text(_formatDate(alert['time']),
+                      style: TextStyle(
+                          fontSize: screenWidth * 0.032,
+                          color: Colors.grey.shade500)),
+                  if (alert['emergency_level'] != 'regular')
+                    Container(
+                      margin: const EdgeInsets.only(top: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: alert['emergency_level'] == 'critical'
+                            ? Colors.red.withValues(alpha: 0.1)
+                            : alert['emergency_level'] == 'cancelled'
+                                ? Colors.green.withValues(alpha: 0.1)
+                                : Colors.orange.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        alert['emergency_level'].toUpperCase(),
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: alert['emergency_level'] == 'critical'
+                              ? Colors.red
+                              : alert['emergency_level'] == 'cancelled'
+                                  ? Colors.green
+                                  : Colors.orange,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              trailing: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: alert['emergency_level'] == 'critical'
-                      ? Colors.red.withValues(alpha: 0.1)
-                      : Colors.orange.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
+                  color: alert['status'] == 'active'
+                      ? const Color(0xFFF73D5C).withValues(alpha: 0.1)
+                      : Colors.green.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
-                  alert['emergency_level'].toUpperCase(),
+                  alert['status'].toUpperCase(),
                   style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    color: alert['emergency_level'] == 'critical'
-                        ? Colors.red
-                        : Colors.orange,
+                    color: alert['status'] == 'active'
+                        ? const Color(0xFFF73D5C)
+                        : Colors.green,
+                    fontWeight: FontWeight.w600,
+                    fontSize: screenWidth * 0.032,
                   ),
+                ),
+              ),
+              onTap: () => _showAlertDetails(alert, screenWidth, screenHeight),
+            ),
+            // Quick action buttons
+            if (isUnread)
+              Container(
+                padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        icon: Icon(Icons.check, size: 16),
+                        label: Text('Mark as Viewed',
+                            style: TextStyle(fontSize: 12)),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.green,
+                          side: BorderSide(color: Colors.green),
+                          padding: EdgeInsets.symmetric(vertical: 8),
+                        ),
+                        onPressed: () => _markAlertAsViewed(alert),
+                      ),
+                    ),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        icon: Icon(Icons.info_outline, size: 16),
+                        label: Text('Details', style: TextStyle(fontSize: 12)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Color(0xFFF73D5C),
+                          foregroundColor: Colors.white,
+                          padding: EdgeInsets.symmetric(vertical: 8),
+                        ),
+                        onPressed: () =>
+                            _showAlertDetails(alert, screenWidth, screenHeight),
+                      ),
+                    ),
+                  ],
                 ),
               ),
           ],
         ),
-        trailing: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: alert['status'] == 'active'
-                ? const Color(0xFFF73D5C).withValues(alpha: 0.1)
-                : Colors.green.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Text(
-            alert['status'].toUpperCase(),
-            style: TextStyle(
-              color: alert['status'] == 'active'
-                  ? const Color(0xFFF73D5C)
-                  : Colors.green,
-              fontWeight: FontWeight.w600,
-              fontSize: screenWidth * 0.032,
-            ),
-          ),
-        ),
-        onTap: () => _showAlertDetails(alert, screenWidth, screenHeight),
       ),
     );
   }
@@ -685,8 +1156,8 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
               decoration: BoxDecoration(
                 color: const Color(0xFFF73D5C).withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
-                border:
-                    Border.all(color: const Color(0xFFF73D5C).withValues(alpha: 0.3)),
+                border: Border.all(
+                    color: const Color(0xFFF73D5C).withValues(alpha: 0.3)),
               ),
               child: Text(
                 'Total alerts: ${_sosAlerts.length}',
@@ -816,7 +1287,8 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
                                             ? Colors.red.withValues(alpha: 0.1)
                                             : alert['emergency_level'] ==
                                                     'checkin'
-                                                ? Colors.blue.withValues(alpha: 0.1)
+                                                ? Colors.blue
+                                                    .withValues(alpha: 0.1)
                                                 : Colors.orange
                                                     .withValues(alpha: 0.1),
                                         borderRadius: BorderRadius.circular(6),
@@ -844,7 +1316,8 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
                                   horizontal: 8, vertical: 4),
                               decoration: BoxDecoration(
                                 color: alert['status'] == 'active'
-                                    ? const Color(0xFFF73D5C).withValues(alpha: 0.1)
+                                    ? const Color(0xFFF73D5C)
+                                        .withValues(alpha: 0.1)
                                     : alert['status'] == 'resolved'
                                         ? Colors.green.withValues(alpha: 0.1)
                                         : Colors.grey.withValues(alpha: 0.1),
@@ -1216,7 +1689,8 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
             future: _getUserProfilePhoto(contact['user_id']),
             builder: (context, snapshot) {
               return CircleAvatar(
-                backgroundColor: const Color(0xFFF73D5C).withValues(alpha: 0.15),
+                backgroundColor:
+                    const Color(0xFFF73D5C).withValues(alpha: 0.15),
                 backgroundImage: snapshot.hasData && snapshot.data!.isNotEmpty
                     ? NetworkImage(snapshot.data!)
                     : null,

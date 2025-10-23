@@ -484,6 +484,9 @@ class EmergencyService extends ChangeNotifier {
     // Update database
     await _updateEmergencyStatus('CANCELLED');
 
+    // Notify parents about cancellation
+    await _logEmergencyToDatabase('CANCEL', null);
+
     notifyListeners();
     debugPrint('Emergency cancelled');
   }
@@ -494,30 +497,57 @@ class EmergencyService extends ChangeNotifier {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) return;
 
-      await _supabase.from('emergency_alerts').insert({
-        'id': _emergencyId,
-        'user_id': userId,
-        'alert_type': type,
-        'timestamp': _emergencyStartTime?.toIso8601String(),
-        'latitude': _lastKnownLocation?.latitude,
-        'longitude': _lastKnownLocation?.longitude,
-        'address': _lastKnownAddress,
-        'status': 'ACTIVE',
-        'battery_level': alertData?['battery'] ?? 100,
-        'device_data': alertData,
-      });
+      // First, insert into panic_alerts table to record the alert
+      debugPrint('📝 Inserting panic alert into database...');
+      final panicAlertResponse = await _supabase
+          .from('panic_alerts')
+          .insert({
+            'user_id': userId,
+            'alert_level': type,
+            'timestamp': _emergencyStartTime?.toIso8601String() ??
+                DateTime.now().toIso8601String(),
+            'latitude': _lastKnownLocation?.latitude,
+            'longitude': _lastKnownLocation?.longitude,
+            'location': _lastKnownAddress,
+            'battery_level': alertData?['battery'] ?? 100,
+            'acknowledged': false,
+          })
+          .select()
+          .single();
 
-      debugPrint('Emergency logged to database');
+      final panicAlertId = panicAlertResponse['id'] as int;
+      debugPrint('✅ Panic alert created with ID: $panicAlertId');
+      debugPrint('🔍 Panic alert ID type: ${panicAlertId.runtimeType}');
 
-      // Notify parent accounts
-      await _notifyParentAccounts(type);
+      // Notify parent accounts FIRST (before emergency_alerts insert that might fail)
+      await _notifyParentAccounts(type, panicAlertId);
+
+      // Also insert into emergency_alerts table (for compatibility)
+      // Note: This table may not exist, so we'll let it fail silently
+      try {
+        await _supabase.from('emergency_alerts').insert({
+          'id': _emergencyId,
+          'user_id': userId,
+          'alert_type': type,
+          'timestamp': _emergencyStartTime?.toIso8601String(),
+          'latitude': _lastKnownLocation?.latitude,
+          'longitude': _lastKnownLocation?.longitude,
+          'address': _lastKnownAddress,
+          'status': 'ACTIVE',
+          'battery_level': alertData?['battery'] ?? 100,
+          'device_data': alertData,
+        });
+        debugPrint('Emergency logged to database');
+      } catch (e) {
+        debugPrint('⚠️ Emergency_alerts table not available (expected): $e');
+      }
     } catch (e) {
       debugPrint('Error logging emergency: $e');
     }
   }
 
-  /// Notify parent accounts via Supabase Edge Function
-  Future<void> _notifyParentAccounts(String alertType) async {
+  /// Notify parent accounts via Postgres Function
+  Future<void> _notifyParentAccounts(String alertType, int panicAlertId) async {
     try {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) {
@@ -526,30 +556,23 @@ class EmergencyService extends ChangeNotifier {
       }
 
       debugPrint('🔔 Notifying parent accounts of $alertType alert...');
+      debugPrint('📋 Panic Alert ID: $panicAlertId');
 
-      // Call Supabase Edge Function to send FCM notifications
-      final response = await _supabase.functions.invoke(
-        'send-parent-alerts',
-        body: {
-          'alert': {
-            'id': _emergencyId,
-            'user_id': userId,
-            'alert_type': alertType,
-            'timestamp': _emergencyStartTime?.toIso8601String(),
-            'latitude': _lastKnownLocation?.latitude,
-            'longitude': _lastKnownLocation?.longitude,
-            'address': _lastKnownAddress,
-            'battery_level': 100, // You can get this from device if available
-            'status': 'ACTIVE',
-          }
-        },
+      // Call Postgres function to create parent notifications
+      debugPrint(
+          '🚀 Calling Postgres function: create_parent_notifications_for_alert_v6');
+      final response = await _supabase.rpc(
+        'create_parent_notifications_for_alert_v6',
+        params: {'p_panic_alert_id': panicAlertId},
       );
 
-      if (response.data != null && response.data['success'] == true) {
-        final sent = response.data['sent'] ?? 0;
-        debugPrint('✅ Parent notifications sent to $sent device(s)');
+      debugPrint('📬 Parent notification response: $response');
+
+      if (response != null && response['success'] == true) {
+        final parentCount = response['parent_count'] ?? 0;
+        debugPrint('✅ Successfully notified $parentCount parent(s)');
       } else {
-        debugPrint('⚠️ Parent notification response: ${response.data}');
+        debugPrint('⚠️ Parent notification may have failed: $response');
       }
     } catch (e) {
       debugPrint('❌ Error notifying parents: $e');

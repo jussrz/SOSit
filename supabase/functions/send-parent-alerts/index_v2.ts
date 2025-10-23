@@ -68,10 +68,6 @@ serve(async (req) => {
     }
 
     console.log('📩 Processing parent alert notification:', alert)
-    
-    // Extract panic_alert_id from request
-    const panicAlertId = alert.panic_alert_id
-    console.log('🆔 Panic Alert ID:', panicAlertId)
 
     // Create Supabase client with service role
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
@@ -206,7 +202,6 @@ serve(async (req) => {
           .insert({
             parent_user_id: parent.parent_user_id,
             child_user_id: alert.user_id,
-            panic_alert_id: panicAlertId,  // Link to panic_alerts table
             alert_type: alert.alert_type,
             notification_title: notification.title,
             notification_body: notification.body,
@@ -234,7 +229,7 @@ serve(async (req) => {
         results.push({
           parent: `${parent.parent_first_name} ${parent.parent_last_name}`,
           status: 'failed',
-          error: error instanceof Error ? error.message : 'Unknown error'
+          error: error.message
         })
       }
     }
@@ -257,7 +252,7 @@ serve(async (req) => {
     console.error('❌ Error in send-parent-alerts:', error)
     return new Response(
       JSON.stringify({ 
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: error.message,
         success: false
       }),
       { 
