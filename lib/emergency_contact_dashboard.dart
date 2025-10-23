@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'home_screen.dart';
 import 'services/parent_notification_service.dart';
 
@@ -2108,77 +2109,32 @@ class _EmergencyContactDashboardState extends State<EmergencyContactDashboard> {
   }
 
   Widget _buildMapWidget(double latitude, double longitude) {
-    // Using Google Maps Static API for a simple map display
-    return Stack(
-      children: [
-        Image.network(
-          'https://maps.googleapis.com/maps/api/staticmap?'
-          'center=$latitude,$longitude'
-          '&zoom=15'
-          '&size=600x400'
-          '&markers=color:red%7C$latitude,$longitude'
-          '&key=AIzaSyBmKbuujHem0Nk-TZdxUHbcEsLqwXeAwQs',
-          fit: BoxFit.cover,
-          width: double.infinity,
-          height: double.infinity,
-          errorBuilder: (context, error, stackTrace) {
-            return Container(
-              color: Colors.grey.shade200,
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.map, size: 48, color: Colors.grey.shade400),
-                    SizedBox(height: 8),
-                    Text('Map unavailable',
-                        style: TextStyle(color: Colors.grey.shade600)),
-                    SizedBox(height: 4),
-                    Text('Lat: ${latitude.toStringAsFixed(4)}',
-                        style: TextStyle(
-                            fontSize: 12, color: Colors.grey.shade500)),
-                    Text('Lng: ${longitude.toStringAsFixed(4)}',
-                        style: TextStyle(
-                            fontSize: 12, color: Colors.grey.shade500)),
-                  ],
-                ),
-              ),
-            );
-          },
-          loadingBuilder: (context, child, loadingProgress) {
-            if (loadingProgress == null) return child;
-            return Container(
-              color: Colors.grey.shade200,
-              child: Center(
-                child: CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFF73D5C)),
-                ),
-              ),
-            );
-          },
-        ),
-        Positioned(
-          bottom: 8,
-          right: 8,
-          child: Container(
-            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(4),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black26,
-                  blurRadius: 4,
-                  offset: Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Text(
-              '${latitude.toStringAsFixed(6)}, ${longitude.toStringAsFixed(6)}',
-              style: TextStyle(fontSize: 10, fontWeight: FontWeight.w500),
-            ),
+    // Using interactive Google Map
+    return GoogleMap(
+      initialCameraPosition: CameraPosition(
+        target: LatLng(latitude, longitude),
+        zoom: 16,
+      ),
+      markers: {
+        Marker(
+          markerId: MarkerId('alert_location'),
+          position: LatLng(latitude, longitude),
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+          infoWindow: InfoWindow(
+            title: 'Emergency Alert Location',
+            snippet:
+                '${latitude.toStringAsFixed(6)}, ${longitude.toStringAsFixed(6)}',
           ),
         ),
-      ],
+      },
+      mapType: MapType.normal,
+      myLocationButtonEnabled: true,
+      compassEnabled: true,
+      zoomControlsEnabled: true,
+      zoomGesturesEnabled: true,
+      scrollGesturesEnabled: true,
+      rotateGesturesEnabled: true,
+      tiltGesturesEnabled: true,
     );
   }
 }
