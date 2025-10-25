@@ -31,23 +31,79 @@ class _TanodDashboardState extends State<TanodDashboard> {
     _loadIncidents();
     _loadUserProfile();
     _loadIncidentHistory();
-    _listenForPanicButtonAlerts();
+    _listenForStationNotifications();
+    _startLocationTracking();
   }
 
-  Future<void> _listenForPanicButtonAlerts() async {
+  // Listen for station notifications instead of panic_alerts
+  Future<void> _listenForStationNotifications() async {
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) return;
+
     supabase
-        .channel('public:panic_alerts')
+        .channel('station_notifications:$userId')
         .onPostgresChanges(
             event: PostgresChangeEvent.insert,
             schema: 'public',
-            table: 'panic_alerts',
+            table: 'station_notifications',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'station_user_id',
+              value: userId,
+            ),
             callback: (payload) {
-              _handleNewPanicAlert(payload.newRecord);
+              _handleNewStationNotification(payload.newRecord);
             })
         .subscribe();
   }
 
-  void _handleNewPanicAlert(Map<String, dynamic> alert) {
+  // Start periodic location tracking (every 5 minutes)
+  Future<void> _startLocationTracking() async {
+    // Update location immediately
+    await _updateDeviceLocation();
+
+    // Then update every 5 minutes
+    Future.delayed(const Duration(minutes: 5), () {
+      if (mounted) {
+        _startLocationTracking();
+      }
+    });
+  }
+
+  // Update device location in database
+  Future<void> _updateDeviceLocation() async {
+    try {
+      final userId = supabase.auth.currentUser?.id;
+      if (userId == null) return;
+
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return;
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) return;
+      }
+
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      // Update location in database
+      await supabase.rpc('update_user_location', params: {
+        'p_user_id': userId,
+        'p_latitude': position.latitude,
+        'p_longitude': position.longitude,
+      });
+
+      debugPrint(
+          '📍 Location updated: ${position.latitude}, ${position.longitude}');
+    } catch (e) {
+      debugPrint('Error updating location: $e');
+    }
+  }
+
+  void _handleNewStationNotification(Map<String, dynamic> notification) {
     if (!mounted) return;
 
     // Play alert sound or vibration here
@@ -56,7 +112,7 @@ class _TanodDashboardState extends State<TanodDashboard> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => _buildPanicAlertDialog(alert),
+      builder: (context) => _buildStationNotificationDialog(notification),
     );
   }
 
@@ -90,21 +146,36 @@ class _TanodDashboardState extends State<TanodDashboard> {
     }
   }
 
-  Widget _buildPanicAlertDialog(Map<String, dynamic> alert) {
+  Widget _buildStationNotificationDialog(Map<String, dynamic> notification) {
     final screenWidth = MediaQuery.of(context).size.width;
 
-    // Extract user information from the alert
-    final userName = alert['user_name'] ?? 'Unknown User';
-    final location = alert['location'] ?? 'Location unavailable';
+    // Extract notification data from JSONB field
+    final notificationData =
+        notification['notification_data'] as Map<String, dynamic>? ?? {};
+    final childName = notificationData['child_name'] ?? 'Unknown User';
+    final address = notificationData['address'] ?? 'Location unavailable';
+    final distanceKm = (notification['distance_km'] is num)
+        ? (notification['distance_km'] as num).toStringAsFixed(2)
+        : 'N/A';
     final timestamp =
-        DateTime.tryParse(alert['created_at'] ?? '') ?? DateTime.now();
+        DateTime.tryParse(notification['created_at'] ?? '') ?? DateTime.now();
     final formattedTime =
         '${timestamp.day}/${timestamp.month}/${timestamp.year} - ${timestamp.hour}:${timestamp.minute.toString().padLeft(2, '0')} ${timestamp.hour >= 12 ? 'PM' : 'AM'}';
-    final contactInfo = alert['emergency_contact'] ?? 'Not provided';
-    final contactNumber = alert['contact_number'] ?? 'Not provided';
-    final latitude = alert['latitude'] as double?;
-    final longitude = alert['longitude'] as double?;
-    final userId = alert['user_id'];
+    final latitude = notificationData['latitude'] as double?;
+    final longitude = notificationData['longitude'] as double?;
+    final userId = notification['child_user_id'];
+    final alertType = notification['alert_type'] ?? 'REGULAR';
+
+    // Set title and color based on alert type
+    String title = 'Emergency Alert Received';
+    Color alertColor = const Color(0xFFF73D5C);
+    if (alertType == 'CRITICAL') {
+      title = '🚨 CRITICAL EMERGENCY';
+      alertColor = Colors.red;
+    } else if (alertType == 'CANCEL') {
+      title = '✅ Emergency Cancelled';
+      alertColor = Colors.green;
+    }
 
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -114,9 +185,9 @@ class _TanodDashboardState extends State<TanodDashboard> {
         children: [
           Container(
             padding: const EdgeInsets.all(16),
-            decoration: const BoxDecoration(
-              color: Color(0xFFF73D5C),
-              borderRadius: BorderRadius.only(
+            decoration: BoxDecoration(
+              color: alertColor,
+              borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(20),
                 topRight: Radius.circular(20),
               ),
@@ -124,9 +195,9 @@ class _TanodDashboardState extends State<TanodDashboard> {
             width: double.infinity,
             child: Column(
               children: [
-                const Text(
-                  'Emergency Alert Received',
-                  style: TextStyle(
+                Text(
+                  title,
+                  style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
                     fontSize: 18,
@@ -155,9 +226,9 @@ class _TanodDashboardState extends State<TanodDashboard> {
                     height: screenWidth * 0.3,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: const Color(0xFFF73D5C),
+                      color: alertColor,
                       border: Border.all(
-                        color: const Color(0xFFFFCDD2),
+                        color: alertColor.withOpacity(0.3),
                         width: 8,
                       ),
                     ),
@@ -181,42 +252,68 @@ class _TanodDashboardState extends State<TanodDashboard> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                _buildInfoRow('Name:', userName),
-                _buildInfoRow('Location:', location),
+                _buildInfoRow('Name:', childName),
+                _buildInfoRow('Location:', address),
+                _buildInfoRow('Distance:', '$distanceKm km away'),
                 _buildInfoRow('Timestamp:', formattedTime),
-                _buildInfoRow('Emergency Contact:', contactInfo),
-                _buildInfoRow('Contact:', contactNumber),
               ],
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFF73D5C),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(30),
+          if (alertType != 'CANCEL')
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: alertColor,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(30),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                ),
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  _trackUser(
-                      userId, latitude, longitude, userName, contactNumber);
-                },
-                child: const Text(
-                  'Track User',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    _trackUser(userId, latitude, longitude, childName, 'N/A');
+                  },
+                  child: const Text(
+                    'Track User',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
+          if (alertType == 'CANCEL')
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(30),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                  },
+                  child: const Text(
+                    'Close',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );

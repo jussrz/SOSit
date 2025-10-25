@@ -574,9 +574,41 @@ class EmergencyService extends ChangeNotifier {
       } else {
         debugPrint('⚠️ Parent notification may have failed: $response');
       }
+
+      // Call Postgres function to create station notifications (police/tanod)
+      debugPrint('📍 Notifying nearby stations (police & tanod) within 5km...');
+      await _notifyNearbyStations(panicAlertId);
     } catch (e) {
       debugPrint('❌ Error notifying parents: $e');
       // Don't fail the entire emergency flow if parent notification fails
+    }
+  }
+
+  // Notify nearby police and tanod stations within 5km radius
+  Future<void> _notifyNearbyStations(int panicAlertId) async {
+    try {
+      debugPrint(
+          '🚀 Calling Postgres function: create_station_notifications_for_alert');
+      final response = await _supabase.rpc(
+        'create_station_notifications_for_alert',
+        params: {'p_panic_alert_id': panicAlertId},
+      );
+
+      debugPrint('📬 Station notification response: $response');
+
+      if (response != null && response['success'] == true) {
+        final policeCount = response['police_notified'] ?? 0;
+        final tanodCount = response['tanod_notified'] ?? 0;
+        final totalNotified = response['total_notified'] ?? 0;
+        debugPrint(
+            '✅ Notified $policeCount police and $tanodCount tanod stations (Total: $totalNotified within 5km)');
+      } else {
+        final error = response?['error'] ?? 'Unknown error';
+        debugPrint('⚠️ Station notification response: $error');
+      }
+    } catch (e) {
+      debugPrint('❌ Error notifying stations: $e');
+      // Don't fail the entire emergency flow if station notification fails
     }
   }
 
