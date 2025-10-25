@@ -31,14 +31,48 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
     _loadIncidents();
     _loadUserProfile();
     _loadIncidentHistory();
+    _loadUnreadStationNotifications(); // Load existing unread notifications
     _listenForStationNotifications();
     _startLocationTracking();
+  }
+
+  // Load existing unread notifications on dashboard open
+  Future<void> _loadUnreadStationNotifications() async {
+    try {
+      final userId = supabase.auth.currentUser?.id;
+      if (userId == null) return;
+
+      debugPrint('📋 Loading unread station notifications for user: $userId');
+
+      final response = await supabase
+          .from('station_notifications')
+          .select()
+          .eq('station_user_id', userId)
+          .eq('read', false)
+          .order('created_at', ascending: false);
+
+      debugPrint('📬 Found ${response.length} unread notifications');
+
+      if (response.isNotEmpty) {
+        // Show the most recent unread notification
+        final mostRecent = response.first;
+        debugPrint('🚨 Showing most recent notification: ${mostRecent['id']}');
+        _handleNewStationNotification(mostRecent);
+      }
+    } catch (e) {
+      debugPrint('❌ Error loading unread notifications: $e');
+    }
   }
 
   // Listen for station notifications instead of panic_alerts
   Future<void> _listenForStationNotifications() async {
     final userId = supabase.auth.currentUser?.id;
-    if (userId == null) return;
+    if (userId == null) {
+      debugPrint('❌ No user ID found for station notifications subscription');
+      return;
+    }
+
+    debugPrint('🔔 Setting up Realtime subscription for user: $userId');
 
     supabase
         .channel('station_notifications:$userId')
@@ -52,9 +86,16 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
               value: userId,
             ),
             callback: (payload) {
+              debugPrint('🔥 NEW REALTIME NOTIFICATION RECEIVED!');
+              debugPrint('📦 Payload: $payload');
               _handleNewStationNotification(payload.newRecord);
             })
-        .subscribe();
+        .subscribe((status, error) {
+      debugPrint('📡 Subscription status: $status');
+      if (error != null) {
+        debugPrint('❌ Subscription error: $error');
+      }
+    });
   }
 
   // Start periodic location tracking (every 5 minutes)
