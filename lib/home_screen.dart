@@ -5,6 +5,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:provider/provider.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'dart:async';
 import 'services/ble_service.dart';
 import 'services/emergency_service.dart';
 import 'main.dart'; // Import for EmergencyAlertHandler
@@ -22,6 +24,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   String _gpsSignal = 'Getting signal...';
+  String _cellularSignal = 'no signal';
   String _location = 'Getting location...';
   GoogleMapController? _mapController;
   bool _isLoadingProfile = false;
@@ -31,6 +34,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
   final _birthdateController = TextEditingController();
+
+  // Connectivity for cellular detection
+  final Connectivity _connectivity = Connectivity();
+  StreamSubscription<ConnectivityResult>? _connectivitySubscription;
 
   // List to store all emergency contacts
   List<Map<String, dynamic>> _emergencyContacts = [];
@@ -52,6 +59,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _ensureBLECallbackSetup();
     });
+
+    // Initialize connectivity listener for cellular state
+    _connectivity.checkConnectivity().then((result) {
+      _updateCellularFromConnectivity(result);
+    }).catchError((e) {
+      debugPrint('Connectivity check failed: $e');
+    });
+
+    _connectivitySubscription = _connectivity.onConnectivityChanged
+        .listen(_updateCellularFromConnectivity);
   }
 
   void _ensureBLECallbackSetup() {
@@ -87,6 +104,29 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
+  void _updateCellularFromConnectivity(ConnectivityResult result) {
+    // Simple pragmatic mapping: if device is on mobile data -> strong,
+    // if no connection -> no signal, wifi -> strong (cellular not required).
+    // For finer-grained signal strength, integrate a platform-specific plugin.
+    String state;
+    if (result == ConnectivityResult.mobile) {
+      state = 'Strong';
+    } else if (result == ConnectivityResult.none) {
+      state = 'no signal';
+    } else if (result == ConnectivityResult.wifi) {
+      // On WiFi we assume the device has connectivity; show 'strong' so app doesn't report 'no signal'.
+      state = 'Strong';
+    } else {
+      state = 'No Signal';
+    }
+
+    if (mounted) {
+      setState(() => _cellularSignal = state);
+    } else {
+      _cellularSignal = state;
+    }
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
@@ -100,6 +140,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _emergencyContactsChannel?.unsubscribe();
+    _connectivitySubscription?.cancel();
     _emailController.dispose();
     _phoneController.dispose();
     _birthdateController.dispose();
@@ -430,6 +471,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       case 'disabled':
       case 'no permission':
       case 'permission denied':
+        return Colors.red;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  Color _getCellularColor(String signal) {
+    switch (signal.toLowerCase()) {
+      case 'strong':
+        return Colors.green;
+      case 'Weak':
+        return Colors.orange;
+      case 'No Signal':
         return Colors.red;
       default:
         return Colors.grey;
@@ -858,6 +912,21 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ),
               SizedBox(height: screenHeight * 0.005),
             ],
+
+            // Cellular Status
+            Row(
+              children: [
+                Text('Cellular: ',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w500,
+                        fontSize: screenWidth * 0.035)),
+                Text(_cellularSignal,
+                    style: TextStyle(
+                        color: _getCellularColor(_cellularSignal),
+                        fontSize: screenWidth * 0.035)),
+              ],
+            ),
+            SizedBox(height: screenHeight * 0.005),
 
             // GPS Status
             Row(
