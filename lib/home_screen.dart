@@ -13,7 +13,7 @@ import 'main.dart'; // Import for EmergencyAlertHandler
 import 'settings_page.dart';
 import 'group_page.dart';
 import 'emergency_contact_dashboard.dart'; // Import for switch view
-import 'package:flutter/services.dart'; // <-- Add this import for rootBundle
+import 'package:flutter/services.dart'; // <-- Add this import for rootBundle and MethodChannel
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -26,6 +26,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   String _gpsSignal = 'Getting signal...';
   String _cellularSignal = 'no signal';
   String _location = 'Getting location...';
+  bool _hasSim = true;
+  static const MethodChannel _simChannel = MethodChannel('sosit/sim');
   GoogleMapController? _mapController;
   bool _isLoadingProfile = false;
   bool _isCardExpanded = false;
@@ -62,13 +64,31 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     // Initialize connectivity listener for cellular state
     _connectivity.checkConnectivity().then((result) {
-      _updateCellularFromConnectivity(result);
+      _checkSimPresence().then((_) => _updateCellularFromConnectivity(result));
     }).catchError((e) {
       debugPrint('Connectivity check failed: $e');
     });
 
     _connectivitySubscription = _connectivity.onConnectivityChanged
-        .listen(_updateCellularFromConnectivity);
+        .listen((result) => _checkSimPresence().then((_) => _updateCellularFromConnectivity(result)));
+  }
+
+  Future<void> _checkSimPresence() async {
+    try {
+      final hasSim = await _simChannel.invokeMethod<bool>('hasSim');
+      if (hasSim != null) {
+        if (mounted) {
+          setState(() => _hasSim = hasSim);
+        } else {
+          _hasSim = hasSim;
+        }
+      }
+    } catch (e) {
+      // If platform channel fails (e.g., iOS or not implemented), assume SIM present
+      debugPrint('SIM check failed or not available: $e');
+      if (mounted) setState(() => _hasSim = true);
+      else _hasSim = true;
+    }
   }
 
   void _ensureBLECallbackSetup() {
@@ -105,19 +125,24 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   void _updateCellularFromConnectivity(ConnectivityResult result) {
-    // Simple pragmatic mapping: if device is on mobile data -> strong,
-    // if no connection -> no signal, wifi -> strong (cellular not required).
-    // For finer-grained signal strength, integrate a platform-specific plugin.
+    // Map cellular status based on SIM presence and connectivity:
+    // - If no SIM -> No Signal
+    // - If SIM present and mobile data active -> Strong
+    // - If SIM present and on WiFi (but no mobile) -> Weak (SIM exists but not using cellular)
+    // - If SIM present and no connectivity -> No Signal
     String state;
-    if (result == ConnectivityResult.mobile) {
-      state = 'Strong';
-    } else if (result == ConnectivityResult.none) {
-      state = 'no signal';
-    } else if (result == ConnectivityResult.wifi) {
-      // On WiFi we assume the device has connectivity; show 'strong' so app doesn't report 'no signal'.
-      state = 'Strong';
-    } else {
+    if (!_hasSim) {
       state = 'No Signal';
+    } else {
+      if (result == ConnectivityResult.mobile) {
+        state = 'Strong';
+      } else if (result == ConnectivityResult.wifi) {
+        state = 'Weak';
+      } else if (result == ConnectivityResult.none) {
+        state = 'No Signal';
+      } else {
+        state = 'No Signal';
+      }
     }
 
     if (mounted) {
@@ -481,9 +506,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     switch (signal.toLowerCase()) {
       case 'strong':
         return Colors.green;
-      case 'Weak':
+      case 'weak':
         return Colors.orange;
-      case 'No Signal':
+      case 'no signal':
         return Colors.red;
       default:
         return Colors.grey;
