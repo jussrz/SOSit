@@ -69,8 +69,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       debugPrint('Connectivity check failed: $e');
     });
 
-    _connectivitySubscription = _connectivity.onConnectivityChanged
-        .listen((result) => _checkSimPresence().then((_) => _updateCellularFromConnectivity(result)));
+    _connectivitySubscription = _connectivity.onConnectivityChanged.listen(
+        (result) => _checkSimPresence()
+            .then((_) => _updateCellularFromConnectivity(result)));
   }
 
   Future<void> _checkSimPresence() async {
@@ -86,8 +87,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     } catch (e) {
       // If platform channel fails (e.g., iOS or not implemented), assume SIM present
       debugPrint('SIM check failed or not available: $e');
-      if (mounted) setState(() => _hasSim = true);
-      else _hasSim = true;
+      if (mounted)
+        setState(() => _hasSim = true);
+      else
+        _hasSim = true;
     }
   }
 
