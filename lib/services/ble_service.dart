@@ -684,62 +684,62 @@ class BLEService extends ChangeNotifier {
 
   // Map button press patterns to alert types
   String _mapButtonPressToAlertType(String rawAlert) {
-    // Handle ESP32 alert strings (convert to uppercase for case-insensitive matching)
-    switch (rawAlert) {
-      // ESP32 sends "regular" for 2 presses (double press)
-      case 'REGULAR':
-        return 'REGULAR';
+    // Robust mapping: normalize, strip non-alphanumerics, handle numeric codes
+    final normalized = rawAlert.toUpperCase().trim();
+    final cleaned = normalized.replaceAll(RegExp(r'[^A-Z0-9_]'), '');
 
-      // ESP32 sends "critical" for long press (3+ seconds)
-      case 'CRITICAL':
-        return 'CRITICAL';
-
-      // ESP32 sends "cancel" for 3 presses (triple press)
-      case 'CANCEL':
-        return 'CANCEL';
-
-      // Handle other possible variations for compatibility
-      case 'DOUBLE':
-      case 'TWO':
-      case '2':
-      case 'DOUBLE_PRESS':
-      case 'DOUBLE_CLICK':
-        return 'REGULAR';
-
-      case 'TRIPLE':
-      case 'THREE':
-      case '3':
-      case 'TRIPLE_PRESS':
-      case 'TRIPLE_CLICK':
-        return 'CANCEL';
-
-      case 'LONG':
-      case 'LONG_PRESS':
-      case 'HOLD':
-      case 'EMERGENCY':
-      case 'LONG_HOLD':
-        return 'CRITICAL';
-
-      // Single press = Check-in (if needed)
-      case 'SINGLE':
-      case 'ONE':
-      case '1':
-      case 'CHECKIN':
-      case 'CHECK':
-      case 'SINGLE_PRESS':
-      case 'SINGLE_CLICK':
-        return 'CHECKIN';
-
-      // Special cases
-      case 'NONE':
-        return 'NONE';
-
-      // Default case - return as-is if already uppercase
-      default:
-        print(
-            '🔥 BLE: No specific mapping found, returning as-is: "$rawAlert"');
-        return rawAlert;
+    // If the device is sending plain digits (like "1", "2", "3"), map them explicitly
+    if (RegExp(r'^\d+$').hasMatch(cleaned)) {
+      final intVal = int.tryParse(cleaned) ?? 0;
+      switch (intVal) {
+        case 1:
+          return 'CHECKIN';
+        case 2:
+          return 'REGULAR';
+        case 3:
+          return 'CANCEL';
+        default:
+          // Any unexpected numeric code treat conservatively as REGULAR
+          _addDebugLog(
+              'BLE: Unrecognized numeric alert "${rawAlert}" - defaulting to REGULAR');
+          return 'REGULAR';
+      }
     }
+
+    // Prefer clear keyword matches (use contains to be tolerant of extra characters)
+    if (cleaned.contains('CRIT') ||
+        cleaned.contains('LONG') ||
+        cleaned.contains('HOLD') ||
+        cleaned.contains('EMERGENCY')) {
+      return 'CRITICAL';
+    }
+
+    if (cleaned.contains('CANCEL') ||
+        cleaned.contains('TRIPLE') ||
+        cleaned.contains('3')) {
+      return 'CANCEL';
+    }
+
+    if (cleaned.contains('REGULAR') ||
+        cleaned.contains('DOUBLE') ||
+        cleaned.contains('TWO') ||
+        cleaned.contains('2')) {
+      return 'REGULAR';
+    }
+
+    if (cleaned.contains('CHECKIN') ||
+        cleaned.contains('SINGLE') ||
+        cleaned.contains('ONE') ||
+        cleaned.contains('1')) {
+      return 'CHECKIN';
+    }
+
+    if (cleaned == 'NONE' || normalized == 'NONE') return 'NONE';
+
+    // If we couldn't map confidently, default to REGULAR to avoid sending CRITICAL on ambiguous input
+    _addDebugLog(
+        '🔥 BLE: No mapping for "${rawAlert}" (cleaned: "${cleaned}"). Defaulting to REGULAR');
+    return 'REGULAR';
   } // Handle battery updates from ESP32
 
   void _handleBatteryUpdate(List<int> data) {
