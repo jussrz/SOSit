@@ -374,8 +374,19 @@ class EmergencyService extends ChangeNotifier {
   }
 
   Future<void> _handleRegularAlert(Map<String, dynamic>? alertData) async {
+    // If an emergency is already active, we still want to record the new REGULAR
+    // press and notify parent accounts (unless the active emergency is already REGULAR).
     if (_isEmergencyActive) {
-      debugPrint('🚫 Emergency already active, ignoring regular alert');
+      if (_activeEmergencyType == 'REGULAR') {
+        debugPrint('🚫 Emergency already active and REGULAR - ignoring duplicate regular alert');
+        return;
+      }
+
+      debugPrint('ℹ️ Emergency already active (type: $_activeEmergencyType). Recording additional REGULAR alert and notifying parents');
+      // Record an additional REGULAR panic alert entry and notify parents/stations
+      await _logEmergencyToDatabase('REGULAR', alertData);
+      // Also send a local push to inform the device owner (not upgrading/downgrading current emergency)
+      await _sendPushNotification('REGULAR', 'Additional regular alert recorded. Location: $_lastKnownAddress');
       return;
     }
 
