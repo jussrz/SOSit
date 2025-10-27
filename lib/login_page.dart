@@ -7,6 +7,7 @@ import 'home_screen.dart'; // Import HomeScreen directly
 import 'admin_home_screen.dart';
 import 'police_dashboard.dart';
 import 'tanod_dashboard.dart';
+import 'services/parent_notification_service.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -133,6 +134,13 @@ class _LoginPageState extends State<LoginPage> {
             MaterialPageRoute(builder: (_) => const TanodDashboard()),
           );
         } else {
+          // Initialize parent notification service for regular/parent users
+          try {
+            await ParentNotificationService().initialize();
+            debugPrint('ParentNotificationService initialized after login');
+          } catch (e) {
+            debugPrint('Error initializing ParentNotificationService after login: $e');
+          }
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (_) => const HomeScreen()),
@@ -140,6 +148,13 @@ class _LoginPageState extends State<LoginPage> {
         }
       } else {
         // Default fallback
+        // Initialize parent notification service for default users
+        try {
+          await ParentNotificationService().initialize();
+          debugPrint('ParentNotificationService initialized after login (fallback)');
+        } catch (e) {
+          debugPrint('Error initializing ParentNotificationService after login (fallback): $e');
+        }
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (_) => const HomeScreen()),
