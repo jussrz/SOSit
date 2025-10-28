@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'dart:async';
 import 'tanod_settings_page.dart';
 
 class TanodDashboard extends StatefulWidget {
@@ -23,10 +25,18 @@ class _TanodDashboardState extends State<TanodDashboard> {
 
   // Tracking state
   Marker? _userLocationMarker;
+  // Realtime subscription for tracking a specific user
+  RealtimeChannel? _userLocationChannel;
+  StreamSubscription? _userLocationStreamSub;
+
+  // Local notifications
+  final FlutterLocalNotificationsPlugin _localNotificationsPlugin =
+      FlutterLocalNotificationsPlugin();
 
   @override
   void initState() {
     super.initState();
+    _initializeLocalNotifications();
     _getCurrentLocation();
     _loadIncidents();
     _loadUserProfile();
@@ -34,6 +44,39 @@ class _TanodDashboardState extends State<TanodDashboard> {
     _loadUnreadStationNotifications(); // Load existing unread notifications
     _listenForStationNotifications();
     _startLocationTracking();
+  }
+
+  Future<void> _initializeLocalNotifications() async {
+    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const iosSettings = DarwinInitializationSettings();
+    const initSettings = InitializationSettings(
+      android: androidSettings,
+      iOS: iosSettings,
+    );
+
+    await _localNotificationsPlugin.initialize(initSettings,
+        onDidReceiveNotificationResponse: (response) {
+      debugPrint('TanodDashboard: notification tapped with payload: ${response.payload}');
+    });
+
+    final androidPlugin = _localNotificationsPlugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
+
+    if (androidPlugin != null) {
+      await androidPlugin.createNotificationChannel(const AndroidNotificationChannel(
+        'station_critical',
+        'Station Critical Alerts',
+        description: 'Critical alerts for police/tanod stations',
+        importance: Importance.max,
+      ));
+
+      await androidPlugin.createNotificationChannel(const AndroidNotificationChannel(
+        'station_regular',
+        'Station Alerts',
+        description: 'Regular alerts for police/tanod stations',
+        importance: Importance.high,
+      ));
+    }
   }
 
   // Load existing unread notifications on dashboard open
@@ -155,6 +198,43 @@ class _TanodDashboardState extends State<TanodDashboard> {
       barrierDismissible: false,
       builder: (context) => _buildStationNotificationDialog(notification),
     );
+    _showLocalNotificationForStation(notification);
+  }
+
+  Future<void> _showLocalNotificationForStation(Map<String, dynamic> notification) async {
+    try {
+      final notificationData =
+          notification['notification_data'] as Map<String, dynamic>? ?? {};
+      final title = notification['alert_type'] == 'CRITICAL'
+          ? '🚨 CRITICAL Emergency'
+          : notification['alert_type'] == 'CANCEL'
+              ? '✅ Alert Cancelled'
+              : '⚠️ Emergency Alert';
+      final body = notificationData['address'] ?? 'Location updating...';
+
+      final androidDetails = AndroidNotificationDetails(
+        notification['alert_type'] == 'CRITICAL' ? 'station_critical' : 'station_regular',
+        'Station Alerts',
+        channelDescription: 'Station alert notifications',
+        importance: notification['alert_type'] == 'CRITICAL' ? Importance.max : Importance.high,
+        priority: notification['alert_type'] == 'CRITICAL' ? Priority.max : Priority.high,
+        fullScreenIntent: notification['alert_type'] == 'CRITICAL',
+        category: AndroidNotificationCategory.alarm,
+        visibility: NotificationVisibility.public,
+      );
+
+      final iosDetails = DarwinNotificationDetails(interruptionLevel: InterruptionLevel.critical);
+
+      await _localNotificationsPlugin.show(
+        DateTime.now().millisecondsSinceEpoch ~/ 1000,
+        title,
+        body,
+        NotificationDetails(android: androidDetails, iOS: iosDetails),
+        payload: notification['id']?.toString(),
+      );
+    } catch (e) {
+      debugPrint('Error showing local station notification: $e');
+    }
   }
 
   Future<void> _getCurrentLocation() async {
@@ -426,8 +506,99 @@ class _TanodDashboardState extends State<TanodDashboard> {
       );
     }
 
+    // Start realtime subscription to track updates for this user
+  _subscribeToUserLocation(userId.toString());
+
     // Show bottom sheet with tracking info
     _showTrackingBottomSheet(userName, contactNumber);
+  }
+
+  void _subscribeToUserLocation(String? userId) {
+    // Unsubscribe existing
+    try {
+      if (_userLocationChannel != null) {
+        _userLocationChannel?.unsubscribe();
+        _userLocationChannel = null;
+      }
+    } catch (_) {}
+
+    if (userId == null) return;
+
+    _userLocationChannel = supabase
+        .channel('user_locations:$userId')
+        .onPostgresChanges(
+            event: PostgresChangeEvent.update,
+            schema: 'public',
+            table: 'user_locations',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'user_id',
+              value: userId,
+            ),
+            callback: (payload) {
+              final rec = payload.newRecord as Map<String, dynamic>?;
+              if (rec != null) {
+                final lat = (rec['latitude'] as num?)?.toDouble();
+                final lng = (rec['longitude'] as num?)?.toDouble();
+                if (lat != null && lng != null) {
+                  setState(() {
+                    _userLocationMarker = Marker(
+                      markerId: MarkerId('user_${userId}'),
+                      position: LatLng(lat, lng),
+                      icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+                      infoWindow: InfoWindow(title: 'Tracking: $userId'),
+                    );
+                    _markers = {..._markers, _userLocationMarker!};
+                  });
+                  _mapController?.animateCamera(CameraUpdate.newLatLng(LatLng(lat, lng)));
+                }
+              }
+            })
+        .subscribe();
+
+    // Fallback to panic_alerts updates
+    supabase
+        .channel('panic_alerts:$userId')
+        .onPostgresChanges(
+            event: PostgresChangeEvent.update,
+            schema: 'public',
+            table: 'panic_alerts',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'user_id',
+              value: userId,
+            ),
+            callback: (payload) {
+              final rec = payload.newRecord as Map<String, dynamic>?;
+              if (rec != null) {
+                final lat = (rec['latitude'] as num?)?.toDouble();
+                final lng = (rec['longitude'] as num?)?.toDouble();
+                final alertType = rec['alert_level'] ?? rec['alert_type'];
+                final ts = rec['timestamp'] ?? rec['created_at'];
+                if (lat != null && lng != null) {
+                  setState(() {
+                    _userLocationMarker = Marker(
+                      markerId: MarkerId('user_${userId}'),
+                      position: LatLng(lat, lng),
+                      icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+                      infoWindow: InfoWindow(title: 'Alert: $alertType', snippet: ts?.toString()),
+                    );
+                    _markers = {..._markers, _userLocationMarker!};
+                  });
+                  _mapController?.animateCamera(CameraUpdate.newLatLng(LatLng(lat, lng)));
+                }
+              }
+            })
+        .subscribe();
+  }
+
+  void _unsubscribeFromUserLocation() {
+    try {
+      if (_userLocationChannel != null) {
+        _userLocationChannel?.unsubscribe();
+        _userLocationChannel = null;
+      }
+    } catch (_) {}
   }
 
   Future<void> _loadUserProfile() async {
@@ -1375,5 +1546,11 @@ class _TanodDashboardState extends State<TanodDashboard> {
     } else {
       return 'Just now';
     }
+  }
+
+  @override
+  void dispose() {
+    _unsubscribeFromUserLocation();
+    super.dispose();
   }
 }
