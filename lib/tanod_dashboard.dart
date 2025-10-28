@@ -3,6 +3,8 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import 'tanod_settings_page.dart';
 
@@ -32,6 +34,12 @@ class _TanodDashboardState extends State<TanodDashboard> {
   // Local notifications
   final FlutterLocalNotificationsPlugin _localNotificationsPlugin =
       FlutterLocalNotificationsPlugin();
+      
+  // Connectivity & offline polling
+  final Connectivity _connectivity = Connectivity();
+  StreamSubscription<ConnectivityResult>? _connectivitySubscription;
+  DateTime? _lastFetchTime;
+  static const String _lastFetchKey = 'tanod_last_notification_fetch';
 
   @override
   void initState() {
@@ -41,13 +49,16 @@ class _TanodDashboardState extends State<TanodDashboard> {
     _loadIncidents();
     _loadUserProfile();
     _loadIncidentHistory();
+    _loadLastFetchTime();
     _loadUnreadStationNotifications(); // Load existing unread notifications
     _listenForStationNotifications();
     _startLocationTracking();
+    _setupConnectivityListener(); // Setup offline recovery
   }
 
   Future<void> _initializeLocalNotifications() async {
-    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidSettings =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
     const iosSettings = DarwinInitializationSettings();
     const initSettings = InitializationSettings(
       android: androidSettings,
@@ -56,21 +67,25 @@ class _TanodDashboardState extends State<TanodDashboard> {
 
     await _localNotificationsPlugin.initialize(initSettings,
         onDidReceiveNotificationResponse: (response) {
-      debugPrint('TanodDashboard: notification tapped with payload: ${response.payload}');
+      debugPrint(
+          'TanodDashboard: notification tapped with payload: ${response.payload}');
     });
 
-    final androidPlugin = _localNotificationsPlugin.resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>();
+    final androidPlugin =
+        _localNotificationsPlugin.resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>();
 
     if (androidPlugin != null) {
-      await androidPlugin.createNotificationChannel(const AndroidNotificationChannel(
+      await androidPlugin
+          .createNotificationChannel(const AndroidNotificationChannel(
         'station_critical',
         'Station Critical Alerts',
         description: 'Critical alerts for police/tanod stations',
         importance: Importance.max,
       ));
 
-      await androidPlugin.createNotificationChannel(const AndroidNotificationChannel(
+      await androidPlugin
+          .createNotificationChannel(const AndroidNotificationChannel(
         'station_regular',
         'Station Alerts',
         description: 'Regular alerts for police/tanod stations',
@@ -104,6 +119,94 @@ class _TanodDashboardState extends State<TanodDashboard> {
       }
     } catch (e) {
       debugPrint('❌ Error loading unread notifications: $e');
+    }
+  }
+  
+  /// Setup connectivity listener to fetch missed notifications when back online
+  void _setupConnectivityListener() {
+    _connectivity.checkConnectivity().then((result) {
+      if (result != ConnectivityResult.none) {
+        _fetchMissedNotifications();
+      }
+    }).catchError((e) {
+      debugPrint('Connectivity check failed: $e');
+    });
+
+    _connectivitySubscription =
+        _connectivity.onConnectivityChanged.listen((result) {
+      if (result != ConnectivityResult.none) {
+        debugPrint('🌐 Connection restored - fetching missed station notifications');
+        _fetchMissedNotifications();
+      }
+    });
+  }
+  
+  /// Load last fetch timestamp from storage
+  Future<void> _loadLastFetchTime() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final timestamp = prefs.getString(_lastFetchKey);
+      if (timestamp != null) {
+        _lastFetchTime = DateTime.parse(timestamp);
+        debugPrint('📅 Last notification fetch: $_lastFetchTime');
+      } else {
+        _lastFetchTime = DateTime.now().subtract(const Duration(hours: 24));
+      }
+    } catch (e) {
+      debugPrint('Error loading last fetch time: $e');
+      _lastFetchTime = DateTime.now().subtract(const Duration(hours: 24));
+    }
+  }
+  
+  /// Save last fetch timestamp
+  Future<void> _saveLastFetchTime(DateTime time) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_lastFetchKey, time.toIso8601String());
+      _lastFetchTime = time;
+    } catch (e) {
+      debugPrint('Error saving last fetch time: $e');
+    }
+  }
+  
+  /// Fetch notifications that were missed while offline
+  Future<void> _fetchMissedNotifications() async {
+    try {
+      final userId = supabase.auth.currentUser?.id;
+      if (userId == null) {
+        debugPrint('Cannot fetch notifications: No user logged in');
+        return;
+      }
+
+      final fetchTime = DateTime.now();
+      
+      debugPrint('🔄 Fetching missed station notifications since $_lastFetchTime');
+
+      final response = await supabase
+          .from('station_notifications')
+          .select()
+          .eq('station_user_id', userId)
+          .gte('created_at', _lastFetchTime!.toIso8601String())
+          .order('created_at', ascending: false);
+
+      final List<dynamic> notifications = response as List<dynamic>;
+      
+      if (notifications.isEmpty) {
+        debugPrint('✅ No missed station notifications');
+      } else {
+        debugPrint('📬 Found ${notifications.length} missed station notification(s)');
+        
+        for (final notification in notifications.reversed) {
+          final notificationMap = notification as Map<String, dynamic>;
+          _handleNewStationNotification(notificationMap);
+          await Future.delayed(const Duration(milliseconds: 500));
+        }
+      }
+      
+      await _saveLastFetchTime(fetchTime);
+      
+    } catch (e) {
+      debugPrint('❌ Error fetching missed station notifications: $e');
     }
   }
 
@@ -201,7 +304,8 @@ class _TanodDashboardState extends State<TanodDashboard> {
     _showLocalNotificationForStation(notification);
   }
 
-  Future<void> _showLocalNotificationForStation(Map<String, dynamic> notification) async {
+  Future<void> _showLocalNotificationForStation(
+      Map<String, dynamic> notification) async {
     try {
       final notificationData =
           notification['notification_data'] as Map<String, dynamic>? ?? {};
@@ -213,17 +317,24 @@ class _TanodDashboardState extends State<TanodDashboard> {
       final body = notificationData['address'] ?? 'Location updating...';
 
       final androidDetails = AndroidNotificationDetails(
-        notification['alert_type'] == 'CRITICAL' ? 'station_critical' : 'station_regular',
+        notification['alert_type'] == 'CRITICAL'
+            ? 'station_critical'
+            : 'station_regular',
         'Station Alerts',
         channelDescription: 'Station alert notifications',
-        importance: notification['alert_type'] == 'CRITICAL' ? Importance.max : Importance.high,
-        priority: notification['alert_type'] == 'CRITICAL' ? Priority.max : Priority.high,
+        importance: notification['alert_type'] == 'CRITICAL'
+            ? Importance.max
+            : Importance.high,
+        priority: notification['alert_type'] == 'CRITICAL'
+            ? Priority.max
+            : Priority.high,
         fullScreenIntent: notification['alert_type'] == 'CRITICAL',
         category: AndroidNotificationCategory.alarm,
         visibility: NotificationVisibility.public,
       );
 
-      final iosDetails = DarwinNotificationDetails(interruptionLevel: InterruptionLevel.critical);
+      final iosDetails = DarwinNotificationDetails(
+          interruptionLevel: InterruptionLevel.critical);
 
       await _localNotificationsPlugin.show(
         DateTime.now().millisecondsSinceEpoch ~/ 1000,
@@ -507,7 +618,7 @@ class _TanodDashboardState extends State<TanodDashboard> {
     }
 
     // Start realtime subscription to track updates for this user
-  _subscribeToUserLocation(userId.toString());
+    _subscribeToUserLocation(userId.toString());
 
     // Show bottom sheet with tracking info
     _showTrackingBottomSheet(userName, contactNumber);
@@ -545,12 +656,14 @@ class _TanodDashboardState extends State<TanodDashboard> {
                     _userLocationMarker = Marker(
                       markerId: MarkerId('user_${userId}'),
                       position: LatLng(lat, lng),
-                      icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+                      icon: BitmapDescriptor.defaultMarkerWithHue(
+                          BitmapDescriptor.hueRed),
                       infoWindow: InfoWindow(title: 'Tracking: $userId'),
                     );
                     _markers = {..._markers, _userLocationMarker!};
                   });
-                  _mapController?.animateCamera(CameraUpdate.newLatLng(LatLng(lat, lng)));
+                  _mapController
+                      ?.animateCamera(CameraUpdate.newLatLng(LatLng(lat, lng)));
                 }
               }
             })
@@ -580,12 +693,15 @@ class _TanodDashboardState extends State<TanodDashboard> {
                     _userLocationMarker = Marker(
                       markerId: MarkerId('user_${userId}'),
                       position: LatLng(lat, lng),
-                      icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-                      infoWindow: InfoWindow(title: 'Alert: $alertType', snippet: ts?.toString()),
+                      icon: BitmapDescriptor.defaultMarkerWithHue(
+                          BitmapDescriptor.hueRed),
+                      infoWindow: InfoWindow(
+                          title: 'Alert: $alertType', snippet: ts?.toString()),
                     );
                     _markers = {..._markers, _userLocationMarker!};
                   });
-                  _mapController?.animateCamera(CameraUpdate.newLatLng(LatLng(lat, lng)));
+                  _mapController
+                      ?.animateCamera(CameraUpdate.newLatLng(LatLng(lat, lng)));
                 }
               }
             })
@@ -1551,6 +1667,7 @@ class _TanodDashboardState extends State<TanodDashboard> {
   @override
   void dispose() {
     _unsubscribeFromUserLocation();
+    _connectivitySubscription?.cancel();
     super.dispose();
   }
 }

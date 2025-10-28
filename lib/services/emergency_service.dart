@@ -5,6 +5,9 @@ import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:vibration/vibration.dart';
@@ -31,6 +34,11 @@ class EmergencyService extends ChangeNotifier {
   DateTime? _lastAlertTime;
   String? _lastAlertType;
 
+  // Offline queueing & connectivity
+  final Connectivity _connectivity = Connectivity();
+  StreamSubscription<ConnectivityResult>? _connectivitySubscription;
+  static const String _pendingAlertsKey = 'pending_panic_alerts';
+
   // UI callback for showing popups
   Function(String alertType)? _showPopupCallback;
 
@@ -56,6 +64,91 @@ class EmergencyService extends ChangeNotifier {
     await _initializeNotifications();
     await _loadEmergencyContacts();
     await _getCurrentLocation();
+    // Start connectivity listener to flush queued alerts when back online
+    _setupConnectivityListener();
+  }
+
+  void _setupConnectivityListener() {
+    // Check initial connectivity and subscribe to changes
+    _connectivity.checkConnectivity().then((result) {
+      if (result != ConnectivityResult.none) {
+        _flushPendingAlerts();
+      }
+    }).catchError((e) {
+      debugPrint('Connectivity check failed: $e');
+    });
+
+    _connectivitySubscription =
+        _connectivity.onConnectivityChanged.listen((result) {
+      if (result != ConnectivityResult.none) {
+        debugPrint('Connectivity restored - attempting to flush pending alerts');
+        _flushPendingAlerts();
+      }
+    });
+  }
+
+  Future<bool> _isOnline() async {
+    try {
+      final result = await _connectivity.checkConnectivity();
+      return result != ConnectivityResult.none;
+    } catch (e) {
+      return true; // assume online if check fails to avoid blocking
+    }
+  }
+
+  Future<void> _enqueuePendingAlert(String type, Map<String, dynamic>? alertData) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final List<String> list = prefs.getStringList(_pendingAlertsKey) ?? [];
+
+      final entry = jsonEncode({
+        'type': type,
+        'alertData': alertData ?? {},
+        'queued_at': DateTime.now().toIso8601String(),
+      });
+
+      list.add(entry);
+      await prefs.setStringList(_pendingAlertsKey, list);
+      debugPrint('🔁 Queued alert for later delivery: $entry');
+
+      // Inform user/app that alert has been queued
+      await _showSimpleAlert('Offline', 'No internet — alert will be sent when connection is restored');
+    } catch (e) {
+      debugPrint('❌ Failed to enqueue pending alert: $e');
+    }
+  }
+
+  Future<void> _flushPendingAlerts() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final List<String> list = prefs.getStringList(_pendingAlertsKey) ?? [];
+      if (list.isEmpty) return;
+
+      debugPrint('🔁 Flushing ${list.length} pending alert(s)...');
+
+      final List<String> remaining = [];
+
+      for (final encoded in list) {
+        try {
+          final Map<String, dynamic> entry = jsonDecode(encoded);
+          final String type = entry['type'] ?? 'REGULAR';
+          final Map<String, dynamic>? alertData = (entry['alertData'] is Map) ? Map<String, dynamic>.from(entry['alertData']) : {};
+
+          // Attempt to log to database and notify parents/stations
+          await _logEmergencyToDatabase(type, alertData);
+          debugPrint('✅ Flushed queued alert of type $type');
+        } catch (e) {
+          debugPrint('❌ Failed to flush queued alert: $e');
+          // keep item for retry later
+          remaining.add(encoded);
+        }
+      }
+
+      // Save remaining (if any)
+      await prefs.setStringList(_pendingAlertsKey, remaining);
+    } catch (e) {
+      debugPrint('❌ Error flushing pending alerts: $e');
+    }
   }
 
   // Initialize local notifications
@@ -511,6 +604,14 @@ class EmergencyService extends ChangeNotifier {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) return;
 
+      // If offline, enqueue the alert and return
+      final online = await _isOnline();
+      if (!online) {
+        debugPrint('🔌 Offline detected - enqueueing alert of type $type');
+        await _enqueuePendingAlert(type, alertData);
+        return;
+      }
+
       // First, insert into panic_alerts table to record the alert
       debugPrint('📝 Inserting panic alert into database...');
       final panicAlertResponse = await _supabase
@@ -557,6 +658,12 @@ class EmergencyService extends ChangeNotifier {
       }
     } catch (e) {
       debugPrint('Error logging emergency: $e');
+      // Try to enqueue the alert for later delivery
+      try {
+        await _enqueuePendingAlert(type, alertData);
+      } catch (inner) {
+        debugPrint('❌ Failed to enqueue alert after logging error: $inner');
+      }
     }
   }
 
@@ -852,6 +959,8 @@ Please call me or emergency services immediately.
   @override
   void dispose() {
     _emergencyTimer?.cancel();
+    _regularAlertTimer?.cancel();
+    _connectivitySubscription?.cancel();
     super.dispose();
   }
 }
