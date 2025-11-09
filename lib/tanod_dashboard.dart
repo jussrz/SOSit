@@ -7,6 +7,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'dart:async';
 import 'tanod_settings_page.dart';
 
@@ -383,9 +384,6 @@ class _TanodDashboardState extends State<TanodDashboard> {
   }
 
   Widget _buildStationNotificationDialog(Map<String, dynamic> notification) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final screenHeight = MediaQuery.of(context).size.height;
-
     // Extract notification data from JSONB field
     final notificationData =
         notification['notification_data'] as Map<String, dynamic>? ?? {};
@@ -417,225 +415,248 @@ class _TanodDashboardState extends State<TanodDashboard> {
     final userId = notification['child_user_id'];
     final alertType = notification['alert_type'] ?? 'REGULAR';
 
-    // Set title and color based on alert type
-    String title = 'Emergency Alert Received';
-    Color alertColor = const Color(0xFFF73D5C);
-    if (alertType == 'CRITICAL') {
-      title = '🚨 CRITICAL EMERGENCY';
-      alertColor = Colors.red;
-    } else if (alertType == 'CANCEL') {
-      title = '✅ Emergency Cancelled';
+    // Set icon, title and color based on alert type
+    IconData alertIcon;
+    String title;
+    Color alertColor;
+
+    if (alertType == 'CANCEL') {
+      alertIcon = Icons.check_circle;
+      title = 'Emergency Cancelled';
       alertColor = Colors.green;
+    } else if (alertType == 'CRITICAL') {
+      alertIcon = Icons.emergency;
+      title = 'CRITICAL EMERGENCY';
+      alertColor = const Color(0xFFDC143C); // Crimson
+    } else {
+      alertIcon = Icons.warning_amber;
+      title = 'Emergency Alert';
+      alertColor = Colors.orange;
     }
 
-    return AlertDialog(
+    return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      contentPadding: EdgeInsets.zero,
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: alertColor,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(20),
-                topRight: Radius.circular(20),
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 400),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Icon Header
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: alertColor.withOpacity(0.1),
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(20),
+                  topRight: Radius.circular(20),
+                ),
               ),
-            ),
-            width: double.infinity,
-            child: Column(
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 18,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  'Panic Button Pressed',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // SOS Button visual
-                Center(
-                  child: Container(
-                    width: screenWidth * 0.3,
-                    height: screenWidth * 0.3,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: alertColor,
-                      border: Border.all(
-                        color: alertColor.withOpacity(0.3),
-                        width: 8,
-                      ),
-                    ),
-                    child: const Center(
-                      child: Text(
-                        'SOS',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 24,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                const Center(
-                  child: Text(
-                    'A user has activated the panic button.',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-                  ),
-                ),
-                const SizedBox(height: 20),
-
-                // User Information
-                _buildInfoRow('User Name:', childName),
-                _buildInfoRow('Parent/Guardian:', parentNames),
-                _buildInfoRow('Date:', formattedDate),
-                _buildInfoRow('Time:', formattedTime),
-                _buildInfoRow('Location:', address),
-                _buildInfoRow('Distance:', '$distanceKm km away'),
-
-                // Map preview if coordinates available
-                if (latitude != null && longitude != null) ...[
-                  const SizedBox(height: 16),
+              child: Column(
+                children: [
                   Container(
-                    height: screenHeight * 0.25,
+                    padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.grey.shade300),
+                      color: alertColor,
+                      shape: BoxShape.circle,
                     ),
-                    clipBehavior: Clip.antiAlias,
-                    child: GoogleMap(
-                      initialCameraPosition: CameraPosition(
-                        target: LatLng(latitude, longitude),
-                        zoom: 15,
-                      ),
-                      markers: {
-                        Marker(
-                          markerId: MarkerId('alert_location'),
-                          position: LatLng(latitude, longitude),
-                          icon: BitmapDescriptor.defaultMarkerWithHue(
-                            alertType == 'CRITICAL'
-                                ? BitmapDescriptor.hueRed
-                                : BitmapDescriptor.hueOrange,
-                          ),
-                          infoWindow: InfoWindow(
-                            title: childName,
-                            snippet: address,
-                          ),
-                        ),
-                      },
-                      myLocationButtonEnabled: false,
-                      zoomControlsEnabled: false,
-                      mapToolbarEnabled: false,
+                    child: Icon(
+                      alertIcon,
+                      color: Colors.white,
+                      size: 48,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: alertColor,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Panic Button Pressed',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey,
                     ),
                   ),
                 ],
-              ],
+              ),
             ),
-          ),
-          if (alertType != 'CANCEL')
+
+            // Details Card
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: alertColor,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(30),
+              padding: const EdgeInsets.all(20),
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  children: [
+                    _buildDetailRow(Icons.person, 'Name', childName),
+                    const SizedBox(height: 12),
+                    _buildDetailRow(Icons.calendar_today, 'Date', formattedDate),
+                    const SizedBox(height: 12),
+                    _buildDetailRow(Icons.access_time, 'Time', formattedTime),
+                    const SizedBox(height: 12),
+                    _buildDetailRow(Icons.location_on, 'Location', address),
+                    const SizedBox(height: 12),
+                    _buildDetailRow(Icons.social_distance, 'Distance', '$distanceKm km away'),
+                  ],
+                ),
+              ),
+            ),
+
+            // Action Buttons
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Column(
+                children: [
+                  if (alertType != 'CANCEL') ...[
+                    // View Map Button
+                    if (latitude != null && longitude != null)
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: () {
+                            Navigator.of(context).pop();
+                            _openMapToLocation(latitude, longitude, childName);
+                          },
+                          icon: const Icon(Icons.map, color: Colors.white),
+                          label: const Text(
+                            'View Map',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: alertColor,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(30),
+                            ),
+                          ),
+                        ),
+                      ),
+                    const SizedBox(height: 12),
+                    // Track User Button
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          _trackUser(userId, latitude, longitude, childName, 'N/A');
+                        },
+                        icon: const Icon(Icons.navigation, color: Colors.white),
+                        label: const Text(
+                          'Track User',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF4A90E2),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(30),
+                          ),
+                        ),
+                      ),
                     ),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                    _trackUser(userId, latitude, longitude, childName, 'N/A');
-                  },
-                  child: const Text(
-                    'Track User',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
+                  ],
+                ],
+              ),
+            ),
+
+            // Dismiss Button
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: Text(
+                  'Dismiss',
+                  style: TextStyle(
+                    color: Colors.grey[600],
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ),
             ),
-          if (alertType == 'CANCEL')
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(30),
-                    ),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                  },
-                  child: const Text(
-                    'Close',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildInfoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 120,
-            child: Text(
-              label,
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
+  Widget _buildDetailRow(IconData icon, String label, String value) {
+    return Row(
+      children: [
+        Icon(icon, size: 20, color: Colors.grey[700]),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[600],
+                  fontWeight: FontWeight.w500,
+                ),
               ),
-            ),
+              const SizedBox(height: 2),
+              Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: Colors.black87,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
           ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(fontSize: 14),
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
+  }
+
+  void _openMapToLocation(double latitude, double longitude, String childName) async {
+    // Create Google Maps URL
+    final url = Uri.parse(
+      'https://www.google.com/maps/search/?api=1&query=$latitude,$longitude'
+    );
+
+    try {
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url, mode: LaunchMode.externalApplication);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Could not open maps'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error opening maps: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   void _trackUser(String? userId, double? latitude, double? longitude,
