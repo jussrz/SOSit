@@ -393,19 +393,23 @@ class _TanodDashboardState extends State<TanodDashboard> {
     final distanceKm = (notification['distance_km'] is num)
         ? (notification['distance_km'] as num).toStringAsFixed(2)
         : 'N/A';
-    
+
     // Parse timestamp from notification_data (REAL-TIME timestamp from panic_alerts)
     final timestampStr = notificationData['timestamp'] as String?;
-    final timestamp = timestampStr != null 
+    final timestamp = timestampStr != null
         ? DateTime.tryParse(timestampStr) ?? DateTime.now()
         : DateTime.now();
-    
+
     // Format date and time separately
-    final formattedDate = '${timestamp.day}/${timestamp.month}/${timestamp.year}';
-    final hour = timestamp.hour > 12 ? timestamp.hour - 12 : (timestamp.hour == 0 ? 12 : timestamp.hour);
+    final formattedDate =
+        '${timestamp.day}/${timestamp.month}/${timestamp.year}';
+    final hour = timestamp.hour > 12
+        ? timestamp.hour - 12
+        : (timestamp.hour == 0 ? 12 : timestamp.hour);
     final period = timestamp.hour >= 12 ? 'PM' : 'AM';
-    final formattedTime = '$hour:${timestamp.minute.toString().padLeft(2, '0')} $period';
-    
+    final formattedTime =
+        '$hour:${timestamp.minute.toString().padLeft(2, '0')} $period';
+
     final latitude = notificationData['latitude'] as double?;
     final longitude = notificationData['longitude'] as double?;
     final userId = notification['child_user_id'];
@@ -497,7 +501,7 @@ class _TanodDashboardState extends State<TanodDashboard> {
                   ),
                 ),
                 const SizedBox(height: 20),
-                
+
                 // User Information
                 _buildInfoRow('User Name:', childName),
                 _buildInfoRow('Parent/Guardian:', parentNames),
@@ -505,7 +509,7 @@ class _TanodDashboardState extends State<TanodDashboard> {
                 _buildInfoRow('Time:', formattedTime),
                 _buildInfoRow('Location:', address),
                 _buildInfoRow('Distance:', '$distanceKm km away'),
-                
+
                 // Map preview if coordinates available
                 if (latitude != null && longitude != null) ...[
                   const SizedBox(height: 16),
@@ -526,8 +530,8 @@ class _TanodDashboardState extends State<TanodDashboard> {
                           markerId: MarkerId('alert_location'),
                           position: LatLng(latitude, longitude),
                           icon: BitmapDescriptor.defaultMarkerWithHue(
-                            alertType == 'CRITICAL' 
-                                ? BitmapDescriptor.hueRed 
+                            alertType == 'CRITICAL'
+                                ? BitmapDescriptor.hueRed
                                 : BitmapDescriptor.hueOrange,
                           ),
                           infoWindow: InfoWindow(
