@@ -34,7 +34,7 @@ class _TanodDashboardState extends State<TanodDashboard> {
   // Local notifications
   final FlutterLocalNotificationsPlugin _localNotificationsPlugin =
       FlutterLocalNotificationsPlugin();
-      
+
   // Connectivity & offline polling
   final Connectivity _connectivity = Connectivity();
   StreamSubscription<ConnectivityResult>? _connectivitySubscription;
@@ -121,7 +121,7 @@ class _TanodDashboardState extends State<TanodDashboard> {
       debugPrint('❌ Error loading unread notifications: $e');
     }
   }
-  
+
   /// Setup connectivity listener to fetch missed notifications when back online
   void _setupConnectivityListener() {
     _connectivity.checkConnectivity().then((result) {
@@ -135,12 +135,13 @@ class _TanodDashboardState extends State<TanodDashboard> {
     _connectivitySubscription =
         _connectivity.onConnectivityChanged.listen((result) {
       if (result != ConnectivityResult.none) {
-        debugPrint('🌐 Connection restored - fetching missed station notifications');
+        debugPrint(
+            '🌐 Connection restored - fetching missed station notifications');
         _fetchMissedNotifications();
       }
     });
   }
-  
+
   /// Load last fetch timestamp from storage
   Future<void> _loadLastFetchTime() async {
     try {
@@ -157,7 +158,7 @@ class _TanodDashboardState extends State<TanodDashboard> {
       _lastFetchTime = DateTime.now().subtract(const Duration(hours: 24));
     }
   }
-  
+
   /// Save last fetch timestamp
   Future<void> _saveLastFetchTime(DateTime time) async {
     try {
@@ -168,7 +169,7 @@ class _TanodDashboardState extends State<TanodDashboard> {
       debugPrint('Error saving last fetch time: $e');
     }
   }
-  
+
   /// Fetch notifications that were missed while offline
   Future<void> _fetchMissedNotifications() async {
     try {
@@ -179,8 +180,9 @@ class _TanodDashboardState extends State<TanodDashboard> {
       }
 
       final fetchTime = DateTime.now();
-      
-      debugPrint('🔄 Fetching missed station notifications since $_lastFetchTime');
+
+      debugPrint(
+          '🔄 Fetching missed station notifications since $_lastFetchTime');
 
       final response = await supabase
           .from('station_notifications')
@@ -190,21 +192,21 @@ class _TanodDashboardState extends State<TanodDashboard> {
           .order('created_at', ascending: false);
 
       final List<dynamic> notifications = response as List<dynamic>;
-      
+
       if (notifications.isEmpty) {
         debugPrint('✅ No missed station notifications');
       } else {
-        debugPrint('📬 Found ${notifications.length} missed station notification(s)');
-        
+        debugPrint(
+            '📬 Found ${notifications.length} missed station notification(s)');
+
         for (final notification in notifications.reversed) {
           final notificationMap = notification as Map<String, dynamic>;
           _handleNewStationNotification(notificationMap);
           await Future.delayed(const Duration(milliseconds: 500));
         }
       }
-      
+
       await _saveLastFetchTime(fetchTime);
-      
     } catch (e) {
       debugPrint('❌ Error fetching missed station notifications: $e');
     }
@@ -380,19 +382,30 @@ class _TanodDashboardState extends State<TanodDashboard> {
 
   Widget _buildStationNotificationDialog(Map<String, dynamic> notification) {
     final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
 
     // Extract notification data from JSONB field
     final notificationData =
         notification['notification_data'] as Map<String, dynamic>? ?? {};
     final childName = notificationData['child_name'] ?? 'Unknown User';
+    final parentNames = notificationData['parent_names'] ?? 'No parents listed';
     final address = notificationData['address'] ?? 'Location unavailable';
     final distanceKm = (notification['distance_km'] is num)
         ? (notification['distance_km'] as num).toStringAsFixed(2)
         : 'N/A';
-    final timestamp =
-        DateTime.tryParse(notification['created_at'] ?? '') ?? DateTime.now();
-    final formattedTime =
-        '${timestamp.day}/${timestamp.month}/${timestamp.year} - ${timestamp.hour}:${timestamp.minute.toString().padLeft(2, '0')} ${timestamp.hour >= 12 ? 'PM' : 'AM'}';
+    
+    // Parse timestamp from notification_data (REAL-TIME timestamp from panic_alerts)
+    final timestampStr = notificationData['timestamp'] as String?;
+    final timestamp = timestampStr != null 
+        ? DateTime.tryParse(timestampStr) ?? DateTime.now()
+        : DateTime.now();
+    
+    // Format date and time separately
+    final formattedDate = '${timestamp.day}/${timestamp.month}/${timestamp.year}';
+    final hour = timestamp.hour > 12 ? timestamp.hour - 12 : (timestamp.hour == 0 ? 12 : timestamp.hour);
+    final period = timestamp.hour >= 12 ? 'PM' : 'AM';
+    final formattedTime = '$hour:${timestamp.minute.toString().padLeft(2, '0')} $period';
+    
     final latitude = notificationData['latitude'] as double?;
     final longitude = notificationData['longitude'] as double?;
     final userId = notification['child_user_id'];
@@ -480,14 +493,55 @@ class _TanodDashboardState extends State<TanodDashboard> {
                 const Center(
                   child: Text(
                     'A user has activated the panic button.',
-                    style: TextStyle(fontSize: 14),
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
                   ),
                 ),
-                const SizedBox(height: 16),
-                _buildInfoRow('Name:', childName),
+                const SizedBox(height: 20),
+                
+                // User Information
+                _buildInfoRow('User Name:', childName),
+                _buildInfoRow('Parent/Guardian:', parentNames),
+                _buildInfoRow('Date:', formattedDate),
+                _buildInfoRow('Time:', formattedTime),
                 _buildInfoRow('Location:', address),
                 _buildInfoRow('Distance:', '$distanceKm km away'),
-                _buildInfoRow('Timestamp:', formattedTime),
+                
+                // Map preview if coordinates available
+                if (latitude != null && longitude != null) ...[
+                  const SizedBox(height: 16),
+                  Container(
+                    height: screenHeight * 0.25,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: GoogleMap(
+                      initialCameraPosition: CameraPosition(
+                        target: LatLng(latitude, longitude),
+                        zoom: 15,
+                      ),
+                      markers: {
+                        Marker(
+                          markerId: MarkerId('alert_location'),
+                          position: LatLng(latitude, longitude),
+                          icon: BitmapDescriptor.defaultMarkerWithHue(
+                            alertType == 'CRITICAL' 
+                                ? BitmapDescriptor.hueRed 
+                                : BitmapDescriptor.hueOrange,
+                          ),
+                          infoWindow: InfoWindow(
+                            title: childName,
+                            snippet: address,
+                          ),
+                        ),
+                      },
+                      myLocationButtonEnabled: false,
+                      zoomControlsEnabled: false,
+                      mapToolbarEnabled: false,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -654,7 +708,7 @@ class _TanodDashboardState extends State<TanodDashboard> {
                 if (lat != null && lng != null) {
                   setState(() {
                     _userLocationMarker = Marker(
-                      markerId: MarkerId('user_${userId}'),
+                      markerId: MarkerId('user_$userId'),
                       position: LatLng(lat, lng),
                       icon: BitmapDescriptor.defaultMarkerWithHue(
                           BitmapDescriptor.hueRed),
@@ -691,7 +745,7 @@ class _TanodDashboardState extends State<TanodDashboard> {
                 if (lat != null && lng != null) {
                   setState(() {
                     _userLocationMarker = Marker(
-                      markerId: MarkerId('user_${userId}'),
+                      markerId: MarkerId('user_$userId'),
                       position: LatLng(lat, lng),
                       icon: BitmapDescriptor.defaultMarkerWithHue(
                           BitmapDescriptor.hueRed),

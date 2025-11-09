@@ -87,10 +87,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     } catch (e) {
       // If platform channel fails (e.g., iOS or not implemented), assume SIM present
       debugPrint('SIM check failed or not available: $e');
-      if (mounted)
+      if (mounted) {
         setState(() => _hasSim = true);
-      else
+      } else {
         _hasSim = true;
+      }
     }
   }
 

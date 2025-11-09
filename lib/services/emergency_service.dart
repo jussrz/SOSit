@@ -81,7 +81,8 @@ class EmergencyService extends ChangeNotifier {
     _connectivitySubscription =
         _connectivity.onConnectivityChanged.listen((result) {
       if (result != ConnectivityResult.none) {
-        debugPrint('Connectivity restored - attempting to flush pending alerts');
+        debugPrint(
+            'Connectivity restored - attempting to flush pending alerts');
         _flushPendingAlerts();
       }
     });
@@ -96,7 +97,8 @@ class EmergencyService extends ChangeNotifier {
     }
   }
 
-  Future<void> _enqueuePendingAlert(String type, Map<String, dynamic>? alertData) async {
+  Future<void> _enqueuePendingAlert(
+      String type, Map<String, dynamic>? alertData) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final List<String> list = prefs.getStringList(_pendingAlertsKey) ?? [];
@@ -112,7 +114,8 @@ class EmergencyService extends ChangeNotifier {
       debugPrint('🔁 Queued alert for later delivery: $entry');
 
       // Inform user/app that alert has been queued
-      await _showSimpleAlert('Offline', 'No internet — alert will be sent when connection is restored');
+      await _showSimpleAlert('Offline',
+          'No internet — alert will be sent when connection is restored');
     } catch (e) {
       debugPrint('❌ Failed to enqueue pending alert: $e');
     }
@@ -132,7 +135,9 @@ class EmergencyService extends ChangeNotifier {
         try {
           final Map<String, dynamic> entry = jsonDecode(encoded);
           final String type = entry['type'] ?? 'REGULAR';
-          final Map<String, dynamic>? alertData = (entry['alertData'] is Map) ? Map<String, dynamic>.from(entry['alertData']) : {};
+          final Map<String, dynamic> alertData = (entry['alertData'] is Map)
+              ? Map<String, dynamic>.from(entry['alertData'])
+              : {};
 
           // Attempt to log to database and notify parents/stations
           await _logEmergencyToDatabase(type, alertData);

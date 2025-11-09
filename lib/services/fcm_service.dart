@@ -41,9 +41,10 @@ class FCMService {
         if (token != null) {
           _currentToken = token;
           await _saveFCMToken(token);
-          debugPrint('✅ FCM token registered: ${token.substring(0, 20)}...');
+          final preview = token.length > 20 ? token.substring(0, 20) : token;
+          debugPrint('FCM token registered: ${preview}...');
         } else {
-          debugPrint('⚠️ Failed to get FCM token');
+          debugPrint('No FCM token available');
         }
 
         // Listen for token refresh

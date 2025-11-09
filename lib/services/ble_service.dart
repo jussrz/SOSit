@@ -701,7 +701,7 @@ class BLEService extends ChangeNotifier {
         default:
           // Any unexpected numeric code treat conservatively as REGULAR
           _addDebugLog(
-              'BLE: Unrecognized numeric alert "${rawAlert}" - defaulting to REGULAR');
+              'BLE: Unrecognized numeric alert "$rawAlert" - defaulting to REGULAR');
           return 'REGULAR';
       }
     }
@@ -738,7 +738,7 @@ class BLEService extends ChangeNotifier {
 
     // If we couldn't map confidently, default to REGULAR to avoid sending CRITICAL on ambiguous input
     _addDebugLog(
-        '🔥 BLE: No mapping for "${rawAlert}" (cleaned: "${cleaned}"). Defaulting to REGULAR');
+        '🔥 BLE: No mapping for "$rawAlert" (cleaned: "$cleaned"). Defaulting to REGULAR');
     return 'REGULAR';
   } // Handle battery updates from ESP32
 
