@@ -8,6 +8,7 @@ import 'package:geocoding/geocoding.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+import 'dart:math';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:vibration/vibration.dart';
@@ -735,6 +736,151 @@ class EmergencyService extends ChangeNotifier {
     } catch (e) {
       debugPrint('❌ Error notifying stations: $e');
       // Don't fail the entire emergency flow if station notification fails
+    }
+
+    // Try calling a Supabase Edge Function (service-role) to create
+    // station_notifications server-side. This bypasses RLS and is the
+    // recommended way to ensure station rows are created and realtime
+    // dashboards receive the notifications.
+    try {
+      debugPrint('🚀 Invoking Edge Function: send-station-alerts');
+      final fnResp =
+          await _supabase.functions.invoke('send-station-alerts', body: {
+        'panic_alert_id': panicAlertId,
+      });
+
+      debugPrint('📬 Edge Function response: ${fnResp.data}');
+    } catch (e) {
+      debugPrint('❌ Edge Function invocation failed: $e');
+    }
+
+    // Client-side fallback (will fail if RLS prevents inserts). Kept for
+    // environments where inserts are allowed from the client.
+    try {
+      await _ensureStationNotificationsExist(panicAlertId);
+    } catch (e) {
+      debugPrint(
+          '❌ Error running client fallback station notification inserts: $e');
+    }
+  }
+
+  /// Compute distance between two lat/lng points (Haversine) in kilometers
+  double _distanceKm(double lat1, double lon1, double lat2, double lon2) {
+    const double earthRadiusKm = 6371.0;
+    double dLat = _deg2rad(lat2 - lat1);
+    double dLon = _deg2rad(lon2 - lon1);
+    double a = (sin(dLat / 2) * sin(dLat / 2)) +
+        cos(_deg2rad(lat1)) *
+            cos(_deg2rad(lat2)) *
+            (sin(dLon / 2) * sin(dLon / 2));
+    double c = 2 * atan2(sqrt(a), sqrt(1 - a));
+    return earthRadiusKm * c;
+  }
+
+  double _deg2rad(double deg) => deg * (pi / 180.0);
+
+  /// Fallback: ensure station_notifications rows exist for nearby station users.
+  /// Some DB RPCs may not create the expected rows (or may only return counts).
+  /// This helper will fetch the panic alert details, find nearby users with
+  /// role 'police' or 'tanod' (using their current_latitude/current_longitude)
+  /// and insert explicit rows into `station_notifications` so realtime clients
+  /// reliably receive the notification.
+  Future<void> _ensureStationNotificationsExist(int panicAlertId) async {
+    try {
+      // Fetch panic alert details
+      final panic = await _supabase
+          .from('panic_alerts')
+          .select()
+          .eq('id', panicAlertId)
+          .maybeSingle();
+
+      if (panic == null) {
+        debugPrint('⚠️ Panic alert $panicAlertId not found');
+        return;
+      }
+
+      final alertLevel = panic['alert_level'] ?? 'REGULAR';
+      final childUserId = panic['user_id'];
+      final latitude = (panic['latitude'] != null)
+          ? (panic['latitude'] as num).toDouble()
+          : null;
+      final longitude = (panic['longitude'] != null)
+          ? (panic['longitude'] as num).toDouble()
+          : null;
+      final address = panic['location'] ?? '';
+
+      if (latitude == null || longitude == null) {
+        debugPrint(
+            '⚠️ Panic alert $panicAlertId has no coordinates; skipping station inserts');
+        return;
+      }
+
+      // Query users with role police or tanod that have location data
+      final stations = await _supabase
+          .from('user')
+          .select(
+              'id, first_name, phone, current_latitude, current_longitude, role')
+          .or('role.eq.police,role.eq.tanod');
+
+      // stations will be a List (possibly empty)
+
+      final List<Map<String, dynamic>> inserts = [];
+
+      for (final s in List<Map<String, dynamic>>.from(stations)) {
+        final sLat = s['current_latitude'];
+        final sLon = s['current_longitude'];
+        if (sLat == null || sLon == null) continue;
+
+        final sLatD = (sLat is num)
+            ? sLat.toDouble()
+            : double.tryParse(sLat.toString()) ?? 0.0;
+        final sLonD = (sLon is num)
+            ? sLon.toDouble()
+            : double.tryParse(sLon.toString()) ?? 0.0;
+
+        double distKm = _distanceKm(latitude, longitude, sLatD, sLonD);
+        if (distKm <= 5.0) {
+          String title;
+          if (alertLevel == 'CRITICAL') {
+            title = '🚨 CRITICAL Emergency';
+          } else if (alertLevel == 'CANCEL') {
+            title = '✅ Alert Cancelled';
+          } else {
+            title = '⚠️ Emergency Alert';
+          }
+          final body = address ?? 'Location updating...';
+
+          inserts.add({
+            'station_user_id': s['id'],
+            'child_user_id': childUserId,
+            'panic_alert_id': panicAlertId,
+            'alert_type': alertLevel,
+            'distance_km': distKm,
+            'notification_title': title,
+            'notification_body': body,
+            'notification_data': {
+              'child_id': childUserId,
+              'address': address,
+              'latitude': latitude,
+              'longitude': longitude,
+              'timestamp':
+                  panic['timestamp'] ?? DateTime.now().toIso8601String(),
+            },
+            'created_at': DateTime.now().toIso8601String(),
+          });
+        }
+      }
+
+      if (inserts.isNotEmpty) {
+        debugPrint(
+            '🔁 Inserting ${inserts.length} station_notifications rows for realtime delivery');
+        await _supabase.from('station_notifications').insert(inserts);
+        debugPrint('✅ station_notifications insert complete');
+      } else {
+        debugPrint('ℹ️ No nearby stations within 5km to notify');
+      }
+    } catch (e) {
+      debugPrint('❌ Error ensuring station notifications: $e');
     }
   }
 
