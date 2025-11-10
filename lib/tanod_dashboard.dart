@@ -1250,7 +1250,7 @@ class _TanodDashboardState extends State<TanodDashboard> {
                               itemCount: _incidentHistory.length,
                               itemBuilder: (context, index) {
                                 final incident = _incidentHistory[index];
-                                return _buildIncidentCard(
+                                return _buildHistoryCard(
                                   incident,
                                   screenWidth,
                                   screenHeight,
@@ -1880,6 +1880,296 @@ class _TanodDashboardState extends State<TanodDashboard> {
                       style: TextStyle(
                         fontSize: screenWidth * 0.025,
                         color: Colors.orange.shade700,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
+              SizedBox(height: screenHeight * 0.015),
+
+              // Child name
+              Row(
+                children: [
+                  Icon(Icons.person,
+                      size: screenWidth * 0.04, color: Colors.blue.shade700),
+                  SizedBox(width: screenWidth * 0.02),
+                  Expanded(
+                    child: Text(
+                      childName,
+                      style: TextStyle(
+                        fontSize: screenWidth * 0.038,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: screenHeight * 0.008),
+
+              // Parent/Guardian
+              Row(
+                children: [
+                  Icon(Icons.family_restroom,
+                      size: screenWidth * 0.04, color: Colors.green.shade700),
+                  SizedBox(width: screenWidth * 0.02),
+                  Expanded(
+                    child: Text(
+                      'Parent: $parentNames',
+                      style: TextStyle(
+                        fontSize: screenWidth * 0.035,
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: screenHeight * 0.008),
+
+              // Date and Time
+              Row(
+                children: [
+                  Icon(Icons.calendar_today,
+                      size: screenWidth * 0.035, color: Colors.grey.shade600),
+                  SizedBox(width: screenWidth * 0.02),
+                  Text(
+                    formattedDate,
+                    style: TextStyle(
+                      fontSize: screenWidth * 0.033,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  SizedBox(width: screenWidth * 0.03),
+                  Icon(Icons.access_time,
+                      size: screenWidth * 0.035, color: Colors.grey.shade600),
+                  SizedBox(width: screenWidth * 0.02),
+                  Text(
+                    formattedTime,
+                    style: TextStyle(
+                      fontSize: screenWidth * 0.033,
+                      color: Colors.black87,
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: screenHeight * 0.008),
+
+              // Location
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.location_on,
+                      size: screenWidth * 0.04, color: Colors.red.shade600),
+                  SizedBox(width: screenWidth * 0.02),
+                  Expanded(
+                    child: Text(
+                      address,
+                      style: TextStyle(
+                        fontSize: screenWidth * 0.035,
+                        color: Colors.black87,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: screenHeight * 0.008),
+
+              // Distance
+              Row(
+                children: [
+                  Icon(Icons.social_distance,
+                      size: screenWidth * 0.04, color: Colors.purple.shade600),
+                  SizedBox(width: screenWidth * 0.02),
+                  Text(
+                    distance,
+                    style: TextStyle(
+                      fontSize: screenWidth * 0.035,
+                      color: Colors.black87,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+
+              SizedBox(height: screenHeight * 0.015),
+
+              // Mark as Handled Button
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    await _markIncidentAsHandled(incident['id']);
+                  },
+                  icon: Icon(Icons.check_circle_outline,
+                      size: screenWidth * 0.045),
+                  label: Text(
+                    'Mark as Handled',
+                    style: TextStyle(fontSize: screenWidth * 0.038),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green.shade600,
+                    foregroundColor: Colors.white,
+                    padding:
+                        EdgeInsets.symmetric(vertical: screenHeight * 0.012),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _markIncidentAsHandled(String incidentId) async {
+    try {
+      debugPrint('🔄 TANOD: Marking incident as handled: $incidentId');
+
+      await supabase
+          .from('station_notifications')
+          .update({'read': true}).eq('id', incidentId);
+
+      debugPrint('✅ TANOD: Incident marked as handled successfully');
+
+      // Reload both active incidents and history
+      await _loadIncidents();
+      await _loadIncidentHistory();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Incident marked as handled'),
+            backgroundColor: Colors.green.shade600,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('❌ TANOD: Error marking incident as handled: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to mark incident as handled'),
+            backgroundColor: Colors.red.shade600,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    }
+  }
+
+  Widget _buildHistoryCard(
+      Map<String, dynamic> incident, double screenWidth, double screenHeight) {
+    final notificationData =
+        incident['notification_data'] as Map<String, dynamic>? ?? {};
+    // Get child_user_id from root notification object (same as active incidents)
+    final childUserId = incident['child_user_id'] as String?;
+
+    return FutureBuilder<String>(
+      future: _fetchParentNames(childUserId),
+      builder: (context, parentSnapshot) {
+        final parentNames = parentSnapshot.data ?? 'Loading...';
+
+        // Extract comprehensive details from notification_data
+        final childName = notificationData['child_name'] ?? 'Unknown';
+        final address = notificationData['address'] ?? 'Unknown location';
+        final latitude = notificationData['latitude'] as double?;
+        final longitude = notificationData['longitude'] as double?;
+        final timestamp = notificationData['timestamp'] as String?;
+        final alertType = incident['alert_type'] ?? 'REGULAR';
+
+        // Format date and time
+        DateTime? dateTime;
+        String formattedDate = 'Unknown date';
+        String formattedTime = 'Unknown time';
+
+        if (timestamp != null) {
+          try {
+            dateTime = DateTime.parse(timestamp);
+            formattedDate = DateFormat('MMMM d, yyyy').format(dateTime);
+            formattedTime = DateFormat('h:mm a').format(dateTime);
+          } catch (e) {
+            debugPrint('Error parsing timestamp: $e');
+          }
+        }
+
+        // Calculate distance if coordinates available
+        String distance = 'Unknown distance';
+        if (latitude != null && longitude != null && _currentPosition != null) {
+          final distanceInMeters = Geolocator.distanceBetween(
+            _currentPosition!.latitude,
+            _currentPosition!.longitude,
+            latitude,
+            longitude,
+          );
+          if (distanceInMeters < 1000) {
+            distance = '${distanceInMeters.toStringAsFixed(0)}m away';
+          } else {
+            distance = '${(distanceInMeters / 1000).toStringAsFixed(2)}km away';
+          }
+        }
+
+        return Container(
+          margin: EdgeInsets.only(bottom: screenHeight * 0.015),
+          padding: EdgeInsets.all(screenWidth * 0.04),
+          decoration: BoxDecoration(
+            color: Colors.green.shade50,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: Colors.green.shade200,
+              width: 2,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header
+              Row(
+                children: [
+                  Container(
+                    padding: EdgeInsets.all(screenWidth * 0.02),
+                    decoration: BoxDecoration(
+                      color: Colors.green.shade100,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.check_circle,
+                      color: Colors.green.shade700,
+                      size: screenWidth * 0.05,
+                    ),
+                  ),
+                  SizedBox(width: screenWidth * 0.03),
+                  Expanded(
+                    child: Text(
+                      '$alertType ALERT',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: screenWidth * 0.04,
+                        color: Colors.green.shade700,
+                      ),
+                    ),
+                  ),
+                  Container(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: screenWidth * 0.025,
+                      vertical: screenHeight * 0.005,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.green.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      'HANDLED',
+                      style: TextStyle(
+                        fontSize: screenWidth * 0.025,
+                        color: Colors.green.shade700,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
