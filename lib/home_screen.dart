@@ -823,25 +823,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ),
             SizedBox(height: screenHeight * 0.005),
 
-            // Battery Level (if connected)
-            if (bleService.isConnected) ...[
-              Row(
-                children: [
-                  Text('Battery: ',
-                      style: TextStyle(
-                          fontWeight: FontWeight.w500,
-                          fontSize: screenWidth * 0.035)),
-                  Text('${bleService.batteryLevel}%',
-                      style: TextStyle(
-                          color: bleService.batteryLevel > 20
-                              ? Colors.green
-                              : Colors.red,
-                          fontSize: screenWidth * 0.035)),
-                ],
-              ),
-              SizedBox(height: screenHeight * 0.005),
-            ],
-
             // Emergency Status
             if (emergencyService.isEmergencyActive) ...[
               Row(
