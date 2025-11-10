@@ -19,7 +19,7 @@ class ParentNotificationService {
 
   bool _isInitialized = false;
   Function()? _onNewNotificationCallback;
-  
+
   // Connectivity & offline polling
   final Connectivity _connectivity = Connectivity();
   StreamSubscription<ConnectivityResult>? _connectivitySubscription;
@@ -58,10 +58,10 @@ class ParentNotificationService {
 
     // Start listening for notifications
     await _startRealtimeSubscription();
-    
+
     // Setup connectivity listener for offline recovery
     _setupConnectivityListener();
-    
+
     // Fetch any missed notifications immediately
     await _fetchMissedNotifications();
 
@@ -131,7 +131,7 @@ class ParentNotificationService {
 
     debugPrint('Realtime subscription active on channel: $channelName');
   }
-  
+
   /// Setup connectivity listener to fetch missed notifications when back online
   void _setupConnectivityListener() {
     _connectivity.checkConnectivity().then((result) {
@@ -150,7 +150,7 @@ class ParentNotificationService {
       }
     });
   }
-  
+
   /// Load last fetch timestamp from storage
   Future<void> _loadLastFetchTime() async {
     try {
@@ -168,7 +168,7 @@ class ParentNotificationService {
       _lastFetchTime = DateTime.now().subtract(const Duration(hours: 24));
     }
   }
-  
+
   /// Save last fetch timestamp
   Future<void> _saveLastFetchTime(DateTime time) async {
     try {
@@ -179,7 +179,7 @@ class ParentNotificationService {
       debugPrint('Error saving last fetch time: $e');
     }
   }
-  
+
   /// Fetch notifications that were missed while offline
   Future<void> _fetchMissedNotifications() async {
     try {
@@ -190,7 +190,7 @@ class ParentNotificationService {
       }
 
       final fetchTime = DateTime.now();
-      
+
       debugPrint('🔄 Fetching missed notifications since $_lastFetchTime');
 
       // Query parent_notifications table for unread notifications
@@ -199,28 +199,24 @@ class ParentNotificationService {
           .select()
           .eq('parent_user_id', userId)
           .gte('created_at', _lastFetchTime!.toIso8601String())
-          .order('created_at', ascending: false);
+          .order('created_at', ascending: false)
+          .limit(1); // Only fetch the latest notification
 
       final List<dynamic> notifications = response as List<dynamic>;
-      
+
       if (notifications.isEmpty) {
         debugPrint('✅ No missed notifications');
       } else {
-        debugPrint('📬 Found ${notifications.length} missed notification(s)');
-        
-        // Show each missed notification
-        for (final notification in notifications.reversed) {
-          final notificationMap = notification as Map<String, dynamic>;
-          _handleNewNotification(notificationMap);
-          
-          // Small delay between notifications to avoid overwhelming user
-          await Future.delayed(const Duration(milliseconds: 500));
-        }
+        debugPrint(
+            '📬 Found ${notifications.length} missed notification(s) - showing only the latest');
+
+        // Only show the latest (most recent) notification
+        final latestNotification = notifications.first as Map<String, dynamic>;
+        _handleNewNotification(latestNotification);
       }
-      
+
       // Update last fetch time
       await _saveLastFetchTime(fetchTime);
-      
     } catch (e) {
       debugPrint('❌ Error fetching missed notifications: $e');
     }
@@ -332,7 +328,7 @@ class ParentNotificationService {
       await supabase.removeChannel(_notificationChannel!);
       _notificationChannel = null;
     }
-    
+
     _connectivitySubscription?.cancel();
     _pollingTimer?.cancel();
 

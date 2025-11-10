@@ -211,7 +211,8 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
           .select()
           .eq('station_user_id', userId)
           .gte('created_at', _lastFetchTime!.toIso8601String())
-          .order('created_at', ascending: false);
+          .order('created_at', ascending: false)
+          .limit(1); // Only fetch the latest notification
 
       final List<dynamic> notifications = response as List<dynamic>;
 
@@ -219,13 +220,11 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
         debugPrint('✅ No missed station notifications');
       } else {
         debugPrint(
-            '📬 Found ${notifications.length} missed station notification(s)');
+            '📬 Found ${notifications.length} missed station notification(s) - showing only the latest');
 
-        for (final notification in notifications.reversed) {
-          final notificationMap = notification as Map<String, dynamic>;
-          _handleNewStationNotification(notificationMap);
-          await Future.delayed(const Duration(milliseconds: 500));
-        }
+        // Only show the latest (most recent) notification
+        final latestNotification = notifications.first as Map<String, dynamic>;
+        _handleNewStationNotification(latestNotification);
       }
 
       await _saveLastFetchTime(fetchTime);
