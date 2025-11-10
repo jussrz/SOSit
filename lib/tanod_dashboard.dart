@@ -559,7 +559,8 @@ class _TanodDashboardState extends State<TanodDashboard> {
           .select('emergency_contact_name, emergency_contact_relationship')
           .eq('user_id', childUserId);
 
-      debugPrint('🔍 Found ${emergencyContactRecords.length} emergency contacts for this user');
+      debugPrint(
+          '🔍 Found ${emergencyContactRecords.length} emergency contacts for this user');
 
       if (emergencyContactRecords.isEmpty) {
         debugPrint('⚠️ No emergency contacts found for user $childUserId');

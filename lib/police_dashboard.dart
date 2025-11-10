@@ -411,7 +411,8 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
         return;
       }
 
-      debugPrint('📳 POLICE: Starting 5-second vibration for CRITICAL alert...');
+      debugPrint(
+          '📳 POLICE: Starting 5-second vibration for CRITICAL alert...');
 
       // Vibration pattern: [wait, vibrate, wait, vibrate, ...]
       // Total duration: 5 seconds
@@ -571,7 +572,8 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
           .select('emergency_contact_name, emergency_contact_relationship')
           .eq('user_id', childUserId);
 
-      debugPrint('🔍 Found ${emergencyContactRecords.length} emergency contacts for this user');
+      debugPrint(
+          '🔍 Found ${emergencyContactRecords.length} emergency contacts for this user');
 
       if (emergencyContactRecords.isEmpty) {
         debugPrint('⚠️ No emergency contacts found for user $childUserId');
