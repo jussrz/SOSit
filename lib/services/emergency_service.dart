@@ -112,7 +112,10 @@ class EmergencyService extends ChangeNotifier {
 
       list.add(entry);
       await prefs.setStringList(_pendingAlertsKey, list);
-      debugPrint('🔁 Queued alert for later delivery: $entry');
+      debugPrint('🔁 Queued alert for later delivery:');
+      debugPrint('   - Type: $type');
+      debugPrint('   - Queue position: ${list.length}');
+      debugPrint('   - Total in queue: ${list.length}');
 
       // Inform user/app that alert has been queued
       await _showSimpleAlert('Offline',
@@ -128,30 +131,32 @@ class EmergencyService extends ChangeNotifier {
       final List<String> list = prefs.getStringList(_pendingAlertsKey) ?? [];
       if (list.isEmpty) return;
 
-      debugPrint('🔁 Flushing ${list.length} pending alert(s)...');
+      debugPrint('🔁 Found ${list.length} pending alert(s) in queue');
 
-      final List<String> remaining = [];
-
-      for (final encoded in list) {
+      // Only send the LAST (most recent) alert, not all of them
+      if (list.isNotEmpty) {
         try {
+          final encoded = list.last; // Get the last (most recent) queued alert
           final Map<String, dynamic> entry = jsonDecode(encoded);
           final String type = entry['type'] ?? 'REGULAR';
           final Map<String, dynamic> alertData = (entry['alertData'] is Map)
               ? Map<String, dynamic>.from(entry['alertData'])
               : {};
 
+          debugPrint('📤 Sending only the latest queued alert of type: $type');
+          debugPrint('   (Skipping ${list.length - 1} older alert(s))');
+
           // Attempt to log to database and notify parents/stations
           await _logEmergencyToDatabase(type, alertData);
-          debugPrint('✅ Flushed queued alert of type $type');
+          debugPrint('✅ Flushed the latest queued alert of type $type');
+
+          // Clear all queued alerts after successfully sending the latest one
+          await prefs.setStringList(_pendingAlertsKey, []);
         } catch (e) {
-          debugPrint('❌ Failed to flush queued alert: $e');
-          // keep item for retry later
-          remaining.add(encoded);
+          debugPrint('❌ Failed to flush latest queued alert: $e');
+          // Keep the alerts for retry later
         }
       }
-
-      // Save remaining (if any)
-      await prefs.setStringList(_pendingAlertsKey, remaining);
     } catch (e) {
       debugPrint('❌ Error flushing pending alerts: $e');
     }
@@ -597,8 +602,16 @@ class EmergencyService extends ChangeNotifier {
     // Update database
     await _updateEmergencyStatus('CANCELLED');
 
-    // Notify parents about cancellation
-    await _logEmergencyToDatabase('CANCEL', null);
+    // Only send CANCEL notification if we're online
+    // (No point queueing CANCEL if the original alert was never sent)
+    final online = await _isOnline();
+    if (online) {
+      debugPrint('📡 Online - sending CANCEL notification to database');
+      await _logEmergencyToDatabase('CANCEL', null);
+    } else {
+      debugPrint(
+          '📴 Offline - skipping CANCEL notification (original alert was queued)');
+    }
 
     notifyListeners();
     debugPrint('Emergency cancelled');
@@ -610,6 +623,8 @@ class EmergencyService extends ChangeNotifier {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) return;
 
+      debugPrint('🔥 _logEmergencyToDatabase called with type: $type');
+
       // If offline, enqueue the alert and return
       final online = await _isOnline();
       if (!online) {
@@ -620,6 +635,11 @@ class EmergencyService extends ChangeNotifier {
 
       // First, insert into panic_alerts table to record the alert
       debugPrint('📝 Inserting panic alert into database...');
+      debugPrint('   - Alert Type: $type');
+      debugPrint('   - User ID: $userId');
+      debugPrint(
+          '   - Timestamp: ${_emergencyStartTime?.toIso8601String() ?? DateTime.now().toIso8601String()}');
+
       final panicAlertResponse = await _supabase
           .from('panic_alerts')
           .insert({
@@ -639,6 +659,7 @@ class EmergencyService extends ChangeNotifier {
       final panicAlertId = panicAlertResponse['id'] as int;
       debugPrint('✅ Panic alert created with ID: $panicAlertId');
       debugPrint('🔍 Panic alert ID type: ${panicAlertId.runtimeType}');
+      debugPrint('🔍 Alert level in DB: ${panicAlertResponse['alert_level']}');
 
       // Notify parent accounts FIRST (before emergency_alerts insert that might fail)
       await _notifyParentAccounts(type, panicAlertId);
@@ -716,6 +737,8 @@ class EmergencyService extends ChangeNotifier {
     try {
       debugPrint(
           '🚀 Calling Postgres function: create_station_notifications_for_alert');
+      debugPrint('   - Panic Alert ID param: $panicAlertId');
+
       final response = await _supabase.rpc(
         'create_station_notifications_for_alert',
         params: {'p_panic_alert_id': panicAlertId},

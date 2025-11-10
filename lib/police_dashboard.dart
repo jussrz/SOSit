@@ -201,18 +201,20 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
         return;
       }
 
+      // Use current time minus 30 seconds to catch very recent notifications
+      // This prevents fetching old notifications from previous tests
+      final since = DateTime.now().subtract(const Duration(seconds: 30));
       final fetchTime = DateTime.now();
 
-      debugPrint(
-          '🔄 Fetching missed station notifications since $_lastFetchTime');
+      debugPrint('🔄 Fetching recent station notifications (last 30 seconds)');
+      debugPrint('   - Since: ${since.toIso8601String()}');
 
+      // Fetch notifications from the last 30 seconds only
       final response = await supabase
           .from('station_notifications')
           .select()
           .eq('station_user_id', userId)
-          .gte('created_at', _lastFetchTime!.toIso8601String())
-          .order('created_at', ascending: false)
-          .limit(1); // Only fetch the latest notification
+          .gte('created_at', since.toIso8601String());
 
       final List<dynamic> notifications = response as List<dynamic>;
 
@@ -220,11 +222,34 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
         debugPrint('✅ No missed station notifications');
       } else {
         debugPrint(
-            '📬 Found ${notifications.length} missed station notification(s) - showing only the latest');
+            '📬 Found ${notifications.length} missed station notification(s)');
 
-        // Only show the latest (most recent) notification
-        final latestNotification = notifications.first as Map<String, dynamic>;
-        _handleNewStationNotification(latestNotification);
+        // Find the notification with the HIGHEST panic_alert_id (most recent alert)
+        Map<String, dynamic>? latestNotification;
+        int highestPanicAlertId = -1;
+
+        for (final notif in notifications) {
+          final notifMap = notif as Map<String, dynamic>;
+          final panicAlertId = notifMap['panic_alert_id'] as int? ?? 0;
+
+          debugPrint(
+              '   - Notification ID: ${notifMap['id']}, Panic Alert ID: $panicAlertId, Type: ${notifMap['alert_type']}');
+
+          if (panicAlertId > highestPanicAlertId) {
+            highestPanicAlertId = panicAlertId;
+            latestNotification = notifMap;
+          }
+        }
+
+        if (latestNotification != null) {
+          debugPrint(
+              '🎯 POLICE: Showing notification with highest panic_alert_id:');
+          debugPrint('   - Notification ID: ${latestNotification['id']}');
+          debugPrint(
+              '   - Panic Alert ID: ${latestNotification['panic_alert_id']}');
+          debugPrint('   - Alert Type: ${latestNotification['alert_type']}');
+          _handleNewStationNotification(latestNotification);
+        }
       }
 
       await _saveLastFetchTime(fetchTime);

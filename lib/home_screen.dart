@@ -5,7 +5,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:provider/provider.dart';
-import 'package:connectivity_plus/connectivity_plus.dart';
 import 'dart:async';
 import 'services/ble_service.dart';
 import 'services/emergency_service.dart';
@@ -24,10 +23,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   String _gpsSignal = 'Getting signal...';
-  String _cellularSignal = 'no signal';
   String _location = 'Getting location...';
-  bool _hasSim = true;
-  static const MethodChannel _simChannel = MethodChannel('sosit/sim');
   GoogleMapController? _mapController;
   bool _isLoadingProfile = false;
   bool _isCardExpanded = false;
@@ -36,10 +32,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
   final _birthdateController = TextEditingController();
-
-  // Connectivity for cellular detection
-  final Connectivity _connectivity = Connectivity();
-  StreamSubscription<ConnectivityResult>? _connectivitySubscription;
 
   // List to store all emergency contacts
   List<Map<String, dynamic>> _emergencyContacts = [];
@@ -61,38 +53,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _ensureBLECallbackSetup();
     });
-
-    // Initialize connectivity listener for cellular state
-    _connectivity.checkConnectivity().then((result) {
-      _checkSimPresence().then((_) => _updateCellularFromConnectivity(result));
-    }).catchError((e) {
-      debugPrint('Connectivity check failed: $e');
-    });
-
-    _connectivitySubscription = _connectivity.onConnectivityChanged.listen(
-        (result) => _checkSimPresence()
-            .then((_) => _updateCellularFromConnectivity(result)));
-  }
-
-  Future<void> _checkSimPresence() async {
-    try {
-      final hasSim = await _simChannel.invokeMethod<bool>('hasSim');
-      if (hasSim != null) {
-        if (mounted) {
-          setState(() => _hasSim = hasSim);
-        } else {
-          _hasSim = hasSim;
-        }
-      }
-    } catch (e) {
-      // If platform channel fails (e.g., iOS or not implemented), assume SIM present
-      debugPrint('SIM check failed or not available: $e');
-      if (mounted) {
-        setState(() => _hasSim = true);
-      } else {
-        _hasSim = true;
-      }
-    }
   }
 
   void _ensureBLECallbackSetup() {
@@ -128,34 +88,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  void _updateCellularFromConnectivity(ConnectivityResult result) {
-    // Map cellular status based on SIM presence and connectivity:
-    // - If no SIM -> No Signal
-    // - If SIM present and mobile data active -> Strong
-    // - If SIM present and on WiFi (but no mobile) -> Weak (SIM exists but not using cellular)
-    // - If SIM present and no connectivity -> No Signal
-    String state;
-    if (!_hasSim) {
-      state = 'No Signal';
-    } else {
-      if (result == ConnectivityResult.mobile) {
-        state = 'Strong';
-      } else if (result == ConnectivityResult.wifi) {
-        state = 'Weak';
-      } else if (result == ConnectivityResult.none) {
-        state = 'No Signal';
-      } else {
-        state = 'No Signal';
-      }
-    }
-
-    if (mounted) {
-      setState(() => _cellularSignal = state);
-    } else {
-      _cellularSignal = state;
-    }
-  }
-
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
@@ -169,7 +101,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _emergencyContactsChannel?.unsubscribe();
-    _connectivitySubscription?.cancel();
     _emailController.dispose();
     _phoneController.dispose();
     _birthdateController.dispose();
@@ -500,19 +431,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       case 'disabled':
       case 'no permission':
       case 'permission denied':
-        return Colors.red;
-      default:
-        return Colors.grey;
-    }
-  }
-
-  Color _getCellularColor(String signal) {
-    switch (signal.toLowerCase()) {
-      case 'strong':
-        return Colors.green;
-      case 'weak':
-        return Colors.orange;
-      case 'no signal':
         return Colors.red;
       default:
         return Colors.grey;
@@ -941,21 +859,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ),
               SizedBox(height: screenHeight * 0.005),
             ],
-
-            // Cellular Status
-            Row(
-              children: [
-                Text('Cellular: ',
-                    style: TextStyle(
-                        fontWeight: FontWeight.w500,
-                        fontSize: screenWidth * 0.035)),
-                Text(_cellularSignal,
-                    style: TextStyle(
-                        color: _getCellularColor(_cellularSignal),
-                        fontSize: screenWidth * 0.035)),
-              ],
-            ),
-            SizedBox(height: screenHeight * 0.005),
 
             // GPS Status
             Row(
