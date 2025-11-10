@@ -52,7 +52,10 @@ class _TanodDashboardState extends State<TanodDashboard> {
     _loadUserProfile();
     _loadIncidentHistory();
     _loadLastFetchTime();
-    _loadUnreadStationNotifications(); // Load existing unread notifications
+    // NOTE: Do NOT load old unread notifications on login to prevent multiple modals/notifications
+    // Old notifications from initial station detection are not relevant emergencies
+    // Real panic alerts are handled by _listenForStationNotifications() in real-time
+    // _loadUnreadStationNotifications(); // DISABLED - was causing 11 modals on login
     _listenForStationNotifications();
     _startLocationTracking();
     _setupConnectivityListener(); // Setup offline recovery
@@ -126,13 +129,15 @@ class _TanodDashboardState extends State<TanodDashboard> {
 
   /// Setup connectivity listener to fetch missed notifications when back online
   void _setupConnectivityListener() {
-    _connectivity.checkConnectivity().then((result) {
-      if (result != ConnectivityResult.none) {
-        _fetchMissedNotifications();
-      }
-    }).catchError((e) {
-      debugPrint('Connectivity check failed: $e');
-    });
+    // Do NOT fetch on initial check during login - this prevents loading old notifications
+    // Only fetch when connection is RESTORED after being offline
+    // _connectivity.checkConnectivity().then((result) {
+    //   if (result != ConnectivityResult.none) {
+    //     _fetchMissedNotifications();
+    //   }
+    // }).catchError((e) {
+    //   debugPrint('Connectivity check failed: $e');
+    // });
 
     _connectivitySubscription =
         _connectivity.onConnectivityChanged.listen((result) {
@@ -153,11 +158,14 @@ class _TanodDashboardState extends State<TanodDashboard> {
         _lastFetchTime = DateTime.parse(timestamp);
         debugPrint('📅 Last notification fetch: $_lastFetchTime');
       } else {
-        _lastFetchTime = DateTime.now().subtract(const Duration(hours: 24));
+        // First time login - set to NOW to prevent fetching old notifications
+        _lastFetchTime = DateTime.now();
+        await _saveLastFetchTime(_lastFetchTime!);
+        debugPrint('📅 First login - initialized last fetch time to NOW');
       }
     } catch (e) {
       debugPrint('Error loading last fetch time: $e');
-      _lastFetchTime = DateTime.now().subtract(const Duration(hours: 24));
+      _lastFetchTime = DateTime.now();
     }
   }
 
@@ -218,14 +226,15 @@ class _TanodDashboardState extends State<TanodDashboard> {
   Future<void> _listenForStationNotifications() async {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) {
-      debugPrint('❌ No user ID found for station notifications subscription');
+      debugPrint(
+          '❌ TANOD: No user ID found for station notifications subscription');
       return;
     }
 
-    debugPrint('🔔 Setting up Realtime subscription for user: $userId');
+    debugPrint('🔔 TANOD: Setting up Realtime subscription for user: $userId');
 
     supabase
-        .channel('station_notifications:$userId')
+        .channel('tanod_station_notifications:$userId')
         .onPostgresChanges(
             event: PostgresChangeEvent.insert,
             schema: 'public',
@@ -236,14 +245,21 @@ class _TanodDashboardState extends State<TanodDashboard> {
               value: userId,
             ),
             callback: (payload) {
-              debugPrint('🔥 NEW REALTIME NOTIFICATION RECEIVED!');
-              debugPrint('📦 Payload: $payload');
+              debugPrint('🔥 TANOD: NEW REALTIME NOTIFICATION RECEIVED!');
+              debugPrint('📦 TANOD Payload: $payload');
+              debugPrint('📦 TANOD newRecord: ${payload.newRecord}');
               _handleNewStationNotification(payload.newRecord);
             })
         .subscribe((status, error) {
-      debugPrint('📡 Subscription status: $status');
+      debugPrint('📡 TANOD Subscription status: $status');
+      if (status == RealtimeSubscribeStatus.subscribed) {
+        debugPrint(
+            '✅ TANOD: Successfully subscribed to station notifications!');
+      } else if (status == RealtimeSubscribeStatus.channelError) {
+        debugPrint('❌ TANOD: Channel error occurred');
+      }
       if (error != null) {
-        debugPrint('❌ Subscription error: $error');
+        debugPrint('❌ TANOD Subscription error: $error');
       }
     });
   }
@@ -295,7 +311,16 @@ class _TanodDashboardState extends State<TanodDashboard> {
   }
 
   void _handleNewStationNotification(Map<String, dynamic> notification) {
-    if (!mounted) return;
+    debugPrint('🚨 TANOD: _handleNewStationNotification called!');
+    debugPrint('🚨 TANOD: Notification data: $notification');
+    debugPrint('🚨 TANOD: mounted = $mounted');
+
+    if (!mounted) {
+      debugPrint('❌ TANOD: Widget not mounted, skipping notification display');
+      return;
+    }
+
+    debugPrint('✅ TANOD: Showing notification dialog...');
 
     // Play alert sound or vibration here
 
@@ -505,7 +530,7 @@ class _TanodDashboardState extends State<TanodDashboard> {
                 const SizedBox(height: 20),
 
                 // User Information
-                _buildInfoRow('User Name:', childName),
+                _buildInfoRow('Name:', childName),
                 _buildInfoRow('Parent/Guardian:', parentNames),
                 _buildInfoRow('Date:', formattedDate),
                 _buildInfoRow('Time:', formattedTime),
