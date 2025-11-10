@@ -1,8 +1,9 @@
 // ============================================================
 // SOSit Parent Alert Notification - Supabase Edge Function
 // ============================================================
-// Uses Firebase Cloud Messaging V1 API (Modern, OAuth2-based)
+// Uses Firebase Cloud Messaging V1 API to send push notifications to parents
 // Deploy with: supabase functions deploy send-parent-alerts
+// Requires: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, FIREBASE_SERVICE_ACCOUNT
 // ============================================================
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
@@ -14,35 +15,160 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-// Get Firebase access token using service account
-async function getAccessToken() {
-  const serviceAccountJson = Deno.env.get('FIREBASE_SERVICE_ACCOUNT')
-  
-  if (!serviceAccountJson) {
-    throw new Error('FIREBASE_SERVICE_ACCOUNT not configured')
+// Base64 encode for JWT
+function base64UrlEncode(str: string): string {
+  return btoa(str)
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=/g, '')
+}
+
+// Create JWT for Google OAuth2
+async function createJWT(serviceAccount: any): Promise<string> {
+  const header = {
+    alg: 'RS256',
+    typ: 'JWT',
   }
 
-  const serviceAccount = JSON.parse(serviceAccountJson)
-  
-  // Create JWT for OAuth2
-  const header = {
-    alg: "RS256",
-    typ: "JWT"
-  }
-  
   const now = Math.floor(Date.now() / 1000)
   const payload = {
     iss: serviceAccount.client_email,
     sub: serviceAccount.client_email,
-    aud: "https://oauth2.googleapis.com/token",
+    aud: 'https://oauth2.googleapis.com/token',
     iat: now,
     exp: now + 3600,
-    scope: "https://www.googleapis.com/auth/firebase.messaging"
+    scope: 'https://www.googleapis.com/auth/firebase.messaging',
   }
 
-  // For Edge Functions, we'll use a simpler approach with the Legacy API
-  // This is a fallback that works without complex JWT signing
-  return null
+  const encodedHeader = base64UrlEncode(JSON.stringify(header))
+  const encodedPayload = base64UrlEncode(JSON.stringify(payload))
+  const unsignedToken = `${encodedHeader}.${encodedPayload}`
+
+  // Import the private key
+  const privateKey = serviceAccount.private_key
+  const keyData = privateKey
+    .replace('-----BEGIN PRIVATE KEY-----', '')
+    .replace('-----END PRIVATE KEY-----', '')
+    .replace(/\s/g, '')
+
+  const binaryKey = Uint8Array.from(atob(keyData), c => c.charCodeAt(0))
+
+  const cryptoKey = await crypto.subtle.importKey(
+    'pkcs8',
+    binaryKey,
+    {
+      name: 'RSASSA-PKCS1-v1_5',
+      hash: 'SHA-256',
+    },
+    false,
+    ['sign']
+  )
+
+  const signature = await crypto.subtle.sign(
+    'RSASSA-PKCS1-v1_5',
+    cryptoKey,
+    new TextEncoder().encode(unsignedToken)
+  )
+
+  const encodedSignature = base64UrlEncode(
+    String.fromCharCode(...new Uint8Array(signature))
+  )
+
+  return `${unsignedToken}.${encodedSignature}`
+}
+
+// Get OAuth2 access token
+async function getAccessToken(serviceAccount: any): Promise<string> {
+  const jwt = await createJWT(serviceAccount)
+
+  const response = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: new URLSearchParams({
+      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+      assertion: jwt,
+    }),
+  })
+
+  const data = await response.json()
+  
+  if (!data.access_token) {
+    throw new Error('Failed to get access token: ' + JSON.stringify(data))
+  }
+
+  return data.access_token
+}
+
+// Send FCM notification using V1 API
+async function sendFCMNotification(
+  fcmToken: string,
+  title: string,
+  body: string,
+  data: any,
+  alertType: string,
+  projectId: string,
+  accessToken: string
+) {
+  try {
+    const message = {
+      message: {
+        token: fcmToken,
+        notification: {
+          title: title,
+          body: body,
+        },
+        data: {
+          ...data,
+          type: 'parent_alert',
+          click_action: 'FLUTTER_NOTIFICATION_CLICK',
+        },
+        android: {
+          priority: alertType === 'CRITICAL' ? 'high' : 'normal',
+          notification: {
+            channel_id: alertType === 'CRITICAL' ? 'critical_alerts' : 'regular_alerts',
+            sound: 'default',
+            notification_priority: alertType === 'CRITICAL' ? 'PRIORITY_MAX' : 'PRIORITY_HIGH',
+          },
+        },
+        apns: {
+          payload: {
+            aps: {
+              sound: 'default',
+              badge: 1,
+              'interruption-level': alertType === 'CRITICAL' ? 'critical' : 'active',
+            },
+          },
+        },
+      },
+    }
+
+    const response = await fetch(
+      `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify(message),
+      }
+    )
+
+    const result = await response.json()
+
+    if (response.ok) {
+      console.log('✅ FCM V1 notification sent successfully')
+      return { success: true }
+    } else {
+      console.error('❌ FCM V1 send failed:', result)
+      return { success: false, error: result }
+    }
+  } catch (error) {
+    console.error('❌ FCM V1 send error:', error)
+    return { success: false, error: error }
+  }
 }
 
 serve(async (req) => {
@@ -55,7 +181,23 @@ serve(async (req) => {
     // Get environment variables
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    const firebaseProjectId = Deno.env.get('FIREBASE_PROJECT_ID') || '363891894437'
+    const firebaseProjectId = Deno.env.get('FIREBASE_PROJECT_ID') || 'sosit-64bfe'
+    const serviceAccountJson = Deno.env.get('FIREBASE_SERVICE_ACCOUNT')
+
+    if (!serviceAccountJson) {
+      console.error('❌ FIREBASE_SERVICE_ACCOUNT not configured')
+      return new Response(
+        JSON.stringify({ error: 'Firebase service account not configured' }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      )
+    }
+
+    const serviceAccount = JSON.parse(serviceAccountJson)
+
+    // Get OAuth2 access token for FCM V1 API
+    console.log('🔑 Getting Firebase access token...')
+    const accessToken = await getAccessToken(serviceAccount)
+    console.log('✅ Access token obtained')
 
     // Parse request body
     const { alert } = await req.json()
@@ -139,6 +281,7 @@ serve(async (req) => {
       latitude: alert.latitude?.toString() || '',
       longitude: alert.longitude?.toString() || '',
       address: alert.address || 'Location updating...',
+      panic_alert_id: panicAlertId,
       click_action: 'FLUTTER_NOTIFICATION_CLICK'
     }
 
@@ -170,37 +313,27 @@ serve(async (req) => {
 
     const notification = getNotificationConfig(alert.alert_type)
 
-    // Send notification using FCM HTTP v1 API with direct token approach
-    // Since we're using client SDK tokens, we can use the simpler notification format
+    // Send FCM notifications to all parent devices
     let sentCount = 0
     let failedCount = 0
     const results = []
 
     for (const parent of parents) {
       try {
-        // Use FCM's data-only message which works without server key
-        // The Flutter app will create the notification locally
-        const message = {
-          data: {
-            ...notificationData,
-            notification_title: notification.title,
-            notification_body: notification.body,
-          },
-          token: parent.fcm_token,
-          android: {
-            priority: alert.alert_type === 'CRITICAL' ? 'high' : 'normal',
-            notification: {
-              channel_id: alert.alert_type === 'CRITICAL' ? 'critical_alerts' : 'regular_alerts',
-              priority: alert.alert_type === 'CRITICAL' ? 'high' : 'default',
-              sound: alert.alert_type === 'CRITICAL' ? 'emergency_alert' : 'default',
-            }
-          }
-        }
-
-        console.log(`📤 Sending to parent: ${parent.parent_first_name} (${parent.fcm_token.substring(0, 20)}...)`)
+        console.log(`📤 Sending FCM V1 to parent: ${parent.parent_first_name} (${parent.fcm_token.substring(0, 20)}...)`)
         
-        // Store notification info for Flutter to handle locally
-        // Since we can't easily send without server key, we'll use Supabase realtime as fallback
+        // Send FCM push notification using V1 API
+        const fcmResult = await sendFCMNotification(
+          parent.fcm_token,
+          notification.title,
+          notification.body,
+          notificationData,
+          alert.alert_type,
+          firebaseProjectId,
+          accessToken
+        )
+
+        // Store notification info in database as backup
         const { error: notifError } = await supabase
           .from('parent_notifications')
           .insert({
@@ -214,19 +347,22 @@ serve(async (req) => {
             created_at: new Date().toISOString()
           })
 
-        if (notifError) {
-          console.error('Failed to store notification:', notifError)
-          failedCount++
-        } else {
-          console.log(`✅ Notification queued for ${parent.parent_first_name}`)
+        if (fcmResult.success) {
+          console.log(`✅ FCM notification sent to ${parent.parent_first_name}`)
           sentCount++
+          results.push({
+            parent: `${parent.parent_first_name} ${parent.parent_last_name}`,
+            status: 'sent',
+          })
+        } else {
+          console.log(`⚠️ FCM failed, stored in DB for ${parent.parent_first_name}`)
+          failedCount++
+          results.push({
+            parent: `${parent.parent_first_name} ${parent.parent_last_name}`,
+            status: 'db_fallback',
+            error: fcmResult.error
+          })
         }
-
-        results.push({
-          parent: `${parent.parent_first_name} ${parent.parent_last_name}`,
-          status: notifError ? 'failed' : 'queued',
-          error: notifError?.message
-        })
 
       } catch (error) {
         console.error(`❌ Failed to send to parent:`, error)
@@ -239,7 +375,7 @@ serve(async (req) => {
       }
     }
 
-    console.log(`📊 Results: ${sentCount} queued, ${failedCount} failed`)
+    console.log(`📊 Results: ${sentCount} sent via FCM, ${failedCount} failed`)
 
     return new Response(
       JSON.stringify({
@@ -248,7 +384,7 @@ serve(async (req) => {
         failed: failedCount,
         total: parents.length,
         results,
-        message: 'Notifications queued. Using Supabase Realtime for delivery.'
+        message: sentCount > 0 ? 'FCM notifications sent successfully' : 'Notifications stored in database'
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     )
