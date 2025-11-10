@@ -815,6 +815,60 @@ class EmergencyService extends ChangeNotifier {
         return;
       }
 
+      // Fetch child user information
+      debugPrint('🔍 Fetching child user information for: $childUserId');
+      final childUser = await _supabase
+          .from('user')
+          .select('first_name, last_name, email, phone')
+          .eq('id', childUserId)
+          .maybeSingle();
+
+      final childFirstName = childUser?['first_name'] ?? '';
+      final childLastName = childUser?['last_name'] ?? '';
+      final childFullName = '$childFirstName $childLastName'.trim();
+      final childEmail = childUser?['email'] ?? '';
+      final childPhone = childUser?['phone'] ?? '';
+      
+      debugPrint('👤 Child name: $childFullName');
+
+      // Fetch parent/guardian names for the child
+      // The emergency_contacts table stores:
+      // - user_id: The user who ADDED the contact (Joshua in this case)
+      // - emergency_contact_name: The name of the emergency contact (Leyden)
+      // So we need to get the emergency contacts WHERE user_id = childUserId
+      debugPrint('🔍 Fetching emergency contacts for user: $childUserId');
+      String parentNames = 'No parents listed';
+      
+      try {
+        // Get emergency contacts that this user (Joshua) added
+        final emergencyContactRecords = await _supabase
+            .from('emergency_contacts')
+            .select('emergency_contact_name, emergency_contact_relationship')
+            .eq('user_id', childUserId);
+        
+        debugPrint('🔍 Found ${emergencyContactRecords.length} emergency contacts for this user');
+        
+        if (emergencyContactRecords.isNotEmpty) {
+          // Extract the contact names
+          final contactNames = emergencyContactRecords
+              .map((record) => record['emergency_contact_name'])
+              .where((name) => name != null && name.toString().isNotEmpty)
+              .toList();
+          
+          if (contactNames.isNotEmpty) {
+            parentNames = contactNames.join(', ');
+            debugPrint('✅ Emergency contact names: $parentNames');
+          }
+        } else {
+          debugPrint('⚠️ No emergency contacts found for user $childUserId');
+        }
+        
+        debugPrint('👨‍👩‍👧 Parent/Guardian names: $parentNames');
+      } catch (e) {
+        debugPrint('❌ Error fetching emergency contact names: $e');
+        parentNames = 'Error loading parents';
+      }
+
       // Query users with role police or tanod that have location data
       final stations = await _supabase
           .from('user')
@@ -860,11 +914,16 @@ class EmergencyService extends ChangeNotifier {
             'notification_body': body,
             'notification_data': {
               'child_id': childUserId,
+              'child_name': childFullName.isNotEmpty ? childFullName : 'Unknown User',
+              'child_phone': childPhone,
+              'child_email': childEmail,
+              'parent_names': parentNames,
               'address': address,
               'latitude': latitude,
               'longitude': longitude,
               'timestamp':
                   panic['timestamp'] ?? DateTime.now().toIso8601String(),
+              'battery_level': panic['battery_level'],
             },
             'created_at': DateTime.now().toIso8601String(),
           });

@@ -9,6 +9,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
+import 'package:vibration/vibration.dart';
 import 'dart:async';
 import 'police_settings_page.dart';
 
@@ -341,7 +342,10 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
     // Refresh incidents list to show the new alert
     _loadIncidents();
 
-    // Play alert sound or vibration here
+    // Vibrate on CRITICAL alerts
+    if (notification['alert_type'] == 'CRITICAL') {
+      _vibrateCriticalAlert();
+    }
 
     // Show alert dialog
     showDialog(
@@ -394,6 +398,40 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
       );
     } catch (e) {
       debugPrint('Error showing local station notification: $e');
+    }
+  }
+
+  // Vibrate for 5 seconds on CRITICAL alerts (for police/tanod accounts)
+  Future<void> _vibrateCriticalAlert() async {
+    try {
+      // Check if device supports vibration
+      final hasVibrator = await Vibration.hasVibrator();
+      if (hasVibrator != true) {
+        debugPrint('⚠️ POLICE: Device does not support vibration');
+        return;
+      }
+
+      debugPrint('📳 POLICE: Starting 5-second vibration for CRITICAL alert...');
+
+      // Vibration pattern: [wait, vibrate, wait, vibrate, ...]
+      // Total duration: 5 seconds
+      // Pattern: 500ms vibrate, 200ms pause (repeating)
+      const pattern = [
+        0, 500, 200, // First pulse
+        500, 200, // Second pulse
+        500, 200, // Third pulse
+        500, 200, // Fourth pulse
+        500, 200, // Fifth pulse
+        500, 200, // Sixth pulse
+        500, // Final pulse
+      ];
+
+      // Vibrate with pattern for approximately 5 seconds
+      await Vibration.vibrate(pattern: pattern);
+
+      debugPrint('✅ POLICE: 5-second critical alert vibration completed');
+    } catch (e) {
+      debugPrint('❌ POLICE: Error during vibration: $e');
     }
   }
 
@@ -509,6 +547,15 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
   ///
   /// Since group_members is blocked by RLS, we'll search emergency_contacts
   /// for any record that might be linked to this child user.
+  /// Fetch parent/guardian names for a child user
+  ///
+  /// CORRECT DATABASE RELATIONSHIP:
+  /// emergency_contacts.user_id = The USER who added the contact (Joshua)
+  /// emergency_contacts.emergency_contact_name = The EMERGENCY CONTACT name (Leyden Dondon)
+  ///
+  /// To find emergency contacts for a user:
+  /// Query emergency_contacts WHERE user_id = childUserId
+  /// Then get the emergency_contact_name field
   Future<String> _fetchParentNames(String? childUserId) async {
     if (childUserId == null) {
       debugPrint('🔍 Parent fetch: childUserId is null');
@@ -516,101 +563,37 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
     }
 
     try {
-      debugPrint('🔍 Fetching parents for child user: $childUserId');
+      debugPrint('🔍 Fetching emergency contacts for user: $childUserId');
 
-      // STEP 1: Get the child's email and full name
-      debugPrint('🔍 STEP 1: Fetching child user record...');
-      final childUser = await supabase
-          .from('user')
-          .select('first_name, last_name, email')
-          .eq('id', childUserId)
-          .maybeSingle();
+      // Get emergency contacts that this user added
+      final emergencyContactRecords = await supabase
+          .from('emergency_contacts')
+          .select('emergency_contact_name, emergency_contact_relationship')
+          .eq('user_id', childUserId);
 
-      if (childUser == null) {
-        debugPrint('❌ Child user not found in database');
-        return 'No parents listed';
-      }
-
-      final childEmail = childUser['email'] as String?;
-      final childFullName =
-          '${childUser['first_name'] ?? ''} ${childUser['last_name'] ?? ''}'
-              .trim();
-      debugPrint('🔍 Child name: $childFullName');
-      debugPrint('🔍 Child email: $childEmail');
-
-      // STEP 2: Try to find emergency contacts by added_by email
-      debugPrint(
-          '🔍 STEP 2: Searching emergency_contacts by added_by email...');
-
-      List<dynamic> emergencyContactRecords = [];
-
-      if (childEmail != null && childEmail.isNotEmpty) {
-        emergencyContactRecords = await supabase
-            .from('emergency_contacts')
-            .select('user_id')
-            .eq('added_by', childEmail);
-
-        debugPrint(
-            '🔍 Found ${emergencyContactRecords.length} records by email');
-      }
-
-      // STEP 3: If email search fails, try searching by name (even if it's "null null")
-      if (emergencyContactRecords.isEmpty &&
-          childFullName.isNotEmpty &&
-          childFullName != 'null null') {
-        debugPrint('🔍 STEP 3: Trying search by emergency_contact_name...');
-        emergencyContactRecords = await supabase
-            .from('emergency_contacts')
-            .select('user_id')
-            .eq('emergency_contact_name', childFullName);
-
-        debugPrint(
-            '🔍 Found ${emergencyContactRecords.length} records by name');
-      }
+      debugPrint('🔍 Found ${emergencyContactRecords.length} emergency contacts for this user');
 
       if (emergencyContactRecords.isEmpty) {
-        debugPrint('⚠️ No emergency contacts found for this child');
+        debugPrint('⚠️ No emergency contacts found for user $childUserId');
         return 'No parents listed';
       }
 
-      // STEP 4: Extract unique parent user IDs
-      final parentUserIds = emergencyContactRecords
-          .map((record) => record['user_id'])
-          .where((id) => id != null)
-          .toSet()
+      // Extract the contact names
+      final contactNames = emergencyContactRecords
+          .map((record) => record['emergency_contact_name'])
+          .where((name) => name != null && name.toString().isNotEmpty)
           .toList();
 
-      debugPrint('🔍 Parent user IDs: $parentUserIds');
-
-      if (parentUserIds.isEmpty) {
+      if (contactNames.isEmpty) {
+        debugPrint('⚠️ Emergency contacts exist but have no names');
         return 'No parents listed';
       }
 
-      // STEP 5: Get parent user records to get their names
-      debugPrint('🔍 STEP 4: Fetching parent user records...');
-      final parentUsers = await supabase
-          .from('user')
-          .select('first_name, last_name')
-          .inFilter('id', parentUserIds);
-
-      debugPrint('🔍 Found ${parentUsers.length} parent user records');
-      debugPrint('🔍 Parent data: $parentUsers');
-
-      if (parentUsers.isEmpty) {
-        return 'No parents listed';
-      }
-
-      // STEP 6: Format parent names
-      final parentNames = parentUsers
-          .map((user) =>
-              '${user['first_name'] ?? ''} ${user['last_name'] ?? ''}'.trim())
-          .where((name) => name.isNotEmpty)
-          .join(', ');
-
-      debugPrint('✅ SUCCESS - Parent names: $parentNames');
-      return parentNames.isNotEmpty ? parentNames : 'No parents listed';
+      final parentNames = contactNames.join(', ');
+      debugPrint('✅ Emergency contact names: $parentNames');
+      return parentNames;
     } catch (e) {
-      debugPrint('❌ Error fetching parent names: $e');
+      debugPrint('❌ Error fetching emergency contact names: $e');
       debugPrint('❌ Stack trace: ${StackTrace.current}');
       return 'Error loading parents';
     }
@@ -985,8 +968,8 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
     // Start realtime subscription to track updates for this user
     _subscribeToUserLocation(userId.toString());
 
-    // Show bottom sheet with tracking info
-    _showTrackingBottomSheet(userName, contactNumber);
+    // Removed the tracking bottom sheet popup - now goes directly to map
+    // _showTrackingBottomSheet(userName, contactNumber);
   }
 
   Future<void> _loadUserProfile() async {
