@@ -22,16 +22,14 @@ class _PoliceSettingsPageState extends State<PoliceSettingsPage> {
   }
 
   Future<void> _loadUserData() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
     try {
       final userId = supabase.auth.currentUser?.id;
       if (userId != null) {
         // Load user data
-        final userData = await supabase
-            .from('user')
-            .select()
-            .eq('id', userId)
-            .single();
+        final userData =
+            await supabase.from('user').select().eq('id', userId).single();
 
         // Load police-specific data
         final policeData = await supabase
@@ -40,6 +38,7 @@ class _PoliceSettingsPageState extends State<PoliceSettingsPage> {
             .eq('user_id', userId)
             .maybeSingle();
 
+        if (!mounted) return;
         setState(() {
           _userData = userData;
           _policeData = policeData;
@@ -48,7 +47,9 @@ class _PoliceSettingsPageState extends State<PoliceSettingsPage> {
     } catch (e) {
       debugPrint('Error loading user data: $e');
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -151,7 +152,8 @@ class _PoliceSettingsPageState extends State<PoliceSettingsPage> {
         ),
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF2196F3)))
+          ? const Center(
+              child: CircularProgressIndicator(color: Color(0xFF2196F3)))
           : Center(
               child: SingleChildScrollView(
                 padding: EdgeInsets.symmetric(horizontal: screenWidth * 0.06),
@@ -176,7 +178,8 @@ class _PoliceSettingsPageState extends State<PoliceSettingsPage> {
                             width: screenWidth * 0.25,
                             height: screenWidth * 0.25,
                             decoration: BoxDecoration(
-                              color: const Color(0xFF2196F3).withValues(alpha: 0.1),
+                              color: const Color(0xFF2196F3)
+                                  .withValues(alpha: 0.1),
                               shape: BoxShape.circle,
                             ),
                             child: Icon(
@@ -190,8 +193,10 @@ class _PoliceSettingsPageState extends State<PoliceSettingsPage> {
 
                           // Name
                           Text(
-                            '${_userData?['first_name'] ?? ''} ${_userData?['last_name'] ?? ''}'.trim().isEmpty 
-                                ? 'Police Officer' 
+                            '${_userData?['first_name'] ?? ''} ${_userData?['last_name'] ?? ''}'
+                                    .trim()
+                                    .isEmpty
+                                ? 'Police Officer'
                                 : '${_userData?['first_name'] ?? ''} ${_userData?['last_name'] ?? ''}',
                             textAlign: TextAlign.center,
                             style: TextStyle(
@@ -318,8 +323,8 @@ class _PoliceSettingsPageState extends State<PoliceSettingsPage> {
                             'Status',
                             (_policeData?['status'] ?? 'Unknown').toUpperCase(),
                             screenWidth,
-                            valueColor: _policeData?['status'] == 'verified' 
-                                ? Colors.green 
+                            valueColor: _policeData?['status'] == 'verified'
+                                ? Colors.green
                                 : Colors.orange,
                           ),
                           if (_policeData?['station_name'] != null) ...[
@@ -344,7 +349,8 @@ class _PoliceSettingsPageState extends State<PoliceSettingsPage> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF2196F3),
                           foregroundColor: Colors.white,
-                          padding: EdgeInsets.symmetric(vertical: screenHeight * 0.02),
+                          padding: EdgeInsets.symmetric(
+                              vertical: screenHeight * 0.02),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(30),
                           ),

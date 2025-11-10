@@ -22,6 +22,7 @@ dependencies:
   font_awesome_flutter: ^10.7.0
   geolocator: ^10.1.0
   geocoding: ^2.1.1
+  intl: ^0.18.1
   
   # BLE & Emergency Features
   flutter_blue_plus: ^1.36.8

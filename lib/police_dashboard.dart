@@ -8,6 +8,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:intl/intl.dart';
 import 'dart:async';
 import 'police_settings_page.dart';
 
@@ -43,6 +44,9 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
   StreamSubscription<ConnectivityResult>? _connectivitySubscription;
   DateTime? _lastFetchTime;
   static const String _lastFetchKey = 'police_last_notification_fetch';
+
+  // Current position for distance calculation
+  Position? _currentPosition;
 
   @override
   void initState() {
@@ -157,13 +161,17 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
     try {
       final prefs = await SharedPreferences.getInstance();
       final timestamp = prefs.getString(_lastFetchKey);
+
+      // Always use NOW as the baseline to prevent fetching old notifications
+      // This ensures only NEW notifications created after login are fetched
+      _lastFetchTime = DateTime.now();
+      await _saveLastFetchTime(_lastFetchTime!);
+
       if (timestamp != null) {
-        _lastFetchTime = DateTime.parse(timestamp);
-        debugPrint('📅 Last notification fetch: $_lastFetchTime');
+        debugPrint('📅 Previous fetch time was: $timestamp');
+        debugPrint(
+            '📅 Reset to NOW: $_lastFetchTime (prevents old notifications)');
       } else {
-        // First time login - set to NOW to prevent fetching old notifications
-        _lastFetchTime = DateTime.now();
-        await _saveLastFetchTime(_lastFetchTime!);
         debugPrint('📅 First login - initialized last fetch time to NOW');
       }
     } catch (e) {
@@ -229,7 +237,8 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
   Future<void> _listenForStationNotifications() async {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) {
-      debugPrint('❌ POLICE: No user ID found for station notifications subscription');
+      debugPrint(
+          '❌ POLICE: No user ID found for station notifications subscription');
       return;
     }
 
@@ -255,7 +264,8 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
         .subscribe((status, error) {
       debugPrint('📡 POLICE Subscription status: $status');
       if (status == RealtimeSubscribeStatus.subscribed) {
-        debugPrint('✅ POLICE: Successfully subscribed to station notifications!');
+        debugPrint(
+            '✅ POLICE: Successfully subscribed to station notifications!');
       } else if (status == RealtimeSubscribeStatus.channelError) {
         debugPrint('❌ POLICE: Channel error occurred');
       }
@@ -297,6 +307,11 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
         desiredAccuracy: LocationAccuracy.high,
       );
 
+      // Store current position for distance calculations
+      setState(() {
+        _currentPosition = position;
+      });
+
       // Update location in database
       await supabase.rpc('update_user_location', params: {
         'p_user_id': userId,
@@ -315,13 +330,16 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
     debugPrint('🚨 POLICE: _handleNewStationNotification called!');
     debugPrint('🚨 POLICE: Notification data: $notification');
     debugPrint('🚨 POLICE: mounted = $mounted');
-    
+
     if (!mounted) {
       debugPrint('❌ POLICE: Widget not mounted, skipping notification display');
       return;
     }
 
     debugPrint('✅ POLICE: Showing notification dialog...');
+
+    // Refresh incidents list to show the new alert
+    _loadIncidents();
 
     // Play alert sound or vibration here
 
@@ -413,12 +431,199 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
     // Extract notification data from JSONB field
     final notificationData =
         notification['notification_data'] as Map<String, dynamic>? ?? {};
+
+    // DEBUG: Print full notification data to see what's available
+    debugPrint('🔍 POLICE MODAL - Full notification: $notification');
+    debugPrint('🔍 POLICE MODAL - Notification data: $notificationData');
+
+    final childUserId = notification['child_user_id'];
     final childName = notificationData['child_name'] ?? 'Unknown User';
     final address = notificationData['address'] ?? 'Location unavailable';
-    final distanceKm = (notification['distance_km'] is num)
-        ? (notification['distance_km'] as num).toStringAsFixed(2)
-        : 'N/A';
 
+    // Calculate real-time distance asynchronously
+    final alertLat = notificationData['latitude'] as double?;
+    final alertLon = notificationData['longitude'] as double?;
+
+    // Use FutureBuilder to fetch parent names and calculate distance
+    return FutureBuilder<Map<String, String>>(
+      future: _fetchModalData(childUserId, alertLat, alertLon, notification),
+      builder: (context, snapshot) {
+        final parentNames = snapshot.data?['parentNames'] ??
+            (notificationData['parent_names'] ?? 'Loading...');
+        final distanceKm = snapshot.data?['distance'] ??
+            ((notification['distance_km'] is num)
+                ? (notification['distance_km'] as num).toStringAsFixed(2)
+                : 'Calculating...');
+
+        return _buildPoliceModalContent(
+          notification,
+          notificationData,
+          childName,
+          parentNames,
+          address,
+          distanceKm,
+        );
+      },
+    );
+  }
+
+  /// Fetch parent names and calculate real-time distance
+  Future<Map<String, String>> _fetchModalData(
+    String? childUserId,
+    double? alertLat,
+    double? alertLon,
+    Map<String, dynamic> notification,
+  ) async {
+    final result = <String, String>{};
+
+    // Fetch parent names
+    result['parentNames'] = await _fetchParentNames(childUserId);
+
+    // Calculate real-time distance
+    try {
+      if (alertLat != null && alertLon != null) {
+        final position = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high,
+        );
+
+        final distance = Geolocator.distanceBetween(
+          position.latitude,
+          position.longitude,
+          alertLat,
+          alertLon,
+        );
+        result['distance'] = (distance / 1000).toStringAsFixed(2);
+      }
+    } catch (e) {
+      debugPrint('❌ Error calculating real-time distance: $e');
+    }
+
+    return result;
+  }
+
+  /// Fetch parent/guardian names for a child user
+  ///
+  /// NEW APPROACH: Query emergency_contacts directly by searching for records
+  /// where the child's email or name appears in the added_by field or
+  /// where we can match via group relationships.
+  ///
+  /// Since group_members is blocked by RLS, we'll search emergency_contacts
+  /// for any record that might be linked to this child user.
+  Future<String> _fetchParentNames(String? childUserId) async {
+    if (childUserId == null) {
+      debugPrint('🔍 Parent fetch: childUserId is null');
+      return 'No parents listed';
+    }
+
+    try {
+      debugPrint('🔍 Fetching parents for child user: $childUserId');
+
+      // STEP 1: Get the child's email and full name
+      debugPrint('🔍 STEP 1: Fetching child user record...');
+      final childUser = await supabase
+          .from('user')
+          .select('first_name, last_name, email')
+          .eq('id', childUserId)
+          .maybeSingle();
+
+      if (childUser == null) {
+        debugPrint('❌ Child user not found in database');
+        return 'No parents listed';
+      }
+
+      final childEmail = childUser['email'] as String?;
+      final childFullName =
+          '${childUser['first_name'] ?? ''} ${childUser['last_name'] ?? ''}'
+              .trim();
+      debugPrint('🔍 Child name: $childFullName');
+      debugPrint('🔍 Child email: $childEmail');
+
+      // STEP 2: Try to find emergency contacts by added_by email
+      debugPrint(
+          '🔍 STEP 2: Searching emergency_contacts by added_by email...');
+
+      List<dynamic> emergencyContactRecords = [];
+
+      if (childEmail != null && childEmail.isNotEmpty) {
+        emergencyContactRecords = await supabase
+            .from('emergency_contacts')
+            .select('user_id')
+            .eq('added_by', childEmail);
+
+        debugPrint(
+            '🔍 Found ${emergencyContactRecords.length} records by email');
+      }
+
+      // STEP 3: If email search fails, try searching by name (even if it's "null null")
+      if (emergencyContactRecords.isEmpty &&
+          childFullName.isNotEmpty &&
+          childFullName != 'null null') {
+        debugPrint('🔍 STEP 3: Trying search by emergency_contact_name...');
+        emergencyContactRecords = await supabase
+            .from('emergency_contacts')
+            .select('user_id')
+            .eq('emergency_contact_name', childFullName);
+
+        debugPrint(
+            '🔍 Found ${emergencyContactRecords.length} records by name');
+      }
+
+      if (emergencyContactRecords.isEmpty) {
+        debugPrint('⚠️ No emergency contacts found for this child');
+        return 'No parents listed';
+      }
+
+      // STEP 4: Extract unique parent user IDs
+      final parentUserIds = emergencyContactRecords
+          .map((record) => record['user_id'])
+          .where((id) => id != null)
+          .toSet()
+          .toList();
+
+      debugPrint('🔍 Parent user IDs: $parentUserIds');
+
+      if (parentUserIds.isEmpty) {
+        return 'No parents listed';
+      }
+
+      // STEP 5: Get parent user records to get their names
+      debugPrint('🔍 STEP 4: Fetching parent user records...');
+      final parentUsers = await supabase
+          .from('user')
+          .select('first_name, last_name')
+          .inFilter('id', parentUserIds);
+
+      debugPrint('🔍 Found ${parentUsers.length} parent user records');
+      debugPrint('🔍 Parent data: $parentUsers');
+
+      if (parentUsers.isEmpty) {
+        return 'No parents listed';
+      }
+
+      // STEP 6: Format parent names
+      final parentNames = parentUsers
+          .map((user) =>
+              '${user['first_name'] ?? ''} ${user['last_name'] ?? ''}'.trim())
+          .where((name) => name.isNotEmpty)
+          .join(', ');
+
+      debugPrint('✅ SUCCESS - Parent names: $parentNames');
+      return parentNames.isNotEmpty ? parentNames : 'No parents listed';
+    } catch (e) {
+      debugPrint('❌ Error fetching parent names: $e');
+      debugPrint('❌ Stack trace: ${StackTrace.current}');
+      return 'Error loading parents';
+    }
+  }
+
+  Widget _buildPoliceModalContent(
+    Map<String, dynamic> notification,
+    Map<String, dynamic> notificationData,
+    String childName,
+    String parentNames,
+    String address,
+    String distanceKm,
+  ) {
     // Parse timestamp from notification_data (REAL-TIME timestamp from panic_alerts)
     final timestampStr = notificationData['timestamp'] as String?;
     final timestamp = timestampStr != null
@@ -507,163 +712,176 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: Container(
-        constraints: const BoxConstraints(maxWidth: 400),
+        constraints: const BoxConstraints(maxWidth: 400, maxHeight: 680),
         padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Alert Icon
-            Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                color: alertColor.withOpacity(0.1),
-                shape: BoxShape.circle,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Alert Icon
+              Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  color: alertColor.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  alertIcon,
+                  size: 45,
+                  color: alertColor,
+                ),
               ),
-              child: Icon(
-                alertIcon,
-                size: 45,
-                color: alertColor,
-              ),
-            ),
-            const SizedBox(height: 16),
+              const SizedBox(height: 16),
 
-            // Alert Type
-            Text(
-              alertTitle,
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: alertColor,
+              // Alert Type
+              Text(
+                alertTitle,
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: alertColor,
+                ),
+                textAlign: TextAlign.center,
               ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
+              const SizedBox(height: 8),
 
-            // Alert Message
-            Text(
-              alertMessage,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: Colors.black87,
+              // Alert Message
+              Text(
+                alertMessage,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87,
+                ),
+                textAlign: TextAlign.center,
               ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24),
+              const SizedBox(height: 24),
 
-            // Alert Details Card
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade50,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey.shade200),
+              // Alert Details Card
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade200),
+                ),
+                child: Column(
+                  children: [
+                    _buildDetailRow(Icons.person, 'Name', childName),
+                    const SizedBox(height: 12),
+                    _buildDetailRow(Icons.family_restroom, 'Parent/Guardian',
+                        parentNames), // ✅ Use the fetched parent names!
+                    const SizedBox(height: 12),
+                    _buildDetailRow(
+                        Icons.calendar_today, 'Date', formattedDate),
+                    const SizedBox(height: 12),
+                    _buildDetailRow(Icons.access_time, 'Time', formattedTime),
+                    const SizedBox(height: 12),
+                    _buildDetailRow(
+                      Icons.location_on,
+                      'Location',
+                      address.isNotEmpty ? address : 'Location updating...',
+                    ),
+                    const SizedBox(height: 12),
+                    _buildDetailRow(
+                        Icons.near_me, 'Distance', '$distanceKm km away'),
+                  ],
+                ),
               ),
-              child: Column(
-                children: [
-                  _buildDetailRow(Icons.person, 'Name', childName),
-                  const SizedBox(height: 12),
-                  _buildDetailRow(Icons.calendar_today, 'Date', formattedDate),
-                  const SizedBox(height: 12),
-                  _buildDetailRow(Icons.access_time, 'Time', formattedTime),
-                  const SizedBox(height: 12),
-                  _buildDetailRow(
-                    Icons.location_on,
-                    'Location',
-                    address.isNotEmpty ? address : 'Location updating...',
+              const SizedBox(height: 16),
+
+              // Map Preview
+              if (latitude != null && longitude != null)
+                Container(
+                  height: 150,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey.shade300),
                   ),
-                  const SizedBox(height: 12),
-                  _buildDetailRow(
-                      Icons.near_me, 'Distance', '$distanceKm km away'),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // Action Buttons
-            if (alertType.toUpperCase() != 'CANCEL') ...[
-              Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: latitude != null && longitude != null
-                          ? () => _openMapToLocation(latitude, longitude)
-                          : null,
-                      icon: const Icon(Icons.map, color: Colors.white),
-                      label: const Text(
-                        'View Map',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
+                  clipBehavior: Clip.antiAlias,
+                  child: GoogleMap(
+                    initialCameraPosition: CameraPosition(
+                      target: LatLng(latitude, longitude),
+                      zoom: 15,
+                    ),
+                    markers: {
+                      Marker(
+                        markerId: const MarkerId('alert_location'),
+                        position: LatLng(latitude, longitude),
+                        icon: BitmapDescriptor.defaultMarkerWithHue(
+                          alertType.toUpperCase() == 'CRITICAL'
+                              ? BitmapDescriptor.hueRed
+                              : BitmapDescriptor.hueOrange,
+                        ),
+                        infoWindow: InfoWindow(
+                          title: childName,
+                          snippet: address,
                         ),
                       ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: alertColor,
-                        disabledBackgroundColor: Colors.grey.shade400,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        elevation: 2,
+                    },
+                    myLocationButtonEnabled: false,
+                    zoomControlsEnabled: false,
+                    mapToolbarEnabled: false,
+                  ),
+                ),
+              const SizedBox(height: 16),
+
+              // Action Buttons
+              if (alertType.toUpperCase() != 'CANCEL') ...[
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      _trackUser(userId, latitude, longitude, childName, 'N/A');
+                    },
+                    icon: const Icon(Icons.my_location, color: Colors.white),
+                    label: const Text(
+                      'Track User',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: () {
-                        Navigator.of(context).pop();
-                        _trackUser(
-                            userId, latitude, longitude, childName, 'N/A');
-                      },
-                      icon: const Icon(Icons.my_location, color: Colors.white),
-                      label: const Text(
-                        'Track User',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: alertColor,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
                       ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF4CAF50),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        elevation: 2,
-                      ),
+                      elevation: 2,
                     ),
                   ),
-                ],
+                ),
+                const SizedBox(height: 12),
+              ],
+
+              // Dismiss Button
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                  },
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(color: Colors.grey.shade400),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  child: Text(
+                    alertType.toUpperCase() == 'CANCEL' ? 'OK' : 'Dismiss',
+                    style: const TextStyle(
+                      color: Colors.black87,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
               ),
-              const SizedBox(height: 12),
             ],
-
-            // Dismiss Button
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                },
-                style: OutlinedButton.styleFrom(
-                  side: BorderSide(color: Colors.grey.shade400),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                child: Text(
-                  alertType.toUpperCase() == 'CANCEL' ? 'OK' : 'Dismiss',
-                  style: const TextStyle(
-                    color: Colors.black87,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -786,30 +1004,49 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
     setState(() => _isLoadingIncidents = true);
 
     try {
-      // Load recent incidents/emergency reports
+      final userId = supabase.auth.currentUser?.id;
+      if (userId == null) {
+        setState(() => _isLoadingIncidents = false);
+        return;
+      }
+
+      debugPrint('🔍 POLICE: Loading active incidents for user: $userId');
+
+      // Load UNREAD station notifications (active incidents only)
       final incidents = await supabase
-          .from('emergency_reports')
-          .select('*, user!inner(*)')
+          .from('station_notifications')
+          .select()
+          .eq('station_user_id', userId)
+          .eq('read', false)
           .order('created_at', ascending: false)
-          .limit(10);
+          .limit(20);
+
+      debugPrint('📊 POLICE: Found ${incidents.length} active incidents');
 
       Set<Marker> markers = {};
 
       for (var incident in incidents) {
-        if (incident['latitude'] != null && incident['longitude'] != null) {
+        final notificationData =
+            incident['notification_data'] as Map<String, dynamic>? ?? {};
+        final latitude = notificationData['latitude'] as double?;
+        final longitude = notificationData['longitude'] as double?;
+
+        if (latitude != null && longitude != null) {
+          final childName = notificationData['child_name'] ?? 'Unknown';
+          final alertType = incident['alert_type'] ?? 'REGULAR';
+
           markers.add(
             Marker(
               markerId: MarkerId(incident['id'].toString()),
-              position: LatLng(
-                incident['latitude'].toDouble(),
-                incident['longitude'].toDouble(),
-              ),
+              position: LatLng(latitude, longitude),
               infoWindow: InfoWindow(
-                title: 'Emergency Report',
-                snippet: incident['emergency_type'] ?? 'Unknown',
+                title: '$alertType Alert',
+                snippet: childName,
               ),
               icon: BitmapDescriptor.defaultMarkerWithHue(
-                  BitmapDescriptor.hueRed),
+                  alertType == 'CRITICAL'
+                      ? BitmapDescriptor.hueRed
+                      : BitmapDescriptor.hueOrange),
             ),
           );
         }
@@ -830,15 +1067,23 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
     setState(() => _isLoadingHistory = true);
     try {
       final userId = supabase.auth.currentUser?.id;
-      if (userId == null) return;
+      if (userId == null) {
+        setState(() => _isLoadingHistory = false);
+        return;
+      }
 
-      // Load incidents where this police responded
+      debugPrint('📚 Loading incident history for user: $userId');
+
+      // Load read station notifications (incident history)
       final history = await supabase
-          .from('incident_responses')
-          .select('*, incident:emergency_reports(*, user!inner(email))')
-          .eq('responder_id', userId)
-          .order('responded_at', ascending: false)
+          .from('station_notifications')
+          .select()
+          .eq('station_user_id', userId)
+          .eq('read', true)
+          .order('created_at', ascending: false)
           .limit(20);
+
+      debugPrint('📜 Found ${history.length} history records');
 
       setState(() {
         _incidentHistory = history;
@@ -846,7 +1091,7 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
       });
     } catch (e) {
       setState(() => _isLoadingHistory = false);
-      debugPrint('Error loading incident history: $e');
+      debugPrint('❌ Error loading incident history: $e');
     }
   }
 
@@ -939,89 +1184,11 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
                           : ListView.builder(
                               itemCount: _incidentHistory.length,
                               itemBuilder: (context, index) {
-                                final item = _incidentHistory[index];
-                                final incident = item['incident'] ?? {};
-                                final type =
-                                    incident['emergency_type'] ?? 'Unknown';
-                                final location = incident['location'] ??
-                                    'Location not available';
-                                final reporter =
-                                    incident['user']?['email'] ?? 'Unknown';
-                                final responseType =
-                                    item['response_type'] ?? '';
-                                final respondedAt = item['responded_at'] != null
-                                    ? DateTime.tryParse(item['responded_at'])
-                                    : null;
-                                final timeAgo = respondedAt != null
-                                    ? _getTimeAgo(respondedAt)
-                                    : '';
-
-                                return Container(
-                                  margin: EdgeInsets.only(
-                                      bottom: screenHeight * 0.012),
-                                  padding: EdgeInsets.all(screenWidth * 0.03),
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey.shade50,
-                                    borderRadius: BorderRadius.circular(10),
-                                    border:
-                                        Border.all(color: Colors.grey.shade200),
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          Icon(Icons.warning,
-                                              color: Colors.red,
-                                              size: screenWidth * 0.05),
-                                          SizedBox(width: screenWidth * 0.02),
-                                          Text(
-                                            type.toUpperCase(),
-                                            style: TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                              color: Colors.red.shade700,
-                                              fontSize: screenWidth * 0.037,
-                                            ),
-                                          ),
-                                          Spacer(),
-                                          Text(
-                                            responseType.toUpperCase(),
-                                            style: TextStyle(
-                                              color: Colors.blue,
-                                              fontWeight: FontWeight.w600,
-                                              fontSize: screenWidth * 0.032,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      SizedBox(height: screenHeight * 0.004),
-                                      Text(
-                                        'Reporter: $reporter',
-                                        style: TextStyle(
-                                          fontSize: screenWidth * 0.033,
-                                          color: Colors.black87,
-                                        ),
-                                      ),
-                                      Text(
-                                        'Location: $location',
-                                        style: TextStyle(
-                                          fontSize: screenWidth * 0.033,
-                                          color: Colors.black87,
-                                        ),
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      SizedBox(height: screenHeight * 0.004),
-                                      Text(
-                                        timeAgo,
-                                        style: TextStyle(
-                                          fontSize: screenWidth * 0.03,
-                                          color: Colors.grey.shade600,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
+                                final incident = _incidentHistory[index];
+                                return _buildIncidentCard(
+                                  incident,
+                                  screenWidth,
+                                  screenHeight,
                                 );
                               },
                             ),
@@ -1475,24 +1642,12 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
                 size: screenWidth * 0.06,
               ),
               SizedBox(width: screenWidth * 0.03),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Active Incidents',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: screenWidth * 0.045,
-                    ),
-                  ),
-                  Text(
-                    '${_incidents.length} reports',
-                    style: TextStyle(
-                      color: Colors.grey.shade600,
-                      fontSize: screenWidth * 0.035,
-                    ),
-                  ),
-                ],
+              Text(
+                'Active Incidents',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: screenWidth * 0.045,
+                ),
               ),
               const Spacer(),
               Container(
@@ -1641,161 +1796,239 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
 
   Widget _buildIncidentCard(
       Map<String, dynamic> incident, double screenWidth, double screenHeight) {
-    final user = incident['user'];
-    final emergencyType = incident['emergency_type'] ?? 'Unknown';
-    final location = incident['location'] ?? 'Location not available';
-    final timestamp = DateTime.parse(incident['created_at']);
-    final timeAgo = _getTimeAgo(timestamp);
+    final notificationData =
+        incident['notification_data'] as Map<String, dynamic>? ?? {};
+    // Get child_user_id from root notification object (same as modal)
+    final childUserId = incident['child_user_id'] as String?;
 
-    return Container(
-      margin: EdgeInsets.only(bottom: screenHeight * 0.015),
-      padding: EdgeInsets.all(screenWidth * 0.04),
-      decoration: BoxDecoration(
-        color: Colors.red.shade50,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.red.shade200),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header
-          Row(
+    return FutureBuilder<String>(
+      future: _fetchParentNames(childUserId),
+      builder: (context, parentSnapshot) {
+        final parentNames = parentSnapshot.data ?? 'Loading...';
+
+        // Extract comprehensive details from notification_data
+        final childName = notificationData['child_name'] ?? 'Unknown';
+        final address = notificationData['address'] ?? 'Unknown location';
+        final latitude = notificationData['latitude'] as double?;
+        final longitude = notificationData['longitude'] as double?;
+        final timestamp = notificationData['timestamp'] as String?;
+        final alertType = incident['alert_type'] ?? 'REGULAR';
+
+        // Format date and time
+        DateTime? dateTime;
+        String formattedDate = 'Unknown date';
+        String formattedTime = 'Unknown time';
+        String timeAgo = '';
+
+        if (timestamp != null) {
+          try {
+            dateTime = DateTime.parse(timestamp);
+            formattedDate = DateFormat('MMMM d, yyyy').format(dateTime);
+            formattedTime = DateFormat('h:mm a').format(dateTime);
+            timeAgo = _getTimeAgo(dateTime);
+          } catch (e) {
+            debugPrint('Error parsing timestamp: $e');
+          }
+        }
+
+        // Calculate distance if coordinates available
+        String distance = 'Unknown distance';
+        if (latitude != null && longitude != null && _currentPosition != null) {
+          final distanceInMeters = Geolocator.distanceBetween(
+            _currentPosition!.latitude,
+            _currentPosition!.longitude,
+            latitude,
+            longitude,
+          );
+          if (distanceInMeters < 1000) {
+            distance = '${distanceInMeters.toStringAsFixed(0)}m away';
+          } else {
+            distance = '${(distanceInMeters / 1000).toStringAsFixed(2)}km away';
+          }
+        }
+
+        return Container(
+          margin: EdgeInsets.only(bottom: screenHeight * 0.015),
+          padding: EdgeInsets.all(screenWidth * 0.04),
+          decoration: BoxDecoration(
+            color: alertType == 'CRITICAL'
+                ? Colors.red.shade50
+                : Colors.orange.shade50,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: alertType == 'CRITICAL'
+                  ? Colors.red.shade200
+                  : Colors.orange.shade200,
+              width: 2,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                padding: EdgeInsets.all(screenWidth * 0.02),
-                decoration: BoxDecoration(
-                  color: Colors.red.shade100,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.warning,
-                  color: Colors.red.shade700,
-                  size: screenWidth * 0.05,
-                ),
-              ),
-              SizedBox(width: screenWidth * 0.03),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      emergencyType.toUpperCase(),
+              // Header
+              Row(
+                children: [
+                  Container(
+                    padding: EdgeInsets.all(screenWidth * 0.02),
+                    decoration: BoxDecoration(
+                      color: alertType == 'CRITICAL'
+                          ? Colors.red.shade100
+                          : Colors.orange.shade100,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      alertType == 'CRITICAL' ? Icons.warning : Icons.emergency,
+                      color: alertType == 'CRITICAL'
+                          ? Colors.red.shade700
+                          : Colors.orange.shade700,
+                      size: screenWidth * 0.05,
+                    ),
+                  ),
+                  SizedBox(width: screenWidth * 0.03),
+                  Expanded(
+                    child: Text(
+                      '$alertType ALERT',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: screenWidth * 0.04,
-                        color: Colors.red.shade700,
+                        color: alertType == 'CRITICAL'
+                            ? Colors.red.shade700
+                            : Colors.orange.shade700,
                       ),
                     ),
-                    Text(
-                      timeAgo,
+                  ),
+                  Container(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: screenWidth * 0.025,
+                      vertical: screenHeight * 0.005,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      'PENDING',
                       style: TextStyle(
-                        fontSize: screenWidth * 0.03,
-                        color: Colors.grey.shade600,
+                        fontSize: screenWidth * 0.025,
+                        color: Colors.orange.shade700,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
-                  ],
-                ),
-              ),
-              Container(
-                padding: EdgeInsets.symmetric(
-                  horizontal: screenWidth * 0.025,
-                  vertical: screenHeight * 0.005,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.orange.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  'PENDING',
-                  style: TextStyle(
-                    fontSize: screenWidth * 0.025,
-                    color: Colors.orange.shade700,
-                    fontWeight: FontWeight.w600,
                   ),
-                ),
+                ],
               ),
-            ],
-          ),
 
-          SizedBox(height: screenHeight * 0.01),
+              SizedBox(height: screenHeight * 0.015),
 
-          // Details
-          Text(
-            'Reporter: ${user['email'] ?? 'Unknown'}',
-            style: TextStyle(
-              fontSize: screenWidth * 0.035,
-              color: Colors.black87,
-            ),
-          ),
-          SizedBox(height: screenHeight * 0.005),
-          Text(
-            'Location: $location',
-            style: TextStyle(
-              fontSize: screenWidth * 0.035,
-              color: Colors.black87,
-            ),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-
-          SizedBox(height: screenHeight * 0.015),
-
-          // Action buttons
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.orange,
-                    padding:
-                        EdgeInsets.symmetric(vertical: screenHeight * 0.01),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+              // Child name
+              Row(
+                children: [
+                  Icon(Icons.person,
+                      size: screenWidth * 0.04, color: Colors.blue.shade700),
+                  SizedBox(width: screenWidth * 0.02),
+                  Expanded(
+                    child: Text(
+                      childName,
+                      style: TextStyle(
+                        fontSize: screenWidth * 0.038,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
                     ),
                   ),
-                  onPressed: () => _respondToIncident(
-                    incident['id'].toString(),
-                    'dispatched',
+                ],
+              ),
+              SizedBox(height: screenHeight * 0.008),
+
+              // Parent/Guardian
+              Row(
+                children: [
+                  Icon(Icons.family_restroom,
+                      size: screenWidth * 0.04, color: Colors.green.shade700),
+                  SizedBox(width: screenWidth * 0.02),
+                  Expanded(
+                    child: Text(
+                      'Parent: $parentNames',
+                      style: TextStyle(
+                        fontSize: screenWidth * 0.035,
+                        color: Colors.black87,
+                      ),
+                    ),
                   ),
-                  child: Text(
-                    'Dispatch',
+                ],
+              ),
+              SizedBox(height: screenHeight * 0.008),
+
+              // Date and Time
+              Row(
+                children: [
+                  Icon(Icons.calendar_today,
+                      size: screenWidth * 0.035, color: Colors.grey.shade600),
+                  SizedBox(width: screenWidth * 0.02),
+                  Text(
+                    formattedDate,
                     style: TextStyle(
-                      color: Colors.white,
+                      fontSize: screenWidth * 0.033,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  SizedBox(width: screenWidth * 0.03),
+                  Icon(Icons.access_time,
+                      size: screenWidth * 0.035, color: Colors.grey.shade600),
+                  SizedBox(width: screenWidth * 0.02),
+                  Text(
+                    formattedTime,
+                    style: TextStyle(
+                      fontSize: screenWidth * 0.033,
+                      color: Colors.black87,
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: screenHeight * 0.008),
+
+              // Location
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.location_on,
+                      size: screenWidth * 0.04, color: Colors.red.shade600),
+                  SizedBox(width: screenWidth * 0.02),
+                  Expanded(
+                    child: Text(
+                      address,
+                      style: TextStyle(
+                        fontSize: screenWidth * 0.035,
+                        color: Colors.black87,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: screenHeight * 0.008),
+
+              // Distance
+              Row(
+                children: [
+                  Icon(Icons.social_distance,
+                      size: screenWidth * 0.04, color: Colors.purple.shade600),
+                  SizedBox(width: screenWidth * 0.02),
+                  Text(
+                    distance,
+                    style: TextStyle(
                       fontSize: screenWidth * 0.035,
+                      color: Colors.black87,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                ),
-              ),
-              SizedBox(width: screenWidth * 0.02),
-              Expanded(
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    padding:
-                        EdgeInsets.symmetric(vertical: screenHeight * 0.01),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  onPressed: () => _respondToIncident(
-                    incident['id'].toString(),
-                    'responding',
-                  ),
-                  child: Text(
-                    'Respond',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: screenWidth * 0.035,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
+                ],
               ),
             ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -1810,7 +2043,7 @@ class _PoliceDashboardState extends State<PoliceDashboard> {
     } else if (difference.inMinutes > 0) {
       return '${difference.inMinutes}m ago';
     } else {
-      return 'Just now';
+      return '${difference.inSeconds}s ago';
     }
   }
 

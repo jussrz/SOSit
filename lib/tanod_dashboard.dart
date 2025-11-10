@@ -8,6 +8,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:intl/intl.dart';
 import 'dart:async';
 import 'tanod_settings_page.dart';
 
@@ -43,6 +44,9 @@ class _TanodDashboardState extends State<TanodDashboard> {
   StreamSubscription<ConnectivityResult>? _connectivitySubscription;
   DateTime? _lastFetchTime;
   static const String _lastFetchKey = 'tanod_last_notification_fetch';
+
+  // Current position for distance calculation
+  Position? _currentPosition;
 
   @override
   void initState() {
@@ -155,13 +159,17 @@ class _TanodDashboardState extends State<TanodDashboard> {
     try {
       final prefs = await SharedPreferences.getInstance();
       final timestamp = prefs.getString(_lastFetchKey);
+
+      // Always use NOW as the baseline to prevent fetching old notifications
+      // This ensures only NEW notifications created after login are fetched
+      _lastFetchTime = DateTime.now();
+      await _saveLastFetchTime(_lastFetchTime!);
+
       if (timestamp != null) {
-        _lastFetchTime = DateTime.parse(timestamp);
-        debugPrint('📅 Last notification fetch: $_lastFetchTime');
+        debugPrint('📅 Previous fetch time was: $timestamp');
+        debugPrint(
+            '📅 Reset to NOW: $_lastFetchTime (prevents old notifications)');
       } else {
-        // First time login - set to NOW to prevent fetching old notifications
-        _lastFetchTime = DateTime.now();
-        await _saveLastFetchTime(_lastFetchTime!);
         debugPrint('📅 First login - initialized last fetch time to NOW');
       }
     } catch (e) {
@@ -227,7 +235,8 @@ class _TanodDashboardState extends State<TanodDashboard> {
   Future<void> _listenForStationNotifications() async {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) {
-      debugPrint('❌ TANOD: No user ID found for station notifications subscription');
+      debugPrint(
+          '❌ TANOD: No user ID found for station notifications subscription');
       return;
     }
 
@@ -253,7 +262,8 @@ class _TanodDashboardState extends State<TanodDashboard> {
         .subscribe((status, error) {
       debugPrint('📡 TANOD Subscription status: $status');
       if (status == RealtimeSubscribeStatus.subscribed) {
-        debugPrint('✅ TANOD: Successfully subscribed to station notifications!');
+        debugPrint(
+            '✅ TANOD: Successfully subscribed to station notifications!');
       } else if (status == RealtimeSubscribeStatus.channelError) {
         debugPrint('❌ TANOD: Channel error occurred');
       }
@@ -295,6 +305,11 @@ class _TanodDashboardState extends State<TanodDashboard> {
         desiredAccuracy: LocationAccuracy.high,
       );
 
+      // Store current position for distance calculations
+      setState(() {
+        _currentPosition = position;
+      });
+
       // Update location in database
       await supabase.rpc('update_user_location', params: {
         'p_user_id': userId,
@@ -313,13 +328,16 @@ class _TanodDashboardState extends State<TanodDashboard> {
     debugPrint('🚨 TANOD: _handleNewStationNotification called!');
     debugPrint('🚨 TANOD: Notification data: $notification');
     debugPrint('🚨 TANOD: mounted = $mounted');
-    
+
     if (!mounted) {
       debugPrint('❌ TANOD: Widget not mounted, skipping notification display');
       return;
     }
 
     debugPrint('✅ TANOD: Showing notification dialog...');
+
+    // Refresh incidents list to show the new alert
+    _loadIncidents();
 
     // Play alert sound or vibration here
 
@@ -410,13 +428,207 @@ class _TanodDashboardState extends State<TanodDashboard> {
     // Extract notification data from JSONB field
     final notificationData =
         notification['notification_data'] as Map<String, dynamic>? ?? {};
-    final childName = notificationData['child_name'] ?? 'Unknown User';
-    final parentNames = notificationData['parent_names'] ?? 'No parents listed';
-    final address = notificationData['address'] ?? 'Location unavailable';
-    final distanceKm = (notification['distance_km'] is num)
-        ? (notification['distance_km'] as num).toStringAsFixed(2)
-        : 'N/A';
 
+    // DEBUG: Print full notification data to see what's available
+    debugPrint('🔍 TANOD MODAL - Full notification: $notification');
+    debugPrint('🔍 TANOD MODAL - Notification data: $notificationData');
+
+    final childUserId = notification['child_user_id'];
+    final childName = notificationData['child_name'] ?? 'Unknown User';
+    final address = notificationData['address'] ?? 'Location unavailable';
+
+    // Calculate real-time distance asynchronously
+    final alertLat = notificationData['latitude'] as double?;
+    final alertLon = notificationData['longitude'] as double?;
+
+    // Use FutureBuilder to fetch parent names and calculate distance
+    return FutureBuilder<Map<String, String>>(
+      future: _fetchModalData(childUserId, alertLat, alertLon),
+      builder: (context, snapshot) {
+        final parentNames = snapshot.data?['parentNames'] ??
+            (notificationData['parent_names'] ?? 'Loading...');
+        final distanceKm = snapshot.data?['distance'] ??
+            ((notification['distance_km'] is num)
+                ? (notification['distance_km'] as num).toStringAsFixed(2)
+                : 'Calculating...');
+
+        return _buildModalContent(
+          notification,
+          notificationData,
+          childName,
+          parentNames,
+          address,
+          distanceKm,
+        );
+      },
+    );
+  }
+
+  /// Fetch parent names and calculate real-time distance
+  Future<Map<String, String>> _fetchModalData(
+    String? childUserId,
+    double? alertLat,
+    double? alertLon,
+  ) async {
+    final result = <String, String>{};
+
+    // Fetch parent names
+    result['parentNames'] = await _fetchParentNames(childUserId);
+
+    // Calculate real-time distance
+    try {
+      if (alertLat != null && alertLon != null) {
+        final position = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high,
+        );
+
+        final distance = Geolocator.distanceBetween(
+          position.latitude,
+          position.longitude,
+          alertLat,
+          alertLon,
+        );
+        result['distance'] = (distance / 1000).toStringAsFixed(2);
+      }
+    } catch (e) {
+      debugPrint('❌ Error calculating real-time distance: $e');
+    }
+
+    return result;
+  }
+
+  /// Fetch parent/guardian names for a child user
+  ///
+  /// CRITICAL DATABASE RELATIONSHIP:
+  /// emergency_contacts.user_id = PARENT's ID (the group creator)
+  /// emergency_contacts.group_member_id = CHILD's group_member record ID
+  /// emergency_contacts.emergency_contact_name = CHILD's name
+  ///
+  /// To find the PARENT of a child, we need to:
+  /// 1. Get the child's user record to find their name
+  /// 2. Query emergency_contacts WHERE emergency_contact_name matches child's name
+  /// 3. Get the user_id from that record (which is the PARENT's ID)
+  /// 4. Query user table to get parent's full name
+  /// Fetch parent/guardian names for a child user
+  ///
+  /// Query emergency_contacts by searching for records where the child's
+  /// email appears in the added_by field. This matches the working approach
+  /// from police_dashboard.dart.
+  Future<String> _fetchParentNames(String? childUserId) async {
+    if (childUserId == null) {
+      debugPrint('🔍 Parent fetch: childUserId is null');
+      return 'No parents listed';
+    }
+
+    try {
+      debugPrint('🔍 Fetching parents for child user: $childUserId');
+
+      // STEP 1: Get the child's email and full name
+      debugPrint('🔍 STEP 1: Fetching child user record...');
+      final childUser = await supabase
+          .from('user')
+          .select('first_name, last_name, email')
+          .eq('id', childUserId)
+          .maybeSingle();
+
+      if (childUser == null) {
+        debugPrint('❌ Child user not found in database');
+        return 'No parents listed';
+      }
+
+      final childEmail = childUser['email'] as String?;
+      final childFullName =
+          '${childUser['first_name'] ?? ''} ${childUser['last_name'] ?? ''}'
+              .trim();
+      debugPrint('🔍 Child name: $childFullName');
+      debugPrint('🔍 Child email: $childEmail');
+
+      // STEP 2: Try to find emergency contacts by added_by email
+      debugPrint(
+          '🔍 STEP 2: Searching emergency_contacts by added_by email...');
+
+      List<dynamic> emergencyContactRecords = [];
+
+      if (childEmail != null && childEmail.isNotEmpty) {
+        emergencyContactRecords = await supabase
+            .from('emergency_contacts')
+            .select('user_id')
+            .eq('added_by', childEmail);
+
+        debugPrint(
+            '🔍 Found ${emergencyContactRecords.length} records by email');
+      }
+
+      // STEP 3: If email search fails, try searching by name (even if it's "null null")
+      if (emergencyContactRecords.isEmpty &&
+          childFullName.isNotEmpty &&
+          childFullName != 'null null') {
+        debugPrint('🔍 STEP 3: Trying search by emergency_contact_name...');
+        emergencyContactRecords = await supabase
+            .from('emergency_contacts')
+            .select('user_id')
+            .eq('emergency_contact_name', childFullName);
+
+        debugPrint(
+            '🔍 Found ${emergencyContactRecords.length} records by name');
+      }
+
+      if (emergencyContactRecords.isEmpty) {
+        debugPrint('⚠️ No emergency contacts found for this child');
+        return 'No parents listed';
+      }
+
+      // STEP 4: Extract unique parent user IDs
+      final parentUserIds = emergencyContactRecords
+          .map((record) => record['user_id'])
+          .where((id) => id != null)
+          .toSet()
+          .toList();
+
+      debugPrint('🔍 Parent user IDs: $parentUserIds');
+
+      if (parentUserIds.isEmpty) {
+        return 'No parents listed';
+      }
+
+      // STEP 5: Get parent user records to get their names
+      debugPrint('🔍 STEP 4: Fetching parent user records...');
+      final parentUsers = await supabase
+          .from('user')
+          .select('first_name, last_name')
+          .inFilter('id', parentUserIds);
+
+      debugPrint('🔍 Found ${parentUsers.length} parent user records');
+      debugPrint('🔍 Parent data: $parentUsers');
+
+      if (parentUsers.isEmpty) {
+        return 'No parents listed';
+      }
+
+      // STEP 6: Format parent names
+      final parentNames = parentUsers
+          .map((user) =>
+              '${user['first_name'] ?? ''} ${user['last_name'] ?? ''}'.trim())
+          .where((name) => name.isNotEmpty)
+          .join(', ');
+
+      debugPrint('✅ SUCCESS - Parent names: $parentNames');
+      return parentNames.isNotEmpty ? parentNames : 'No parents listed';
+    } catch (e) {
+      debugPrint('❌ Error fetching parent names: $e');
+      debugPrint('❌ Stack trace: ${StackTrace.current}');
+      return 'Error loading parents';
+    }
+  }
+
+  Widget _buildModalContent(
+    Map<String, dynamic> notification,
+    Map<String, dynamic> notificationData,
+    String childName,
+    String parentNames,
+    String address,
+    String distanceKm,
+  ) {
     // Parse timestamp from notification_data (REAL-TIME timestamp from panic_alerts)
     final timestampStr = notificationData['timestamp'] as String?;
     final timestamp = timestampStr != null
@@ -460,108 +672,152 @@ class _TanodDashboardState extends State<TanodDashboard> {
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: Container(
-        constraints: const BoxConstraints(maxWidth: 400),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Icon Header
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: alertColor.withOpacity(0.1),
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(20),
-                  topRight: Radius.circular(20),
-                ),
-              ),
-              child: Column(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: alertColor,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      alertIcon,
-                      color: Colors.white,
-                      size: 48,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: alertColor,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Panic Button Pressed',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // Details Card
-            Padding(
-              padding: const EdgeInsets.all(20),
-              child: Container(
-                padding: const EdgeInsets.all(16),
+        constraints: const BoxConstraints(maxWidth: 400, maxHeight: 680),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Icon Header
+              Container(
+                padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
-                  color: Colors.grey[100],
-                  borderRadius: BorderRadius.circular(12),
+                  color: alertColor.withOpacity(0.1),
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(20),
+                    topRight: Radius.circular(20),
+                  ),
                 ),
                 child: Column(
                   children: [
-                    _buildDetailRow(Icons.person, 'Name', childName),
-                    const SizedBox(height: 12),
-                    _buildDetailRow(
-                        Icons.calendar_today, 'Date', formattedDate),
-                    const SizedBox(height: 12),
-                    _buildDetailRow(Icons.access_time, 'Time', formattedTime),
-                    const SizedBox(height: 12),
-                    _buildDetailRow(Icons.location_on, 'Location', address),
-                    const SizedBox(height: 12),
-                    _buildDetailRow(Icons.social_distance, 'Distance',
-                        '$distanceKm km away'),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: alertColor,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        alertIcon,
+                        color: Colors.white,
+                        size: 48,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: alertColor,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Panic Button Pressed',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey,
+                      ),
+                    ),
                   ],
                 ),
               ),
-            ),
 
-            // Action Buttons
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Column(
-                children: [
-                  if (alertType != 'CANCEL') ...[
-                    // View Map Button
-                    if (latitude != null && longitude != null)
+              // Details Card
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    children: [
+                      _buildDetailRow(Icons.person, 'Name', childName),
+                      const SizedBox(height: 12),
+                      _buildDetailRow(Icons.family_restroom, 'Parent/Guardian',
+                          parentNames),
+                      const SizedBox(height: 12),
+                      _buildDetailRow(
+                          Icons.calendar_today, 'Date', formattedDate),
+                      const SizedBox(height: 12),
+                      _buildDetailRow(Icons.access_time, 'Time', formattedTime),
+                      const SizedBox(height: 12),
+                      _buildDetailRow(Icons.location_on, 'Location', address),
+                      const SizedBox(height: 12),
+                      _buildDetailRow(Icons.social_distance, 'Distance',
+                          '$distanceKm km away'),
+                    ],
+                  ),
+                ),
+              ),
+
+              // Map Preview
+              if (latitude != null && longitude != null)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Container(
+                    height: 150,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: GoogleMap(
+                      initialCameraPosition: CameraPosition(
+                        target: LatLng(latitude, longitude),
+                        zoom: 15,
+                      ),
+                      markers: {
+                        Marker(
+                          markerId: const MarkerId('alert_location'),
+                          position: LatLng(latitude, longitude),
+                          icon: BitmapDescriptor.defaultMarkerWithHue(
+                            alertType == 'CRITICAL'
+                                ? BitmapDescriptor.hueRed
+                                : BitmapDescriptor.hueOrange,
+                          ),
+                          infoWindow: InfoWindow(
+                            title: childName,
+                            snippet: address,
+                          ),
+                        ),
+                      },
+                      myLocationButtonEnabled: false,
+                      zoomControlsEnabled: false,
+                      mapToolbarEnabled: false,
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 12),
+
+              // Action Buttons
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Column(
+                  children: [
+                    if (alertType != 'CANCEL') ...[
+                      // Track User Button
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton.icon(
                           onPressed: () {
                             Navigator.of(context).pop();
-                            _openMapToLocation(latitude, longitude, childName);
+                            _trackUser(
+                                userId, latitude, longitude, childName, 'N/A');
                           },
-                          icon: const Icon(Icons.map, color: Colors.white),
+                          icon:
+                              const Icon(Icons.navigation, color: Colors.white),
                           label: const Text(
-                            'View Map',
+                            'Track User',
                             style: TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: alertColor,
+                            backgroundColor: const Color(0xFF4A90E2),
                             padding: const EdgeInsets.symmetric(vertical: 12),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(30),
@@ -569,53 +825,27 @@ class _TanodDashboardState extends State<TanodDashboard> {
                           ),
                         ),
                       ),
-                    const SizedBox(height: 12),
-                    // Track User Button
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: () {
-                          Navigator.of(context).pop();
-                          _trackUser(
-                              userId, latitude, longitude, childName, 'N/A');
-                        },
-                        icon: const Icon(Icons.navigation, color: Colors.white),
-                        label: const Text(
-                          'Track User',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF4A90E2),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(30),
-                          ),
-                        ),
-                      ),
-                    ),
+                    ],
                   ],
-                ],
+                ),
               ),
-            ),
 
-            // Dismiss Button
-            Padding(
-              padding: const EdgeInsets.all(20),
-              child: TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: Text(
-                  'Dismiss',
-                  style: TextStyle(
-                    color: Colors.grey[600],
-                    fontWeight: FontWeight.w500,
+              // Dismiss Button
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: Text(
+                    'Dismiss',
+                    style: TextStyle(
+                      color: Colors.grey[600],
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -839,30 +1069,49 @@ class _TanodDashboardState extends State<TanodDashboard> {
     setState(() => _isLoadingIncidents = true);
 
     try {
-      // Load recent incidents/emergency reports
+      final userId = supabase.auth.currentUser?.id;
+      if (userId == null) {
+        setState(() => _isLoadingIncidents = false);
+        return;
+      }
+
+      debugPrint('🔍 TANOD: Loading active incidents for user: $userId');
+
+      // Load unread station notifications (active incidents)
       final incidents = await supabase
-          .from('emergency_reports')
-          .select('*, user!inner(*)')
+          .from('station_notifications')
+          .select()
+          .eq('station_user_id', userId)
+          .eq('read', false)
           .order('created_at', ascending: false)
           .limit(10);
+
+      debugPrint('📊 TANOD: Found ${incidents.length} active incidents');
 
       Set<Marker> markers = {};
 
       for (var incident in incidents) {
-        if (incident['latitude'] != null && incident['longitude'] != null) {
+        final notificationData =
+            incident['notification_data'] as Map<String, dynamic>? ?? {};
+        final latitude = notificationData['latitude'] as double?;
+        final longitude = notificationData['longitude'] as double?;
+        final childName = notificationData['child_name'] ?? 'Unknown';
+        final alertType = incident['alert_type'] ?? 'REGULAR';
+
+        if (latitude != null && longitude != null) {
           markers.add(
             Marker(
               markerId: MarkerId(incident['id'].toString()),
-              position: LatLng(
-                incident['latitude'].toDouble(),
-                incident['longitude'].toDouble(),
-              ),
+              position: LatLng(latitude, longitude),
               infoWindow: InfoWindow(
-                title: 'Emergency Report',
-                snippet: incident['emergency_type'] ?? 'Unknown',
+                title: '$alertType ALERT',
+                snippet: childName,
               ),
               icon: BitmapDescriptor.defaultMarkerWithHue(
-                  BitmapDescriptor.hueOrange),
+                alertType == 'CRITICAL'
+                    ? BitmapDescriptor.hueRed
+                    : BitmapDescriptor.hueOrange,
+              ),
             ),
           );
         }
@@ -875,7 +1124,7 @@ class _TanodDashboardState extends State<TanodDashboard> {
       });
     } catch (e) {
       setState(() => _isLoadingIncidents = false);
-      debugPrint('Error loading incidents: $e');
+      debugPrint('❌ Error loading incidents: $e');
     }
   }
 
@@ -883,15 +1132,23 @@ class _TanodDashboardState extends State<TanodDashboard> {
     setState(() => _isLoadingHistory = true);
     try {
       final userId = supabase.auth.currentUser?.id;
-      if (userId == null) return;
+      if (userId == null) {
+        setState(() => _isLoadingHistory = false);
+        return;
+      }
 
-      // Load incidents where this tanod responded
+      debugPrint('📚 TANOD: Loading incident history for user: $userId');
+
+      // Load read station notifications (incident history)
       final history = await supabase
-          .from('incident_responses')
-          .select('*, incident:emergency_reports(*, user!inner(email))')
-          .eq('responder_id', userId)
-          .order('responded_at', ascending: false)
+          .from('station_notifications')
+          .select()
+          .eq('station_user_id', userId)
+          .eq('read', true)
+          .order('created_at', ascending: false)
           .limit(20);
+
+      debugPrint('📜 TANOD: Found ${history.length} history records');
 
       setState(() {
         _incidentHistory = history;
@@ -899,7 +1156,7 @@ class _TanodDashboardState extends State<TanodDashboard> {
       });
     } catch (e) {
       setState(() => _isLoadingHistory = false);
-      debugPrint('Error loading incident history: $e');
+      debugPrint('❌ TANOD: Error loading incident history: $e');
     }
   }
 
@@ -992,89 +1249,11 @@ class _TanodDashboardState extends State<TanodDashboard> {
                           : ListView.builder(
                               itemCount: _incidentHistory.length,
                               itemBuilder: (context, index) {
-                                final item = _incidentHistory[index];
-                                final incident = item['incident'] ?? {};
-                                final type =
-                                    incident['emergency_type'] ?? 'Unknown';
-                                final location = incident['location'] ??
-                                    'Location not available';
-                                final reporter =
-                                    incident['user']?['email'] ?? 'Unknown';
-                                final responseType =
-                                    item['response_type'] ?? '';
-                                final respondedAt = item['responded_at'] != null
-                                    ? DateTime.tryParse(item['responded_at'])
-                                    : null;
-                                final timeAgo = respondedAt != null
-                                    ? _getTimeAgo(respondedAt)
-                                    : '';
-
-                                return Container(
-                                  margin: EdgeInsets.only(
-                                      bottom: screenHeight * 0.012),
-                                  padding: EdgeInsets.all(screenWidth * 0.03),
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey.shade50,
-                                    borderRadius: BorderRadius.circular(10),
-                                    border:
-                                        Border.all(color: Colors.grey.shade200),
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          Icon(Icons.warning,
-                                              color: Colors.orange,
-                                              size: screenWidth * 0.05),
-                                          SizedBox(width: screenWidth * 0.02),
-                                          Text(
-                                            type.toUpperCase(),
-                                            style: TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                              color: Colors.orange.shade700,
-                                              fontSize: screenWidth * 0.037,
-                                            ),
-                                          ),
-                                          Spacer(),
-                                          Text(
-                                            responseType.toUpperCase(),
-                                            style: TextStyle(
-                                              color: Colors.orange,
-                                              fontWeight: FontWeight.w600,
-                                              fontSize: screenWidth * 0.032,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      SizedBox(height: screenHeight * 0.004),
-                                      Text(
-                                        'Reporter: $reporter',
-                                        style: TextStyle(
-                                          fontSize: screenWidth * 0.033,
-                                          color: Colors.black87,
-                                        ),
-                                      ),
-                                      Text(
-                                        'Location: $location',
-                                        style: TextStyle(
-                                          fontSize: screenWidth * 0.033,
-                                          color: Colors.black87,
-                                        ),
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      SizedBox(height: screenHeight * 0.004),
-                                      Text(
-                                        timeAgo,
-                                        style: TextStyle(
-                                          fontSize: screenWidth * 0.03,
-                                          color: Colors.grey.shade600,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
+                                final incident = _incidentHistory[index];
+                                return _buildIncidentCard(
+                                  incident,
+                                  screenWidth,
+                                  screenHeight,
                                 );
                               },
                             ),
@@ -1432,24 +1611,12 @@ class _TanodDashboardState extends State<TanodDashboard> {
                 size: screenWidth * 0.06,
               ),
               SizedBox(width: screenWidth * 0.03),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Active Incidents',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: screenWidth * 0.045,
-                    ),
-                  ),
-                  Text(
-                    '${_incidents.length} reports',
-                    style: TextStyle(
-                      color: Colors.grey.shade600,
-                      fontSize: screenWidth * 0.035,
-                    ),
-                  ),
-                ],
+              Text(
+                'Active Incidents',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: screenWidth * 0.045,
+                ),
               ),
               const Spacer(),
               Container(
@@ -1598,161 +1765,239 @@ class _TanodDashboardState extends State<TanodDashboard> {
 
   Widget _buildIncidentCard(
       Map<String, dynamic> incident, double screenWidth, double screenHeight) {
-    final user = incident['user'];
-    final emergencyType = incident['emergency_type'] ?? 'Unknown';
-    final location = incident['location'] ?? 'Location not available';
-    final timestamp = DateTime.parse(incident['created_at']);
-    final timeAgo = _getTimeAgo(timestamp);
+    final notificationData =
+        incident['notification_data'] as Map<String, dynamic>? ?? {};
+    // Get child_user_id from root notification object (same as modal)
+    final childUserId = incident['child_user_id'] as String?;
 
-    return Container(
-      margin: EdgeInsets.only(bottom: screenHeight * 0.015),
-      padding: EdgeInsets.all(screenWidth * 0.04),
-      decoration: BoxDecoration(
-        color: Colors.orange.shade50,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.orange.shade200),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header
-          Row(
+    return FutureBuilder<String>(
+      future: _fetchParentNames(childUserId),
+      builder: (context, parentSnapshot) {
+        final parentNames = parentSnapshot.data ?? 'Loading...';
+
+        // Extract comprehensive details from notification_data
+        final childName = notificationData['child_name'] ?? 'Unknown';
+        final address = notificationData['address'] ?? 'Unknown location';
+        final latitude = notificationData['latitude'] as double?;
+        final longitude = notificationData['longitude'] as double?;
+        final timestamp = notificationData['timestamp'] as String?;
+        final alertType = incident['alert_type'] ?? 'REGULAR';
+
+        // Format date and time
+        DateTime? dateTime;
+        String formattedDate = 'Unknown date';
+        String formattedTime = 'Unknown time';
+        String timeAgo = 'Just now';
+
+        if (timestamp != null) {
+          try {
+            dateTime = DateTime.parse(timestamp);
+            formattedDate = DateFormat('MMMM d, yyyy').format(dateTime);
+            formattedTime = DateFormat('h:mm a').format(dateTime);
+            timeAgo = _getTimeAgo(dateTime);
+          } catch (e) {
+            debugPrint('Error parsing timestamp: $e');
+          }
+        }
+
+        // Calculate distance if coordinates available
+        String distance = 'Unknown distance';
+        if (latitude != null && longitude != null && _currentPosition != null) {
+          final distanceInMeters = Geolocator.distanceBetween(
+            _currentPosition!.latitude,
+            _currentPosition!.longitude,
+            latitude,
+            longitude,
+          );
+          if (distanceInMeters < 1000) {
+            distance = '${distanceInMeters.toStringAsFixed(0)}m away';
+          } else {
+            distance = '${(distanceInMeters / 1000).toStringAsFixed(2)}km away';
+          }
+        }
+
+        return Container(
+          margin: EdgeInsets.only(bottom: screenHeight * 0.015),
+          padding: EdgeInsets.all(screenWidth * 0.04),
+          decoration: BoxDecoration(
+            color: alertType == 'CRITICAL'
+                ? Colors.red.shade50
+                : Colors.orange.shade50,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: alertType == 'CRITICAL'
+                  ? Colors.red.shade200
+                  : Colors.orange.shade200,
+              width: 2,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                padding: EdgeInsets.all(screenWidth * 0.02),
-                decoration: BoxDecoration(
-                  color: Colors.orange.shade100,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.warning,
-                  color: Colors.orange.shade700,
-                  size: screenWidth * 0.05,
-                ),
-              ),
-              SizedBox(width: screenWidth * 0.03),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      emergencyType.toUpperCase(),
+              // Header
+              Row(
+                children: [
+                  Container(
+                    padding: EdgeInsets.all(screenWidth * 0.02),
+                    decoration: BoxDecoration(
+                      color: alertType == 'CRITICAL'
+                          ? Colors.red.shade100
+                          : Colors.orange.shade100,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      alertType == 'CRITICAL' ? Icons.warning : Icons.emergency,
+                      color: alertType == 'CRITICAL'
+                          ? Colors.red.shade700
+                          : Colors.orange.shade700,
+                      size: screenWidth * 0.05,
+                    ),
+                  ),
+                  SizedBox(width: screenWidth * 0.03),
+                  Expanded(
+                    child: Text(
+                      '$alertType ALERT',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: screenWidth * 0.04,
-                        color: Colors.orange.shade700,
+                        color: alertType == 'CRITICAL'
+                            ? Colors.red.shade700
+                            : Colors.orange.shade700,
                       ),
                     ),
-                    Text(
-                      timeAgo,
+                  ),
+                  Container(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: screenWidth * 0.025,
+                      vertical: screenHeight * 0.005,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      'PENDING',
                       style: TextStyle(
-                        fontSize: screenWidth * 0.03,
-                        color: Colors.grey.shade600,
+                        fontSize: screenWidth * 0.025,
+                        color: Colors.orange.shade700,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
-                  ],
-                ),
-              ),
-              Container(
-                padding: EdgeInsets.symmetric(
-                  horizontal: screenWidth * 0.025,
-                  vertical: screenHeight * 0.005,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.orange.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  'PENDING',
-                  style: TextStyle(
-                    fontSize: screenWidth * 0.025,
-                    color: Colors.orange.shade700,
-                    fontWeight: FontWeight.w600,
                   ),
-                ),
+                ],
               ),
-            ],
-          ),
 
-          SizedBox(height: screenHeight * 0.01),
+              SizedBox(height: screenHeight * 0.015),
 
-          // Details
-          Text(
-            'Reporter: ${user['email'] ?? 'Unknown'}',
-            style: TextStyle(
-              fontSize: screenWidth * 0.035,
-              color: Colors.black87,
-            ),
-          ),
-          SizedBox(height: screenHeight * 0.005),
-          Text(
-            'Location: $location',
-            style: TextStyle(
-              fontSize: screenWidth * 0.035,
-              color: Colors.black87,
-            ),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-
-          SizedBox(height: screenHeight * 0.015),
-
-          // Action buttons
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.orange,
-                    padding:
-                        EdgeInsets.symmetric(vertical: screenHeight * 0.01),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+              // Child name
+              Row(
+                children: [
+                  Icon(Icons.person,
+                      size: screenWidth * 0.04, color: Colors.blue.shade700),
+                  SizedBox(width: screenWidth * 0.02),
+                  Expanded(
+                    child: Text(
+                      childName,
+                      style: TextStyle(
+                        fontSize: screenWidth * 0.038,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
                     ),
                   ),
-                  onPressed: () => _respondToIncident(
-                    incident['id'].toString(),
-                    'dispatched',
+                ],
+              ),
+              SizedBox(height: screenHeight * 0.008),
+
+              // Parent/Guardian
+              Row(
+                children: [
+                  Icon(Icons.family_restroom,
+                      size: screenWidth * 0.04, color: Colors.green.shade700),
+                  SizedBox(width: screenWidth * 0.02),
+                  Expanded(
+                    child: Text(
+                      'Parent: $parentNames',
+                      style: TextStyle(
+                        fontSize: screenWidth * 0.035,
+                        color: Colors.black87,
+                      ),
+                    ),
                   ),
-                  child: Text(
-                    'Dispatch',
+                ],
+              ),
+              SizedBox(height: screenHeight * 0.008),
+
+              // Date and Time
+              Row(
+                children: [
+                  Icon(Icons.calendar_today,
+                      size: screenWidth * 0.035, color: Colors.grey.shade600),
+                  SizedBox(width: screenWidth * 0.02),
+                  Text(
+                    formattedDate,
                     style: TextStyle(
-                      color: Colors.white,
+                      fontSize: screenWidth * 0.033,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  SizedBox(width: screenWidth * 0.03),
+                  Icon(Icons.access_time,
+                      size: screenWidth * 0.035, color: Colors.grey.shade600),
+                  SizedBox(width: screenWidth * 0.02),
+                  Text(
+                    formattedTime,
+                    style: TextStyle(
+                      fontSize: screenWidth * 0.033,
+                      color: Colors.black87,
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: screenHeight * 0.008),
+
+              // Location
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.location_on,
+                      size: screenWidth * 0.04, color: Colors.red.shade600),
+                  SizedBox(width: screenWidth * 0.02),
+                  Expanded(
+                    child: Text(
+                      address,
+                      style: TextStyle(
+                        fontSize: screenWidth * 0.035,
+                        color: Colors.black87,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: screenHeight * 0.008),
+
+              // Distance
+              Row(
+                children: [
+                  Icon(Icons.social_distance,
+                      size: screenWidth * 0.04, color: Colors.purple.shade600),
+                  SizedBox(width: screenWidth * 0.02),
+                  Text(
+                    distance,
+                    style: TextStyle(
                       fontSize: screenWidth * 0.035,
+                      color: Colors.black87,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                ),
-              ),
-              SizedBox(width: screenWidth * 0.02),
-              Expanded(
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    padding:
-                        EdgeInsets.symmetric(vertical: screenHeight * 0.01),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  onPressed: () => _respondToIncident(
-                    incident['id'].toString(),
-                    'responding',
-                  ),
-                  child: Text(
-                    'Respond',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: screenWidth * 0.035,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
+                ],
               ),
             ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -1767,7 +2012,7 @@ class _TanodDashboardState extends State<TanodDashboard> {
     } else if (difference.inMinutes > 0) {
       return '${difference.inMinutes}m ago';
     } else {
-      return 'Just now';
+      return '${difference.inSeconds}s ago';
     }
   }
 
